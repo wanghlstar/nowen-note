@@ -1224,7 +1224,7 @@ function AppLayout() {
 
 function DesktopWindowTitleBar() {
   return (
-    <div className="app-window-titlebar items-center justify-center h-7 shrink-0 select-none">
+    <div className="app-window-titlebar items-center justify-center h-14 shrink-0 select-none">
       <span className="app-window-titlebar__title">nowen note</span>
     </div>
   );

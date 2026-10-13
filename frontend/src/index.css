@@ -3047,7 +3047,7 @@ html[data-electron="darwin"][data-fullscreen="1"]
 html[data-electron="darwin"] .app-window-titlebar {
   display: flex;
   -webkit-app-region: drag;
-  height: 28px;
+  height: 56px;
   flex-shrink: 0;
   user-select: none;
   background-color: var(--color-sidebar, #f3f4f6);
@@ -3056,7 +3056,7 @@ html[data-electron="darwin"][data-fullscreen="1"] .app-window-titlebar {
   display: none;
 }
 .app-window-titlebar__title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text-primary, #111827);

@@ -305,7 +305,7 @@ export default function NoteWorkspaceLayoutController() {
       {activePortalTarget
         ? createPortal(trigger, activePortalTarget)
         : createPortal(
-            <div className="fixed left-3 top-8 z-[70] hidden md:block">
+            <div className="fixed left-3 top-14 z-[70] hidden md:block">
               {trigger}
             </div>,
             document.body,

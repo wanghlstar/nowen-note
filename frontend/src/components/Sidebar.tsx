@@ -398,7 +398,7 @@ export default function Sidebar({
               ? {
                   // 全局标题条已把侧栏顶部下移 28px，不再为红绿灯留 60px。
                   // 保留安全区 + 8px 微间距，与下方内容视觉节奏一致。
-                  paddingTop: "calc(var(--safe-area-top) + 8px)",
+                  paddingTop: "calc(var(--safe-area-top) + 0px)",
                   // 与下方"筛选…"输入框左对齐：知识树工具栏容器是 px-2（8px），
                   // 本容器默认 px-3（12px）会让"我的笔记"框比它偏右 4px。
                   paddingLeft: "8px",
