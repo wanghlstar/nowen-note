@@ -2756,6 +2756,25 @@ html[data-electron="darwin"] main :is(button, a, input, select, textarea, [role=
   -webkit-app-region: no-drag;
 }
 
+/* macOS 窗口标题条（EditorPane 内联元素）：顶部 28px 空白 + 居中应用名。
+ * 整条可拖动，双击最大化（macOS 原生对 drag 区域生效）。
+ * 编辑器工具栏因此随之下沉到标题条下方。 */
+html[data-electron="darwin"] .editor-window-titlebar {
+  -webkit-app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+}
+html[data-electron="darwin"] .editor-window-titlebar__title {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--tx-secondary, #6b7280);
+  pointer-events: none; /* 文字不挡拖拽/双击 */
+}
+/* 全屏时系统隐藏红绿灯，标题条让位避免盖住工具栏顶 */
+html[data-electron="darwin"][data-fullscreen="1"] .editor-window-titlebar {
+  display: none !important;
+}
 /* main 闇€瑕佹槸 relative锛?:before 鎵嶈兘瀹氫綅鍒板畠 */
 html[data-electron="darwin"] main {
   position: relative;

@@ -17,6 +17,21 @@ index 4c69012e..9eb6b271 100644
          vibrancy: "sidebar",
          visualEffectState: "active",
          transparent: false, // 开启 vibrancy 时 backgroundColor 可设半透明或不设
+diff --git a/frontend/src/components/EditorPane.tsx b/frontend/src/components/EditorPane.tsx
+index 0d48da98..4a990a52 100644
+--- a/frontend/src/components/EditorPane.tsx
++++ b/frontend/src/components/EditorPane.tsx
+@@ -3083,6 +3083,10 @@ const moveToTrash = useCallback(async () => {
+         )}
+       </AnimatePresence>
+ 
++      {/* macOS 窗口标题条：顶部空白 + 居中应用名；整条可拖动 / 双击最大化；下方编辑器工具栏随之下沉 */}
++      <div className="hidden md:flex items-center justify-center h-7 shrink-0 editor-window-titlebar" data-electron-titlebar>
++        <span className="editor-window-titlebar__title">nowen note</span>
++      </div>
+       {/* Desktop Editor Header */}
+       <div className="hidden md:flex min-w-0 items-center justify-between gap-3 px-4 py-2 border-b border-app-border bg-app-surface/30 transition-colors">
+         <div className="flex min-w-0 flex-1 items-center gap-1.5">
 diff --git a/frontend/src/components/Sidebar.tsx b/frontend/src/components/Sidebar.tsx
 index 7b70081f..14383ed0 100644
 --- a/frontend/src/components/Sidebar.tsx
@@ -108,7 +123,7 @@ index 7b70081f..14383ed0 100644
          </div>
        )}
 diff --git a/frontend/src/index.css b/frontend/src/index.css
-index 1a8b313d..de5b3767 100644
+index 1a8b313d..933c835f 100644
 --- a/frontend/src/index.css
 +++ b/frontend/src/index.css
 @@ -2650,9 +2650,70 @@ html[data-electron="darwin"]
@@ -183,7 +198,7 @@ index 1a8b313d..de5b3767 100644
  }
  
  /* Fullscreen hides Traffic Lights, so restore the regular header inset. */
-@@ -2685,10 +2746,16 @@ html[data-electron="darwin"] main::before {
+@@ -2685,10 +2746,35 @@ html[data-electron="darwin"] main::before {
    right: 0;
    height: 28px;
    -webkit-app-region: drag;
@@ -198,6 +213,25 @@ index 1a8b313d..de5b3767 100644
 +  -webkit-app-region: no-drag;
 +}
 +
++/* macOS 窗口标题条（EditorPane 内联元素）：顶部 28px 空白 + 居中应用名。
++ * 整条可拖动，双击最大化（macOS 原生对 drag 区域生效）。
++ * 编辑器工具栏因此随之下沉到标题条下方。 */
++html[data-electron="darwin"] .editor-window-titlebar {
++  -webkit-app-region: drag;
++  user-select: none;
++  flex-shrink: 0;
++}
++html[data-electron="darwin"] .editor-window-titlebar__title {
++  font-size: 12px;
++  font-weight: 500;
++  letter-spacing: 0.02em;
++  color: var(--tx-secondary, #6b7280);
++  pointer-events: none; /* 文字不挡拖拽/双击 */
++}
++/* 全屏时系统隐藏红绿灯，标题条让位避免盖住工具栏顶 */
++html[data-electron="darwin"][data-fullscreen="1"] .editor-window-titlebar {
++  display: none !important;
++}
  /* main 闇€瑕佹槸 relative锛?:before 鎵嶈兘瀹氫綅鍒板畠 */
  html[data-electron="darwin"] main {
    position: relative;

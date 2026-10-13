@@ -3083,6 +3083,10 @@ const moveToTrash = useCallback(async () => {
         )}
       </AnimatePresence>
 
+      {/* macOS 窗口标题条：顶部空白 + 居中应用名；整条可拖动 / 双击最大化；下方编辑器工具栏随之下沉 */}
+      <div className="hidden md:flex items-center justify-center h-7 shrink-0 editor-window-titlebar" data-electron-titlebar>
+        <span className="editor-window-titlebar__title">nowen note</span>
+      </div>
       {/* Desktop Editor Header */}
       <div className="hidden md:flex min-w-0 items-center justify-between gap-3 px-4 py-2 border-b border-app-border bg-app-surface/30 transition-colors">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">

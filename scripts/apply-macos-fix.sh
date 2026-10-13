@@ -6,7 +6,7 @@
 #       重新应用 patches/macos-sidebar-trafficlight-fix.patch。
 #       脚本是幂等的：改动已在则直接跳过，可反复运行。
 #
-# 补丁内容共 11 处改动（本次修复的全部）：
+# 补丁内容共 12 处改动（本次修复的全部）：
 #   1. electron/main.js
 #      trafficLightPosition: { x: 12, y: 22 } -> { x: 11, y: 14 }
 #      （红绿灯回到 macOS 标准高度，整体左移 1px）
@@ -51,6 +51,15 @@
 #      WorkspaceSwitcher 容器桌面端 paddingLeft/paddingRight: 8px
 #      （与下方"筛选…"输入框左对齐：知识树工具栏是 px-2=8px，本容器默认
 #       px-3=12px 会让"我的笔记"框比筛选框偏右 4px）
+#  12. frontend/src/components/EditorPane.tsx + frontend/src/index.css
+#      EditorPane 桌面端顶栏上方插入 28px 标题条（居中显示 "nowen note"）：
+#      <div className="hidden md:flex items-center justify-center h-7 shrink-0
+#       editor-window-titlebar" data-electron-titlebar>
+#        <span className="editor-window-titlebar__title">nowen note</span></div>
+#      index.css 给 .editor-window-titlebar 加 -webkit-app-region: drag
+#      （整条可拖动 + 双击最大化），文字 pointer-events:none；
+#      全屏 [data-fullscreen="1"] 下 display:none 让位工具栏。
+#      （编辑器工具栏因此随之下沉到标题条下方，顶部留出空白）
 #
 # 用法：
 #   ./scripts/apply-macos-fix.sh            # 只应用补丁
@@ -83,12 +92,13 @@ grep -qF '.nav-rail::before' frontend/src/index.css && applied=$((applied+1))
 grep -qF '[data-fullscreen="1"] .nav-rail::before' frontend/src/index.css && applied=$((applied+1))
 grep -qF 'main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"])' frontend/src/index.css && applied=$((applied+1))
 grep -qF 'paddingLeft: "8px"' frontend/src/components/Sidebar.tsx && applied=$((applied+1))
+grep -qF 'editor-window-titlebar' frontend/src/components/EditorPane.tsx && applied=$((applied+1))
 
-if [ "$applied" -eq 11 ]; then
-  echo "OK 修复补丁已在当前代码中（11/11），无需重复应用。"
+if [ "$applied" -eq 12 ]; then
+  echo "OK 修复补丁已在当前代码中（12/12），无需重复应用。"
   exit 0
 fi
-echo "==> 检测到 $applied/11 处改动已存在，开始重放补丁..."
+echo "==> 检测到 $applied/12 处改动已存在，开始重放补丁..."
 
 # ---------- 2. 应用补丁（干净应用优先，3way 兜底） ----------
 ERR=$(mktemp)
@@ -105,7 +115,7 @@ else
     echo "!! 上面列出的文件里残留了冲突标记（<<<<<<< / ======= / >>>>>>>），请手动解决后删掉标记。"
   fi
   echo ""
-  echo "请手动完成以下 11 处修改（补丁的全部内容就是这些）："
+  echo "请手动完成以下 12 处修改（补丁的全部内容就是这些）："
   cat <<'EOF'
   1) electron/main.js 的 macWindowOpts 内：
        trafficLightPosition: { x: 11, y: 14 },
@@ -155,6 +165,17 @@ else
          paddingTop: "calc(var(--safe-area-top) + 60px)",
          paddingLeft: "8px", paddingRight: "8px",
        } : undefined}
+ 12) frontend/src/components/EditorPane.tsx：桌面端（hidden md:flex）顶栏上方插入
+     28px 标题条（居中显示 "nowen note"，可拖动/双击最大化），并在
+     frontend/src/index.css 追加：
+       html[data-electron="darwin"] .editor-window-titlebar { -webkit-app-region: drag;
+         user-select: none; flex-shrink: 0; }
+       html[data-electron="darwin"] .editor-window-titlebar__title {
+         font-size: 12px; font-weight: 500; letter-spacing: 0.02em;
+         color: var(--tx-secondary, #6b7280); pointer-events: none; }
+       html[data-electron="darwin"][data-fullscreen="1"] .editor-window-titlebar
+         { display: none !important; }
+     （编辑器工具栏因此下沉到标题条下方，顶部留出空白；整条可拖/双击最大化）
 EOF
   rm -f "$ERR"
   exit 1
@@ -183,6 +204,7 @@ check frontend/src/index.css '.nav-rail::before' "rail 顶部补 drag region"
 check frontend/src/index.css '[data-fullscreen="1"] .nav-rail::before' "全屏时 rail 拖拽区让位"
 check frontend/src/index.css 'main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"])' "主区顶部 drag 区生效 + 交互元素通配 no-drag"
 check frontend/src/components/Sidebar.tsx 'paddingLeft: "8px"' "我的笔记框与筛选框左对齐（8px）"
+check frontend/src/components/EditorPane.tsx 'editor-window-titlebar' "编辑器顶部标题条（居中 nowen note，可拖/双击最大化）"
 if [ "$fail" -ne 0 ]; then
   echo "x 有改动未生效，请检查 git diff 中的冲突标记后重跑本脚本。"
   exit 1
