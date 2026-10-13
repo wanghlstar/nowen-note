@@ -15,7 +15,6 @@ import { useRailMode } from "@/hooks/useRailMode";
 import { useMobileRailHidden } from "@/hooks/useMobileRailHidden";
 import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarControlsCollapsed";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
-import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { api, getCurrentWorkspace } from "@/lib/api";
 import { openWorkspaceIssue, OPEN_NOTIFICATIONS_EVENT } from "@/lib/workspaceIssueNavigation";
@@ -90,7 +89,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
-  const { siteConfig } = useSiteSettings();
   const { prefs: userPrefs } = useUserPreferences();
   const [railMode, setRailMode] = useRailMode();
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useMobileSidebarControlsCollapsed();
@@ -240,24 +238,24 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         <style data-knowledge-tree-scrollbar="">{KNOWLEDGE_TREE_SCROLLBAR_CSS}</style>
       )}
 
-      <header
-        className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3"
-        style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
-      >
-        <div className="flex min-w-0 items-center gap-1">
-          {variant === "mobile" && (
-            <button
-              type="button"
-              onClick={() => setMobileControlsCollapsed(!mobileControlsCollapsed)}
-              title={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
-              aria-label={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
-            >
-              {mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
-            </button>
-          )}
-          <span className="min-w-0 truncate text-sm font-semibold">{siteConfig.title || "nowen-note"}</span>
-        </div>
+      {(variant !== "desktop" || railMode === "hidden") && (
+        <header
+          className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3"
+          style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
+        >
+          <div className="flex min-w-0 items-center gap-1">
+            {variant === "mobile" && (
+              <button
+                type="button"
+                onClick={() => setMobileControlsCollapsed(!mobileControlsCollapsed)}
+                title={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
+                aria-label={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
+              >
+                {mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
+              </button>
+            )}
+          </div>
         {variant === "desktop" && railMode === "hidden" ? (
           noteWorkspaceActive ? (
             <div data-note-workspace-layout-anchor="" className="h-8 w-8 shrink-0" />
@@ -312,10 +310,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             </button>
           </div>
         ) : null}
-      </header>
+        </header>
+      )}
 
       {(variant !== "mobile" || !mobileControlsCollapsed) && (
-        <div className="shrink-0 px-3 py-2">
+        <div
+          className="shrink-0 px-3 py-2"
+          style={
+            variant === "desktop" && railMode !== "hidden"
+              ? { paddingTop: "calc(var(--safe-area-top) + 60px)" }
+              : undefined
+          }
+        >
           <WorkspaceSwitcher />
         </div>
       )}

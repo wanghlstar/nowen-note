@@ -1,0 +1,138 @@
+diff --git a/electron/main.js b/electron/main.js
+index 4c69012..9eb6b27 100644
+--- a/electron/main.js
++++ b/electron/main.js
+@@ -1034,12 +1034,12 @@ function createWindow() {
+   //   - hiddenInset 把 Traffic Light 嵌入工具栏，不占独立标题栏；
+   //   - vibrancy: 'sidebar' 启用系统级毛玻璃（配合前端 macOS 皮肤效果最佳）；
+   //   - visualEffectState: 'active' 避免窗口失焦后毛玻璃褪色导致"发灰"。
+-  //   - trafficLightPosition: { x: 12, y: 14 } 保持在窗口左上角的标准位置。
++  //   - trafficLightPosition: { x: 11, y: 14 } 保持在窗口左上角的标准位置。
+   // 注：仅 macOS 生效；Windows/Linux 保持原有无边框策略（默认），避免踩 Mica/Acrylic 的坑。
+   const macWindowOpts = isMac
+     ? {
+         titleBarStyle: "hiddenInset",
+-        trafficLightPosition: { x: 12, y: 22 },
++        trafficLightPosition: { x: 11, y: 14 },
+         vibrancy: "sidebar",
+         visualEffectState: "active",
+         transparent: false, // 开启 vibrancy 时 backgroundColor 可设半透明或不设
+diff --git a/frontend/src/components/Sidebar.tsx b/frontend/src/components/Sidebar.tsx
+index 7b70081..f3658db 100644
+--- a/frontend/src/components/Sidebar.tsx
++++ b/frontend/src/components/Sidebar.tsx
+@@ -15,7 +15,6 @@ import { useRailMode } from "@/hooks/useRailMode";
+ import { useMobileRailHidden } from "@/hooks/useMobileRailHidden";
+ import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarControlsCollapsed";
+ import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
+-import { useSiteSettings } from "@/hooks/useSiteSettings";
+ import { useUserPreferences } from "@/hooks/useUserPreferences";
+ import { api, getCurrentWorkspace } from "@/lib/api";
+ import { openWorkspaceIssue, OPEN_NOTIFICATIONS_EVENT } from "@/lib/workspaceIssueNavigation";
+@@ -90,7 +89,6 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" |
+   const { state } = useApp();
+   const actions = useAppActions();
+   const { t } = useTranslation();
+-  const { siteConfig } = useSiteSettings();
+   const { prefs: userPrefs } = useUserPreferences();
+   const [railMode, setRailMode] = useRailMode();
+   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useMobileSidebarControlsCollapsed();
+@@ -240,24 +238,24 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" |
+         <style data-knowledge-tree-scrollbar="">{KNOWLEDGE_TREE_SCROLLBAR_CSS}</style>
+       )}
+ 
+-      <header
+-        className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3"
+-        style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
+-      >
+-        <div className="flex min-w-0 items-center gap-1">
+-          {variant === "mobile" && (
+-            <button
+-              type="button"
+-              onClick={() => setMobileControlsCollapsed(!mobileControlsCollapsed)}
+-              title={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
+-              aria-label={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
+-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
+-            >
+-              {mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
+-            </button>
+-          )}
+-          <span className="min-w-0 truncate text-sm font-semibold">{siteConfig.title || "nowen-note"}</span>
+-        </div>
++      {(variant !== "desktop" || railMode === "hidden") && (
++        <header
++          className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3"
++          style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
++        >
++          <div className="flex min-w-0 items-center gap-1">
++            {variant === "mobile" && (
++              <button
++                type="button"
++                onClick={() => setMobileControlsCollapsed(!mobileControlsCollapsed)}
++                title={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
++                aria-label={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
++                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
++              >
++                {mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
++              </button>
++            )}
++          </div>
+         {variant === "desktop" && railMode === "hidden" ? (
+           noteWorkspaceActive ? (
+             <div data-note-workspace-layout-anchor="" className="h-8 w-8 shrink-0" />
+@@ -312,10 +310,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" |
+             </button>
+           </div>
+         ) : null}
+-      </header>
++        </header>
++      )}
+ 
+       {(variant !== "mobile" || !mobileControlsCollapsed) && (
+-        <div className="shrink-0 px-3 py-2">
++        <div
++          className="shrink-0 px-3 py-2"
++          style={
++            variant === "desktop" && railMode !== "hidden"
++              ? { paddingTop: "calc(var(--safe-area-top) + 60px)" }
++              : undefined
++          }
++        >
+           <WorkspaceSwitcher />
+         </div>
+       )}
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+index 1a8b313..194d918 100644
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -2652,7 +2652,29 @@ html[data-electron="darwin"]
+ 
+ /* Keep rail actions below the native window controls. */
+ html[data-electron="darwin"] .nav-rail {
+-  padding-top: 56px !important;
++  padding-top: 28px !important;
++}
++
++/* macOS: 侧栏竖线（rail 右缘）不从红绿灯底下穿过。
++ * 去掉通高的 border-r，改用伪元素从灯区下方起画：
++ * 灯底在 52px（trafficLightPosition y:14 + 12pt 灯高），留 8px 间隙 → 60px。
++ * 全屏时系统隐藏红绿灯，竖线恢复通高。 */
++html[data-electron="darwin"] .nav-rail {
++  position: relative;
++  border-right-width: 0;
++}
++html[data-electron="darwin"] .nav-rail::after {
++  content: "";
++  position: absolute;
++  top: 60px;
++  right: 0;
++  bottom: 0;
++  width: 1px;
++  background: var(--color-border);
++  pointer-events: none;
++}
++html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::after {
++  top: 0;
+ }
+ 
+ /* Fullscreen hides Traffic Lights, so restore the regular header inset. */

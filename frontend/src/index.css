@@ -2652,7 +2652,29 @@ html[data-electron="darwin"]
 
 /* Keep rail actions below the native window controls. */
 html[data-electron="darwin"] .nav-rail {
-  padding-top: 56px !important;
+  padding-top: 28px !important;
+}
+
+/* macOS: 侧栏竖线（rail 右缘）不从红绿灯底下穿过。
+ * 去掉通高的 border-r，改用伪元素从灯区下方起画：
+ * 灯底在 52px（trafficLightPosition y:14 + 12pt 灯高），留 8px 间隙 → 60px。
+ * 全屏时系统隐藏红绿灯，竖线恢复通高。 */
+html[data-electron="darwin"] .nav-rail {
+  position: relative;
+  border-right-width: 0;
+}
+html[data-electron="darwin"] .nav-rail::after {
+  content: "";
+  position: absolute;
+  top: 60px;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border);
+  pointer-events: none;
+}
+html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::after {
+  top: 0;
 }
 
 /* Fullscreen hides Traffic Lights, so restore the regular header inset. */
