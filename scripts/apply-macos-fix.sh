@@ -6,33 +6,11 @@
 #       重新应用 patches/macos-sidebar-trafficlight-fix.patch。
 #       脚本是幂等的：改动已在则直接跳过，可反复运行。
 #
-# 当前修复内容（在已提交的 12 处基础修复之上，本次重构为“全宽标题条”）：
-#   A. electron/main.js（已在 12 处基础修复中提交）
+# 当前修复内容（从 origin/main 到当前 HEAD 的全部 macOS 适配）：
+#   A. electron/main.js
 #      trafficLightPosition: { x: 11, y: 14 }
-#   B. 全宽窗口标题条（本次重构核心，对应 patches 里的 diff）：
-#      1) frontend/src/App.tsx
-#         - 根布局 <div> 改为 flex flex-col h-[100dvh] ...
-#         - 顶部新增 <DesktopWindowTitleBar />，其下内容包进
-#           <div className="flex flex-1 min-h-0 overflow-hidden">
-#         - 新增函数组件 DesktopWindowTitleBar，渲染
-#           <div className="app-window-titlebar items-center justify-center h-7 shrink-0 select-none">
-#             <span className="app-window-titlebar__title">nowen note</span></div>
-#      2) frontend/src/components/EditorPane.tsx
-#         - 删除原先只在“打开笔记时”出现的 per-note 标题条
-#           （class 含 editor-window-titlebar 的 div），标题条统一上提到 AppLayout。
-#      3) frontend/src/index.css
-#         - 新增 .app-window-titlebar 规则：darwin 下 display:flex +
-#           -webkit-app-region: drag + height:28px；全屏 [data-fullscreen="1"] 下隐藏。
-#         - 撤销原先分散在各区域的 drag 伪元素（避免双重 28px 留白与遮挡）：
-#           [data-unified-sidebar]...desktop::before（height 52px）-> 0
-#           .nav-rail::before（height 28px）-> 0；删除 main::before 28px 拖拽区；
-#           .nav-rail padding-top: 28px !important -> 0 !important；
-#           .nav-rail::after top: 60px -> 0（竖线通高）。
-#      4) frontend/src/components/Sidebar.tsx
-#         - 桌面端 WorkspaceSwitcher 容器 paddingTop:
-#           calc(var(--safe-area-top) + 60px) -> + 8px（标题条已统一上移，无需再躲红绿灯）。
-#      5) frontend/src/components/NoteWorkspaceLayoutController.tsx
-#         - 布局切换浮层 portal 定位 top-2 -> top-8（避开 28px 标题条）。
+#   B. frontend/src/index.css + 各组件：侧栏/rail 与红绿灯视觉对齐、
+#      全宽可拖拽标题条等。
 #
 # 幂等检测：下方 9 项标记全部命中即视为已应用。
 #
@@ -61,10 +39,10 @@ grep -qF '.app-window-titlebar {' frontend/src/index.css && applied=$((applied+1
 grep -qF 'html[data-electron="darwin"] .app-window-titlebar {' frontend/src/index.css && applied=$((applied+1))
 grep -qF 'html[data-electron="darwin"][data-fullscreen="1"] .app-window-titlebar {' frontend/src/index.css && applied=$((applied+1))
 grep -qF 'padding-top: 0 !important;' frontend/src/index.css && applied=$((applied+1))
-grep -qF 'app-window-titlebar items-center justify-center h-7 shrink-0' frontend/src/App.tsx && applied=$((applied+1))
+grep -qF 'app-window-titlebar items-center justify-center h-14 shrink-0' frontend/src/App.tsx && applied=$((applied+1))
 grep -qF 'function DesktopWindowTitleBar()' frontend/src/App.tsx && applied=$((applied+1))
-grep -qF 'paddingTop: "calc(var(--safe-area-top) + 8px)"' frontend/src/components/Sidebar.tsx && applied=$((applied+1))
-grep -qF 'fixed left-3 top-8 z-[70] hidden md:block' frontend/src/components/NoteWorkspaceLayoutController.tsx && applied=$((applied+1))
+grep -qF 'paddingTop: "calc(var(--safe-area-top) + 0px)"' frontend/src/components/Sidebar.tsx && applied=$((applied+1))
+grep -qF 'fixed left-3 top-14 z-[70] hidden md:block' frontend/src/components/NoteWorkspaceLayoutController.tsx && applied=$((applied+1))
 
 TOTAL=9
 if [ "$applied" -eq "$TOTAL" ]; then
@@ -95,9 +73,9 @@ else
   echo "  1) electron/main.js: trafficLightPosition: { x: 11, y: 14 }"
   echo "  2) App.tsx: 根布局包 flex flex-col，顶部加 <DesktopWindowTitleBar />，内容包进 flex-1 min-h-0；新增 DesktopWindowTitleBar 组件渲染 .app-window-titlebar 居中 nowen note。"
   echo "  3) EditorPane.tsx: 删除打开笔记时才出现的 editor-window-titlebar 标题条 div。"
-  echo "  4) index.css: 新增 .app-window-titlebar(darwin 下 drag + 高 28px，全屏隐藏)；撤销分散拖拽伪元素；.nav-rail padding-top 改 0；.nav-rail::after top 改 0。"
-  echo "  5) Sidebar.tsx: 桌面端 WorkspaceSwitcher paddingTop 60px -> 8px。"
-  echo "  6) NoteWorkspaceLayoutController.tsx: 布局浮层 portal top-2 -> top-8。"
+  echo "  4) index.css: 新增 .app-window-titlebar(darwin 下 drag + 高 56px，全屏隐藏)；撤销分散拖拽伪元素；.nav-rail padding-top 改 0；.nav-rail::after top 改 0。"
+  echo "  5) Sidebar.tsx: 桌面端 WorkspaceSwitcher paddingTop 60px -> 0px（标题条已向下扩展并与卡片上沿对齐）。"
+  echo "  6) NoteWorkspaceLayoutController.tsx: 布局浮层 portal top-2 -> top-14。"
   rm -f "$ERR"
   exit 1
 fi
@@ -119,10 +97,10 @@ check frontend/src/index.css '.app-window-titlebar {' "全宽标题条根规则"
 check frontend/src/index.css 'html[data-electron="darwin"] .app-window-titlebar {' "darwin 下显示 + 可拖拽/双击最大化"
 check frontend/src/index.css 'html[data-electron="darwin"][data-fullscreen="1"] .app-window-titlebar {' "全屏隐藏标题条"
 check frontend/src/index.css 'padding-top: 0 !important;' "nav-rail 留白 0"
-check frontend/src/App.tsx 'app-window-titlebar items-center justify-center h-7 shrink-0' "标题条挂载点"
+check frontend/src/App.tsx 'app-window-titlebar items-center justify-center h-14 shrink-0' "标题条挂载点"
 check frontend/src/App.tsx 'function DesktopWindowTitleBar()' "DesktopWindowTitleBar 组件"
-check frontend/src/components/Sidebar.tsx 'paddingTop: "calc(var(--safe-area-top) + 8px)"' "我的笔记框上移 8px"
-check frontend/src/components/NoteWorkspaceLayoutController.tsx 'fixed left-3 top-8 z-[70] hidden md:block' "布局浮层避开标题条 top-8"
+check frontend/src/components/Sidebar.tsx 'paddingTop: "calc(var(--safe-area-top) + 0px)"' "我的笔记框与标题条下沿对齐"
+check frontend/src/components/NoteWorkspaceLayoutController.tsx 'fixed left-3 top-14 z-[70] hidden md:block' "布局浮层避开标题条 top-14"
 if [ "$fail" -ne 0 ]; then
   echo "x 有改动未生效，请检查 git diff 中的冲突标记后重跑本脚本。"
   exit 1
