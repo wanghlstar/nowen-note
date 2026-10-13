@@ -2746,8 +2746,14 @@ html[data-electron="darwin"] main::before {
   right: 0;
   height: 28px;
   -webkit-app-region: drag;
-  pointer-events: none; /* 涓嶉樆鎸′笅灞傜偣鍑?*/
   z-index: 1;
+}
+
+/* drag 区会拦截命中测试，其覆盖范围内的交互元素必须显式 no-drag 才能点击。
+ * 编辑器顶栏（Live/已保存/锁/星标/分享…）、列表顶部按钮、欢迎页标签输入
+ * 都落在 main 顶部 28px 内，靠这条通配规则保住交互；拖拽/双击走空白处。 */
+html[data-electron="darwin"] main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"]) {
+  -webkit-app-region: no-drag;
 }
 
 /* main 闇€瑕佹槸 relative锛?:before 鎵嶈兘瀹氫綅鍒板畠 */
