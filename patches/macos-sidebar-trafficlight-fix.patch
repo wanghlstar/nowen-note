@@ -18,7 +18,7 @@ index 4c69012e..9eb6b271 100644
          visualEffectState: "active",
          transparent: false, // 开启 vibrancy 时 backgroundColor 可设半透明或不设
 diff --git a/frontend/src/components/Sidebar.tsx b/frontend/src/components/Sidebar.tsx
-index 7b70081f..f3658db5 100644
+index 7b70081f..14383ed0 100644
 --- a/frontend/src/components/Sidebar.tsx
 +++ b/frontend/src/components/Sidebar.tsx
 @@ -15,7 +15,6 @@ import { useRailMode } from "@/hooks/useRailMode";
@@ -80,7 +80,7 @@ index 7b70081f..f3658db5 100644
          {variant === "desktop" && railMode === "hidden" ? (
            noteWorkspaceActive ? (
              <div data-note-workspace-layout-anchor="" className="h-8 w-8 shrink-0" />
-@@ -312,10 +310,18 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" |
+@@ -312,10 +310,24 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" |
              </button>
            </div>
          ) : null}
@@ -94,7 +94,13 @@ index 7b70081f..f3658db5 100644
 +          className="shrink-0 px-3 py-2"
 +          style={
 +            variant === "desktop" && railMode !== "hidden"
-+              ? { paddingTop: "calc(var(--safe-area-top) + 60px)" }
++              ? {
++                  paddingTop: "calc(var(--safe-area-top) + 60px)",
++                  // 与下方"筛选…"输入框左对齐：知识树工具栏容器是 px-2（8px），
++                  // 本容器默认 px-3（12px）会让"我的笔记"框比它偏右 4px。
++                  paddingLeft: "8px",
++                  paddingRight: "8px",
++                }
 +              : undefined
 +          }
 +        >

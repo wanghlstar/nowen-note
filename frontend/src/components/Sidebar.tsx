@@ -318,7 +318,13 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
           className="shrink-0 px-3 py-2"
           style={
             variant === "desktop" && railMode !== "hidden"
-              ? { paddingTop: "calc(var(--safe-area-top) + 60px)" }
+              ? {
+                  paddingTop: "calc(var(--safe-area-top) + 60px)",
+                  // 与下方"筛选…"输入框左对齐：知识树工具栏容器是 px-2（8px），
+                  // 本容器默认 px-3（12px）会让"我的笔记"框比它偏右 4px。
+                  paddingLeft: "8px",
+                  paddingRight: "8px",
+                }
               : undefined
           }
         >

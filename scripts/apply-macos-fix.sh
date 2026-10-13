@@ -6,7 +6,7 @@
 #       重新应用 patches/macos-sidebar-trafficlight-fix.patch。
 #       脚本是幂等的：改动已在则直接跳过，可反复运行。
 #
-# 补丁内容共 10 处改动（本次修复的全部）：
+# 补丁内容共 11 处改动（本次修复的全部）：
 #   1. electron/main.js
 #      trafficLightPosition: { x: 12, y: 22 } -> { x: 11, y: 14 }
 #      （红绿灯回到 macOS 标准高度，整体左移 1px）
@@ -47,6 +47,10 @@
 #      main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"])
 #      { -webkit-app-region: no-drag }
 #      （编辑器顶栏那一行也能拖动/双击最大化；行内按钮靠通配规则保住点击）
+#  11. frontend/src/components/Sidebar.tsx
+#      WorkspaceSwitcher 容器桌面端 paddingLeft/paddingRight: 8px
+#      （与下方"筛选…"输入框左对齐：知识树工具栏是 px-2=8px，本容器默认
+#       px-3=12px 会让"我的笔记"框比筛选框偏右 4px）
 #
 # 用法：
 #   ./scripts/apply-macos-fix.sh            # 只应用补丁
@@ -78,12 +82,13 @@ grep -qF '[data-unified-sidebar][data-sidebar-variant="desktop"]::before' fronte
 grep -qF '.nav-rail::before' frontend/src/index.css && applied=$((applied+1))
 grep -qF '[data-fullscreen="1"] .nav-rail::before' frontend/src/index.css && applied=$((applied+1))
 grep -qF 'main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"])' frontend/src/index.css && applied=$((applied+1))
+grep -qF 'paddingLeft: "8px"' frontend/src/components/Sidebar.tsx && applied=$((applied+1))
 
-if [ "$applied" -eq 10 ]; then
-  echo "OK 修复补丁已在当前代码中（10/10），无需重复应用。"
+if [ "$applied" -eq 11 ]; then
+  echo "OK 修复补丁已在当前代码中（11/11），无需重复应用。"
   exit 0
 fi
-echo "==> 检测到 $applied/10 处改动已存在，开始重放补丁..."
+echo "==> 检测到 $applied/11 处改动已存在，开始重放补丁..."
 
 # ---------- 2. 应用补丁（干净应用优先，3way 兜底） ----------
 ERR=$(mktemp)
@@ -100,7 +105,7 @@ else
     echo "!! 上面列出的文件里残留了冲突标记（<<<<<<< / ======= / >>>>>>>），请手动解决后删掉标记。"
   fi
   echo ""
-  echo "请手动完成以下 10 处修改（补丁的全部内容就是这些）："
+  echo "请手动完成以下 11 处修改（补丁的全部内容就是这些）："
   cat <<'EOF'
   1) electron/main.js 的 macWindowOpts 内：
        trafficLightPosition: { x: 11, y: 14 },
@@ -143,6 +148,13 @@ else
      drag 区生效），并追加交互元素通配 no-drag（否则顶栏按钮全点不了）：
        html[data-electron="darwin"] main :is(button, a, input, select, textarea,
          [role="button"], [contenteditable="true"]) { -webkit-app-region: no-drag; }
+ 11) frontend/src/components/Sidebar.tsx：WorkspaceSwitcher 外层 div 的桌面端
+     style 里，与 paddingTop 一起加 paddingLeft/paddingRight（与下方"筛选…"
+     输入框左对齐，知识树工具栏是 px-2=8px）：
+       style={variant === "desktop" && railMode !== "hidden" ? {
+         paddingTop: "calc(var(--safe-area-top) + 60px)",
+         paddingLeft: "8px", paddingRight: "8px",
+       } : undefined}
 EOF
   rm -f "$ERR"
   exit 1
@@ -170,6 +182,7 @@ check frontend/src/index.css '[data-unified-sidebar][data-sidebar-variant="deskt
 check frontend/src/index.css '.nav-rail::before' "rail 顶部补 drag region"
 check frontend/src/index.css '[data-fullscreen="1"] .nav-rail::before' "全屏时 rail 拖拽区让位"
 check frontend/src/index.css 'main :is(button, a, input, select, textarea, [role="button"], [contenteditable="true"])' "主区顶部 drag 区生效 + 交互元素通配 no-drag"
+check frontend/src/components/Sidebar.tsx 'paddingLeft: "8px"' "我的笔记框与筛选框左对齐（8px）"
 if [ "$fail" -ne 0 ]; then
   echo "x 有改动未生效，请检查 git diff 中的冲突标记后重跑本脚本。"
   exit 1
