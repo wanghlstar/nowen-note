@@ -37,28 +37,34 @@ die()  { echo "x $*"; exit 1; }
 
 # ---------- 0. git 锁处理（编辑器 git 集成会周期性留下死锁） ----------
 # 覆盖三类锁：.git/index.lock、.git/refs/**/*.lock（fetch tag 时）、.git/*.lock。
-# 判活标准：锁文件大小在 2 秒内无变化 = 死锁（进程已死），可删；
-#           大小在增长 = 活跃进程，继续等，最多 60 秒。
+# 判活标准：一轮批量采样所有锁大小 -> sleep 2 -> 再采样，大小不变的=死锁可删；
+#           有锁在变化的=活跃进程，继续等，最多 30 轮（60 秒）。
+# 注意：macOS 自带 bash 3.2 无关联数组，快照写临时文件实现。
 clear_git_locks() {
-  local i sz1 sz2 lock
+  local i lock line p sz1 sz2 busy snap
+  snap=$(mktemp)
   for i in $(seq 1 30); do
     locks=$(ls -d .git/index.lock .git/*.lock .git/refs/tags/*.lock .git/refs/heads/*.lock 2>/dev/null || true)
-    [ -z "$locks" ] && return 0
-    busy=0
+    if [ -z "$locks" ]; then rm -f "$snap"; return 0; fi
+    : > "$snap"
     for lock in $locks; do
-      [ -f "$lock" ] || continue
-      sz1=$(stat -f%z "$lock" 2>/dev/null || echo 0)
-      sleep 2
-      sz2=$(stat -f%z "$lock" 2>/dev/null || echo 0)
-      if [ "$sz1" != "$sz2" ]; then
+      [ -f "$lock" ] && echo "$lock $(stat -f%z "$lock" 2>/dev/null || echo 0)" >> "$snap"
+    done
+    sleep 2
+    busy=0
+    while read -r p sz1; do
+      [ -f "$p" ] || continue
+      sz2=$(stat -f%z "$p" 2>/dev/null || echo 0)
+      if [ "$sz2" != "$sz1" ]; then
         busy=1   # 还在写，是活跃进程
       else
-        echo "   清理死锁 $lock（无活跃 git 进程，大小 ${sz1}B 不再变化）"
-        rm -f "$lock"
+        echo "   清理死锁 $p（大小 ${sz2}B 不再变化）"
+        rm -f "$p"
       fi
-    done
-    [ "$busy" = "0" ] && return 0
+    done < "$snap"
+    if [ "$busy" = "0" ]; then rm -f "$snap"; return 0; fi
   done
+  rm -f "$snap"
   return 1
 }
 
