@@ -1,22 +1,71 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from "react";
+import React, {
+  useCallback,
+  useRef,
+  useState,
+  useEffect,
+  useMemo,
+} from "react";
 import EncryptedConversionEditorGuard from "./EncryptedConversionEditorGuard";
 import EncryptedNotePane from "./EncryptedNotePane";
 import { isEncryptedNoteFormat } from "@/lib/encryptedNotes/noteDocument";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Star, Pin, Trash2, Cloud, RefreshCw, Check, Loader2, ChevronLeft, FolderInput, ChevronRight, ChevronDown, X, ListTree, Lock, Unlock, Tag as TagIcon, Type, MoreHorizontal, Share2, History, MessageCircle, FileCode, FileText, Eye, Pencil, Paperclip, Search, Sparkles, Network, Minimize2, Image, Link2, Printer, Scissors } from "lucide-react";
+import {
+  Star,
+  Pin,
+  Trash2,
+  Cloud,
+  RefreshCw,
+  Check,
+  Loader2,
+  ChevronLeft,
+  FolderInput,
+  ChevronRight,
+  ChevronDown,
+  X,
+  ListTree,
+  Lock,
+  Unlock,
+  Tag as TagIcon,
+  Type,
+  MoreHorizontal,
+  Share2,
+  History,
+  MessageCircle,
+  FileCode,
+  FileText,
+  Eye,
+  Pencil,
+  Paperclip,
+  Search,
+  Sparkles,
+  Network,
+  Minimize2,
+  Image,
+  Link2,
+  Printer,
+  Scissors,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirm } from "@/components/ui/confirm";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TiptapEditor from "@/components/TiptapEditor";
 import { PhaseAPerfProfiler } from "@/components/PhaseAPerfProfiler";
-import type { NoteEditorHeading, NoteEditorUpdatePayload } from "@/components/editors/types";
+import type {
+  NoteEditorHeading,
+  NoteEditorUpdatePayload,
+} from "@/components/editors/types";
 import MarkdownEditor from "@/components/MarkdownEditor";
-import HtmlPreviewPane, { isFullHtmlDocument } from "@/components/HtmlPreviewPane";
+import HtmlPreviewPane, {
+  isFullHtmlDocument,
+} from "@/components/HtmlPreviewPane";
 import type { NoteEditorHandle } from "@/components/editors/types";
 import { useApp, useAppActions, SyncStatus } from "@/store/AppContext";
 import { api } from "@/lib/api";
 import { confirmMediaNotePersistence } from "@/lib/mediaInsertionCommit";
-import { parseMermaidMindmap, normalizeMindMapData } from "@/lib/mindmapTransform";
+import {
+  parseMermaidMindmap,
+  normalizeMindMapData,
+} from "@/lib/mindmapTransform";
 import { cn } from "@/lib/utils";
 import SyncStatusBadge from "@/components/SyncStatusBadge";
 import { isAndroidNativeRuntime } from "@/lib/mobileLocalMode";
@@ -41,21 +90,29 @@ import ShareModal from "@/components/ShareModal";
 import VersionHistoryPanel from "@/components/VersionHistoryPanel";
 import CommentPanel from "@/components/CommentPanel";
 import NoteAttachmentsPanel from "@/components/NoteAttachmentsPanel";
-import FolderSyncAttachmentPreviewPane, { isFolderSyncAttachmentNote } from "@/components/FolderSyncAttachmentPreviewPane";
+import FolderSyncAttachmentPreviewPane, {
+  isFolderSyncAttachmentNote,
+} from "@/components/FolderSyncAttachmentPreviewPane";
 import BacklinksPanel from "@/components/BacklinksPanel";
 import MermaidView from "@/components/MermaidView";
-import {
-  PresenceBar,
-} from "@/components/PresenceBar";
+import { PresenceBar } from "@/components/PresenceBar";
 import { EditorErrorBoundary } from "@/components/EditorErrorBoundary";
 import NoteTabsBar from "@/components/NoteTabsBar";
-import { EditorToolbarHost, EditorToolbarExpandSlot, MobileEditorToolbarPortal } from "@/components/CollapsibleEditorToolbar";
+import {
+  EditorToolbarHost,
+  EditorToolbarExpandSlot,
+  MobileEditorToolbarPortal,
+} from "@/components/CollapsibleEditorToolbar";
 import NoteLoadingSkeleton from "@/components/NoteLoadingSkeleton";
 import { useNoteLoader } from "@/hooks/useNoteLoader";
 import { useRealtimeNote } from "@/hooks/useRealtimeNote";
 import { useYDoc } from "@/hooks/useYDoc";
 import { realtime } from "@/lib/realtime";
-import { normalizeToMarkdown, detectFormat, markdownToPlainText } from "@/lib/contentFormat";
+import {
+  normalizeToMarkdown,
+  detectFormat,
+  markdownToPlainText,
+} from "@/lib/contentFormat";
 import {
   resolveEditorMode,
   persistEditorMode,
@@ -137,9 +194,14 @@ interface EditorPaneProps {
 
 export default function EditorPane(props: EditorPaneProps) {
   const { state } = useApp();
-  return state.activeNote && isEncryptedNoteFormat(state.activeNote.contentFormat)
-    ? <EncryptedNotePane key={state.activeNote.id} note={state.activeNote} />
-    : <EncryptedConversionEditorGuard noteId={state.activeNote?.id ?? null}><OrdinaryEditorPane {...props} /></EncryptedConversionEditorGuard>;
+  return state.activeNote &&
+    isEncryptedNoteFormat(state.activeNote.contentFormat) ? (
+    <EncryptedNotePane key={state.activeNote.id} note={state.activeNote} />
+  ) : (
+    <EncryptedConversionEditorGuard noteId={state.activeNote?.id ?? null}>
+      <OrdinaryEditorPane {...props} />
+    </EncryptedConversionEditorGuard>
+  );
 }
 
 function OrdinaryEditorPane({
@@ -151,15 +213,31 @@ function OrdinaryEditorPane({
   useEffect(() => {
     const handler = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return;
+      if (
+        !id ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id,
+        )
+      )
+        return;
       pushMindMapAppPath(id);
       actions.setViewMode("mindmaps");
     };
     window.addEventListener("nowen:request-open-embedded-mindmap", handler);
-    return () => window.removeEventListener("nowen:request-open-embedded-mindmap", handler);
+    return () =>
+      window.removeEventListener(
+        "nowen:request-open-embedded-mindmap",
+        handler,
+      );
   }, [actions]);
   const { loadNote, retryNoteLoad } = useNoteLoader();
-  const { activeNote, syncStatus, lastSyncedAt, noteLoading, noteLoadingState } = state;
+  const {
+    activeNote,
+    syncStatus,
+    lastSyncedAt,
+    noteLoading,
+    noteLoadingState,
+  } = state;
   const reduceMotion = useReducedMotion();
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMoveDropdown, setShowMoveDropdown] = useState(false);
@@ -169,14 +247,18 @@ function OrdinaryEditorPane({
   // 一起 reset 完成（目前是"用户在编辑期间手动切换状态，新笔记打开时也会保持"。
   // 因为长期使用极少的用户来说，每次新笔记都反向丢失偏好会很不习惯。
   const { prefs: userPrefs, setPref: setUserPref } = useUserPreferences();
-  const [showOutline, setShowOutline] = useState<boolean>(() => userPrefs.outlineDefaultOpen);
+  const [showOutline, setShowOutline] = useState<boolean>(
+    () => userPrefs.outlineDefaultOpen,
+  );
   const [outlineWidth, setOutlineWidth] = useState(getSavedOutlineWidth);
   // 视图级只读：除了 DB 的 isLocked，还有用户偏好带来的"会话锁"。
   // 打开已有笔记时如果启用了 lockOnOpen 偏好，就把当前笔记 id 加入集合，
   // 编辑器变为只读，用户需要点解锁按钮移除，从而恢复编辑能力。
   // 刚创建后首次自动打开可编辑；离开后再次打开仍按偏好应用，不影响其它笔记。
   // 这样做的好处是：不污染笔记的 isLocked 字段，也不会触发协作广播 / 权限检查。
-  const [viewLockedIds, setViewLockedIds] = useState<Set<string>>(() => new Set());
+  const [viewLockedIds, setViewLockedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const lastOpenedNoteIdRef = useRef<string | null>(null);
   // 用 ref 让 yDoc/snapshot/flushToLocal 等长驻闭包引用最新值。
   // 否则可能读到旧值，导致偏好刚关之后还会往"已锁定的笔记"写 / 写 yDoc。
@@ -200,47 +282,58 @@ function OrdinaryEditorPane({
   const isViewLocked = !!activeNote && viewLockedIds.has(activeNote.id);
   const isTrashed = !!activeNote?.isTrashed;
   const noteSwitchPending = !!noteLoadingState.pendingNoteId;
-  const effectiveLocked = !!activeNote?.isLocked || isViewLocked || isTrashed || noteSwitchPending;
+  const effectiveLocked =
+    !!activeNote?.isLocked || isViewLocked || isTrashed || noteSwitchPending;
   const canEditActiveNote = canWriteNote(activeNote);
   const showDesktopOutline = showOutline && !state.editorFullscreen;
-  const compactMobileEditing = keyboardVisible && canEditActiveNote && !effectiveLocked;
+  const compactMobileEditing =
+    keyboardVisible && canEditActiveNote && !effectiveLocked;
 
-  const handleOutlineResizeStart = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = outlineWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+  const handleOutlineResizeStart = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = outlineWidth;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const nextWidth = clampOutlineWidth(startWidth - (moveEvent.clientX - startX));
-      setOutlineWidth(nextWidth);
-      persistOutlineWidth(nextWidth);
-    };
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const nextWidth = clampOutlineWidth(
+          startWidth - (moveEvent.clientX - startX),
+        );
+        setOutlineWidth(nextWidth);
+        persistOutlineWidth(nextWidth);
+      };
 
-    const handleMouseUp = () => {
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
+      const handleMouseUp = () => {
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  }, [outlineWidth]);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [outlineWidth],
+  );
 
   const handleOutlineWidthReset = useCallback(() => {
     setOutlineWidth(DEFAULT_OUTLINE_WIDTH);
     persistOutlineWidth(DEFAULT_OUTLINE_WIDTH);
   }, []);
-  useEffect(() => subscribeOpenInternalNoteLink(async ({ noteId }) => {
-    await loadNote({
-      noteId,
-      summary: { title: t("editor.noteLoading"), notebookId: "" },
-      request: () => api.getNote(noteId),
-      onSuccess: (target) => actions.setActiveNote(target),
-    });
-  }), [actions, loadNote, t]);
+  useEffect(
+    () =>
+      subscribeOpenInternalNoteLink(async ({ noteId }) => {
+        await loadNote({
+          noteId,
+          summary: { title: t("editor.noteLoading"), notebookId: "" },
+          request: () => api.getNote(noteId),
+          onSuccess: (target) => actions.setActiveNote(target),
+        });
+      }),
+    [actions, loadNote, t],
+  );
 
   // �бʼ�ʱ��ƫ��Ӧ��"�򿪼�����"��
   // ����ֻ�� activeNote.id �仯ʱ��һ�Σ������� prefs.lockOnOpen���������û���
@@ -277,7 +370,9 @@ function OrdinaryEditorPane({
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [mobileTitlePinned, setMobileTitlePinned] = useState(false);
   const [showDesktopMoreMenu, setShowDesktopMoreMenu] = useState(false);
-  const noteMenuViewport = useVisibleViewport(showMobileMenu || showDesktopMoreMenu);
+  const noteMenuViewport = useVisibleViewport(
+    showMobileMenu || showDesktopMoreMenu,
+  );
   const [showMobileMoveMenu, setShowMobileMoveMenu] = useState(false);
   const [showMobileOutline, setShowMobileOutline] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -302,8 +397,10 @@ function OrdinaryEditorPane({
     () => !!activeNote && detectFormat(activeNote.content) === "html",
   );
   const previewInitializedNoteIdRef = useRef(activeNote?.id);
-  const isPendingHtmlNoteSwitch = previewInitializedNoteIdRef.current !== activeNote?.id
-    && !!activeNote && detectFormat(activeNote.content) === "html";
+  const isPendingHtmlNoteSwitch =
+    previewInitializedNoteIdRef.current !== activeNote?.id &&
+    !!activeNote &&
+    detectFormat(activeNote.content) === "html";
   const shouldRenderHtmlPreview = htmlPreviewMode || isPendingHtmlNoteSwitch;
   const [showHtmlEditWarning, setShowHtmlEditWarning] = useState(false);
   // 记住当前笔记的原始格式是否为 HTML。
@@ -315,7 +412,9 @@ function OrdinaryEditorPane({
   const [noteIsFullHtmlDoc, setNoteIsFullHtmlDoc] = useState(false);
 
   // 编辑器模式（MD / Tiptap）：初始值来自 URL / localStorage，可随时切换。
-  const [editorMode, setEditorMode] = useState<EditorMode>(() => resolveEditorMode());
+  const [editorMode, setEditorMode] = useState<EditorMode>(() =>
+    resolveEditorMode(),
+  );
   /**
    * 当前编辑器（Tiptap 或 Markdown）暴露的命令式方法。
    * EditorPane 只需要"命令 flush"等极简方法，切换编辑器、切换笔记、判断当前
@@ -329,7 +428,9 @@ function OrdinaryEditorPane({
       return;
     }
 
-    try { await editorHandleRef.current?.flushSave(); } catch {}
+    try {
+      await editorHandleRef.current?.flushSave();
+    } catch {}
     setHtmlPreviewMode(true);
   }, [htmlPreviewMode]);
 
@@ -389,7 +490,7 @@ function OrdinaryEditorPane({
         // 2nd click in window �� ���У�ͬʱ���ʱ�����������
         console.warn(
           "[EditorPane] toggleEditorMode: user forced mode switch while CRDT not synced; " +
-          "content may be incomplete if yDoc is stale",
+            "content may be incomplete if yDoc is stale",
         );
         lastUnsyncedClickAtRef.current = 0;
         // �䵽������������
@@ -400,7 +501,9 @@ function OrdinaryEditorPane({
             `${t("editor.modeSwitch.syncingToast")}，${t("editor.modeSwitch.forceHint")}。`,
             4000,
           );
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         return;
       }
     } else {
@@ -462,7 +565,10 @@ function OrdinaryEditorPane({
       // �� RTE��MD��normalizeToMarkdown + �淶�� PUT
       //    ʧ��ʱ rollback + return�������� 4��
       if (fromMode === "tiptap") {
-        const ok = await normalizeAndPersistOnSwitchRteToMd(snapshot, preSwitchNote);
+        const ok = await normalizeAndPersistOnSwitchRteToMd(
+          snapshot,
+          preSwitchNote,
+        );
         if (!ok) return;
       }
 
@@ -485,7 +591,9 @@ function OrdinaryEditorPane({
             ? t("editor.modeSwitch.successToMd")
             : t("editor.modeSwitch.successToTiptap"),
         );
-      } catch { /* toast ������Ҳû��ϵ */ }
+      } catch {
+        /* toast ������Ҳû��ϵ */
+      }
 
       // �� MD��RTE���ͷŷ���� y room�������� 3��
       //    ʧ�ܽ���¼��־����syncToYjs ���ƻ����´��л� MD ǰ����״̬��
@@ -493,15 +601,18 @@ function OrdinaryEditorPane({
         try {
           await api.releaseYjsRoom(preSwitchNote.id);
         } catch (err) {
-          console.warn("[EditorPane] releaseYjsRoom after MD��RTE switch failed:", err);
+          console.warn(
+            "[EditorPane] releaseYjsRoom after MD��RTE switch failed:",
+            err,
+          );
         }
       }
     } finally {
       modeSwitchInflightRef.current = false;
       setModeSwitching(false);
     }
-  // toggleEditorMode deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // toggleEditorMode deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorMode, actions, t]);
   // ---------------------------------------------------------------------------
   // toggleEditorMode ���ڲ��ӹ��̣����������Ȧ���Ӷȣ��� A1��
@@ -516,7 +627,13 @@ function OrdinaryEditorPane({
   function syncActiveNoteFromYDoc() {
     const yDocNow = collabYDocRef.current;
     const note = activeNoteRef.current;
-    if (!yDocNow || !note || note.isLocked || viewLockedIdsRef.current.has(note.id)) return;
+    if (
+      !yDocNow ||
+      !note ||
+      note.isLocked ||
+      viewLockedIdsRef.current.has(note.id)
+    )
+      return;
     try {
       const latestMd = yDocNow.getText("content").toString();
       if (latestMd && latestMd !== note.content) {
@@ -543,7 +660,13 @@ function OrdinaryEditorPane({
     preSwitchNote: ReturnType<typeof Object.assign> | null,
   ): Promise<boolean> {
     const note = activeNoteRef.current;
-    if (!snapshot || !note || note.isLocked || viewLockedIdsRef.current.has(note.id)) return true;
+    if (
+      !snapshot ||
+      !note ||
+      note.isLocked ||
+      viewLockedIdsRef.current.has(note.id)
+    )
+      return true;
 
     // snapshot.content ͨ���� Tiptap JSON �ַ���������ʶ��һ�¡�
     const fmt = detectFormat(snapshot.content);
@@ -625,20 +748,32 @@ function OrdinaryEditorPane({
             content: normalizedMd,
             contentText: normalizedText,
             title: note.title,
-            baseVersion: typeof (err as any)?.currentVersion === "number" ? (err as any).currentVersion : initialVersion,
+            baseVersion:
+              typeof (err as any)?.currentVersion === "number"
+                ? (err as any).currentVersion
+                : initialVersion,
             savedAt: Date.now(),
           });
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       console.warn("[EditorPane] normalize PUT on mode switch failed:", err);
       actions.setSyncStatus("error");
 
       // �ع� activeNote�����Ȿ�� content �ѱ� normalizedMd ���ǵ� editorMode û��
       // ������ Tiptap �� markdown �� JSON ���� �� �༭���Ӿ����ң�
-      if (preSwitchNote && activeNoteRef.current?.id === (preSwitchNote as any).id) {
+      if (
+        preSwitchNote &&
+        activeNoteRef.current?.id === (preSwitchNote as any).id
+      ) {
         actions.setActiveNote(preSwitchNote as any);
       }
-      try { toast.error(t("editor.modeSwitch.failRollback")); } catch { /* ignore */ }
+      try {
+        toast.error(t("editor.modeSwitch.failRollback"));
+      } catch {
+        /* ignore */
+      }
       return false;
     }
   }
@@ -656,7 +791,11 @@ function OrdinaryEditorPane({
       if (skipNextSwitchFlushForNoteIdRef.current === prevId) {
         skipNextSwitchFlushForNoteIdRef.current = null;
       } else {
-        try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
+        try {
+          editorHandleRef.current?.flushSave();
+        } catch {
+          /* ignore */
+        }
       }
     }
     lastActiveIdRef.current = nextId;
@@ -664,7 +803,9 @@ function OrdinaryEditorPane({
 
   // ������ P2-5: ��ǰ�༭��ģʽ ref���� handleUpdate ͬ��д�ݸ��ã� ������������������������������
   const editorModeRef = useRef<EditorMode>(editorMode);
-  useEffect(() => { editorModeRef.current = editorMode; }, [editorMode]);
+  useEffect(() => {
+    editorModeRef.current = editorMode;
+  }, [editorMode]);
 
   // ������ P1-3: ҳ�汻ж�� / ����ʱǿ�ưѵ�ǰ�༭������д�뱾�زݸ� + ���߶��� ������������
   // �����������ƶ��� webview ��ϵͳ���ա�ˢ�¡��� Tab���е���̨��ɱ��
@@ -674,11 +815,14 @@ function OrdinaryEditorPane({
   useEffect(() => {
     const flushToLocal = () => {
       const note = activeNoteRef.current;
-      if (!note || note.isLocked || viewLockedIdsRef.current.has(note.id)) return;
+      if (!note || note.isLocked || viewLockedIdsRef.current.has(note.id))
+        return;
       let snap: { content: string; contentText: string } | null = null;
       try {
         snap = editorHandleRef.current?.getSnapshot?.() ?? null;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       if (!snap || typeof snap.content !== "string") return;
       if (snap.content === note.content) return;
       // 1) �ݸ壨ͬ����������������
@@ -692,7 +836,9 @@ function OrdinaryEditorPane({
           baseVersion: note.version,
           savedAt: Date.now(),
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       // 2) ���߶��У��´����� flush��
       // 在线重载、热更新和切后台会触发此路径；常规保存失败会自行入队，
       // 因此在线时只保留草稿，避免将旧版本快照留待下次自动重放。
@@ -712,7 +858,9 @@ function OrdinaryEditorPane({
             version: note.version,
           },
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     const onPageHide = () => flushToLocal();
@@ -738,110 +886,136 @@ function OrdinaryEditorPane({
   const syncStatusRef = useRef(syncStatus);
   syncStatusRef.current = syncStatus;
 
-  const convertActiveNoteFormat = useCallback(async ({
-    noteId,
-    targetFormat,
-  }: NoteFormatConversionRequest) => {
-    const initialNote = activeNoteRef.current;
-    if (!initialNote || initialNote.id !== noteId || modeSwitchInflightRef.current) return;
-    if (initialNote.isLocked || viewLockedIdsRef.current.has(noteId)) {
-      toast.warning(t("editorOps.convertLocked"));
-      return;
-    }
-
-    modeSwitchInflightRef.current = true;
-    setModeSwitching(true);
-    let snapshot: { content: string; contentText: string } | null = null;
-
-    try {
-      snapshot = editorHandleRef.current?.getSnapshot?.() ?? {
-        content: initialNote.content,
-        contentText: initialNote.contentText,
-      };
-      editorHandleRef.current?.discardPending?.();
-
-      if (saveInflightRef.current) {
-        try { await saveInflightRef.current; } catch { /* 使用当前编辑器快照继续转换 */ }
-      }
-      if (activeNoteRef.current?.id !== noteId) return;
-
-      const persisted = await api.getNote(noteId);
-      const converted = convertNoteContent(
-        snapshot.content,
-        snapshot.contentText,
-        targetFormat,
-      );
-      actions.setSyncStatus("saving");
-      const updated = await api.updateNoteConfirmed(noteId, {
-        ...converted,
-        version: persisted.version,
-        ...(targetFormat === "markdown" ? { syncToYjs: true } : {}),
-        writeSource: "manual-save",
-      } as any);
-
-      activeNoteRef.current = updated;
-      actions.setActiveNote(updated);
-      actions.updateNoteInList({
-        id: updated.id,
-        contentText: updated.contentText,
-        contentFormat: updated.contentFormat,
-        updatedAt: updated.updatedAt,
-        version: updated.version,
-      });
-      actions.updateNoteTab({
-        id: updated.id,
-        contentFormat: updated.contentFormat,
-        updatedAt: updated.updatedAt,
-      });
-
-      const nextMode: EditorMode = targetFormat === "markdown" ? "md" : "tiptap";
-      persistEditorMode(nextMode);
-      clearForcedModeFromUrl();
-      setEditorMode(nextMode);
-      editorModeRef.current = nextMode;
-      try { clearDraft(noteId); } catch { /* ignore */ }
-
-      if (targetFormat === "tiptap-json") {
-        try { await api.releaseYjsRoom(noteId); } catch { /* 下次打开时会重新建立房间 */ }
+  const convertActiveNoteFormat = useCallback(
+    async ({ noteId, targetFormat }: NoteFormatConversionRequest) => {
+      const initialNote = activeNoteRef.current;
+      if (
+        !initialNote ||
+        initialNote.id !== noteId ||
+        modeSwitchInflightRef.current
+      )
+        return;
+      if (initialNote.isLocked || viewLockedIdsRef.current.has(noteId)) {
+        toast.warning(t("editorOps.convertLocked"));
+        return;
       }
 
-      actions.setSyncStatus("saved");
-      actions.setLastSynced(new Date().toISOString());
-      actions.refreshNotes();
-      window.dispatchEvent(new CustomEvent("nowen:knowledge-tree-changed", {
-        detail: { reason: "note-format-converted", noteId },
-      }));
-      toast.success(targetFormat === "markdown" ? t("editorOps.convertedMarkdown") : t("editorOps.convertedRichText"));
-    } catch (error) {
-      console.error("[EditorPane] convert note format failed:", error);
-      const current = activeNoteRef.current;
-      if (snapshot && current?.id === noteId) {
-        const restored = {
-          ...current,
-          content: snapshot.content,
-          contentText: snapshot.contentText,
+      modeSwitchInflightRef.current = true;
+      setModeSwitching(true);
+      let snapshot: { content: string; contentText: string } | null = null;
+
+      try {
+        snapshot = editorHandleRef.current?.getSnapshot?.() ?? {
+          content: initialNote.content,
+          contentText: initialNote.contentText,
         };
-        activeNoteRef.current = restored;
-        actions.setActiveNote(restored);
+        editorHandleRef.current?.discardPending?.();
+
+        if (saveInflightRef.current) {
+          try {
+            await saveInflightRef.current;
+          } catch {
+            /* 使用当前编辑器快照继续转换 */
+          }
+        }
+        if (activeNoteRef.current?.id !== noteId) return;
+
+        const persisted = await api.getNote(noteId);
+        const converted = convertNoteContent(
+          snapshot.content,
+          snapshot.contentText,
+          targetFormat,
+        );
+        actions.setSyncStatus("saving");
+        const updated = await api.updateNoteConfirmed(noteId, {
+          ...converted,
+          version: persisted.version,
+          ...(targetFormat === "markdown" ? { syncToYjs: true } : {}),
+          writeSource: "manual-save",
+        } as any);
+
+        activeNoteRef.current = updated;
+        actions.setActiveNote(updated);
+        actions.updateNoteInList({
+          id: updated.id,
+          contentText: updated.contentText,
+          contentFormat: updated.contentFormat,
+          updatedAt: updated.updatedAt,
+          version: updated.version,
+        });
+        actions.updateNoteTab({
+          id: updated.id,
+          contentFormat: updated.contentFormat,
+          updatedAt: updated.updatedAt,
+        });
+
+        const nextMode: EditorMode =
+          targetFormat === "markdown" ? "md" : "tiptap";
+        persistEditorMode(nextMode);
+        clearForcedModeFromUrl();
+        setEditorMode(nextMode);
+        editorModeRef.current = nextMode;
         try {
-          saveDraft({
-            noteId,
-            editorMode: editorModeRef.current,
+          clearDraft(noteId);
+        } catch {
+          /* ignore */
+        }
+
+        if (targetFormat === "tiptap-json") {
+          try {
+            await api.releaseYjsRoom(noteId);
+          } catch {
+            /* 下次打开时会重新建立房间 */
+          }
+        }
+
+        actions.setSyncStatus("saved");
+        actions.setLastSynced(new Date().toISOString());
+        actions.refreshNotes();
+        window.dispatchEvent(
+          new CustomEvent("nowen:knowledge-tree-changed", {
+            detail: { reason: "note-format-converted", noteId },
+          }),
+        );
+        toast.success(
+          targetFormat === "markdown"
+            ? t("editorOps.convertedMarkdown")
+            : t("editorOps.convertedRichText"),
+        );
+      } catch (error) {
+        console.error("[EditorPane] convert note format failed:", error);
+        const current = activeNoteRef.current;
+        if (snapshot && current?.id === noteId) {
+          const restored = {
+            ...current,
             content: snapshot.content,
             contentText: snapshot.contentText,
-            title: restored.title,
-            baseVersion: restored.version,
-            savedAt: Date.now(),
-          });
-        } catch { /* ignore */ }
+          };
+          activeNoteRef.current = restored;
+          actions.setActiveNote(restored);
+          try {
+            saveDraft({
+              noteId,
+              editorMode: editorModeRef.current,
+              content: snapshot.content,
+              contentText: snapshot.contentText,
+              title: restored.title,
+              baseVersion: restored.version,
+              savedAt: Date.now(),
+            });
+          } catch {
+            /* ignore */
+          }
+        }
+        actions.setSyncStatus("error");
+        toast.error(t("editorOps.convertFailed"));
+      } finally {
+        modeSwitchInflightRef.current = false;
+        setModeSwitching(false);
       }
-      actions.setSyncStatus("error");
-      toast.error(t("editorOps.convertFailed"));
-    } finally {
-      modeSwitchInflightRef.current = false;
-      setModeSwitching(false);
-    }
-  }, [actions, t]);
+    },
+    [actions, t],
+  );
 
   useEffect(() => {
     const handleRequest = (event: Event) => {
@@ -849,11 +1023,16 @@ function OrdinaryEditorPane({
       if (!detail?.noteId || !detail.targetFormat) return;
       void convertActiveNoteFormat(detail);
     };
-    window.addEventListener(REQUEST_NOTE_FORMAT_CONVERSION_EVENT, handleRequest);
-    return () => window.removeEventListener(REQUEST_NOTE_FORMAT_CONVERSION_EVENT, handleRequest);
+    window.addEventListener(
+      REQUEST_NOTE_FORMAT_CONVERSION_EVENT,
+      handleRequest,
+    );
+    return () =>
+      window.removeEventListener(
+        REQUEST_NOTE_FORMAT_CONVERSION_EVENT,
+        handleRequest,
+      );
   }, [convertActiveNoteFormat]);
-
-
 
   // ---------------------------------------------------------------------------
   // Phase 2: ʵʱЭ�� ���� Presence / ���� / Զ�̸�����ʾ
@@ -861,7 +1040,10 @@ function OrdinaryEditorPane({
   /** Զ�̸��º���������˱�����ͬһƪ�ʼǣ���ʾ�û����¼��� / ������ͻ */
   const lastAutoAppliedRemoteRef = useRef<string>("");
   /** Զ��ɾ����� */
-  const [remoteDelete, setRemoteDelete] = useState<{ actorUserId?: string; trashed?: boolean } | null>(null);
+  const [remoteDelete, setRemoteDelete] = useState<{
+    actorUserId?: string;
+    trashed?: boolean;
+  } | null>(null);
 
   // ������ P2-5: δ����ݸ�ָ���ʾ ����������������������������
   // �򿪱ʼ�ʱ����������� baseVersion <= server.version �� savedAt > server.updatedAt
@@ -869,69 +1051,98 @@ function OrdinaryEditorPane({
   const [pendingDraft, setPendingDraft] = useState<NoteDraft | null>(null);
   // handleUpdate ������Ŷ��壬������ ref ����"ʹ��δ��ʼ������"
   const handleUpdateRef = useRef<
-    | ((data: { content?: string; contentText?: string; title: string }) => Promise<void>)
+    | ((data: {
+        content?: string;
+        contentText?: string;
+        title: string;
+      }) => Promise<void>)
     | null
   >(null);
-  const handleEditorUpdate = useCallback(async (data: NoteEditorUpdatePayload) => {
-    await handleUpdateRef.current?.(data);
-  }, []);
+  const handleEditorUpdate = useCallback(
+    async (data: NoteEditorUpdatePayload) => {
+      await handleUpdateRef.current?.(data);
+    },
+    [],
+  );
 
-  const handleLocalMirrorUpdate = useCallback((data: NoteEditorUpdatePayload) => {
-    const current = activeNoteRef.current;
-    if (!current || (data._noteId && data._noteId !== current.id)) return;
-    publishEditorSplitMirrorUpdate(current.id, data);
-  }, []);
+  const handleLocalMirrorUpdate = useCallback(
+    (data: NoteEditorUpdatePayload) => {
+      const current = activeNoteRef.current;
+      if (!current || (data._noteId && data._noteId !== current.id)) return;
+      publishEditorSplitMirrorUpdate(current.id, data);
+    },
+    [],
+  );
 
-  const persistPendingConflictSnapshot = useCallback((detail: NoteConflictAutoResolvedDetail): boolean => {
-    const current = activeNoteRef.current;
-    if (!current || current.id !== detail.note.id) return false;
+  const persistPendingConflictSnapshot = useCallback(
+    (detail: NoteConflictAutoResolvedDetail): boolean => {
+      const current = activeNoteRef.current;
+      if (!current || current.id !== detail.note.id) return false;
 
-    const editorHandle = editorHandleRef.current;
-    if (editorHandle) {
-      let snapshot: ReturnType<NonNullable<NoteEditorHandle["getSnapshot"]>> = null;
-      try {
-        snapshot = editorHandle.getSnapshot?.() ?? null;
-      } catch {
-        return false;
-      }
-      if (!snapshot) return false;
+      const editorHandle = editorHandleRef.current;
+      if (editorHandle) {
+        let snapshot: ReturnType<NonNullable<NoteEditorHandle["getSnapshot"]>> =
+          null;
+        try {
+          snapshot = editorHandle.getSnapshot?.() ?? null;
+        } catch {
+          return false;
+        }
+        if (!snapshot) return false;
 
-      const snapshotTitle = snapshot.title ?? current.title;
-      if (shouldPersistPendingConflictSnapshot(snapshot, current.title, detail)) {
-        preserveNoteSyncConflictSnapshot(current.id, {
-          version: current.version,
-          title: snapshotTitle,
-          content: snapshot.content,
-          contentText: snapshot.contentText,
-          contentFormat: current.contentFormat,
-        }, current.version, detail.note);
+        const snapshotTitle = snapshot.title ?? current.title;
+        if (
+          shouldPersistPendingConflictSnapshot(snapshot, current.title, detail)
+        ) {
+          preserveNoteSyncConflictSnapshot(
+            current.id,
+            {
+              version: current.version,
+              title: snapshotTitle,
+              content: snapshot.content,
+              contentText: snapshot.contentText,
+              contentFormat: current.contentFormat,
+            },
+            current.version,
+            detail.note,
+          );
+          editorHandle.discardPending?.();
+          const localNote = {
+            ...current,
+            title: snapshotTitle,
+            content: snapshot.content,
+            contentText: snapshot.contentText,
+          };
+          activeNoteRef.current = localNote;
+          actions.setActiveNote(localNote);
+          return false;
+        }
         editorHandle.discardPending?.();
-        const localNote = {
-          ...current,
-          title: snapshotTitle,
-          content: snapshot.content,
-          contentText: snapshot.contentText,
-        };
-        activeNoteRef.current = localNote;
-        actions.setActiveNote(localNote);
-        return false;
       }
-      editorHandle.discardPending?.();
-    }
 
-    activeNoteRef.current = detail.note;
-    actions.setActiveNote(detail.note);
-    return true;
-  }, [actions]);
+      activeNoteRef.current = detail.note;
+      actions.setActiveNote(detail.note);
+      return true;
+    },
+    [actions],
+  );
 
   useEffect(() => {
     const handleAutoResolvedConflict = (event: Event) => {
-      const detail = (event as CustomEvent<NoteConflictAutoResolvedDetail>).detail;
+      const detail = (event as CustomEvent<NoteConflictAutoResolvedDetail>)
+        .detail;
       if (!detail?.note || !detail.resolvedLocal) return;
       persistPendingConflictSnapshot(detail);
     };
-    window.addEventListener(NOTE_CONFLICT_AUTO_RESOLVED_EVENT, handleAutoResolvedConflict);
-    return () => window.removeEventListener(NOTE_CONFLICT_AUTO_RESOLVED_EVENT, handleAutoResolvedConflict);
+    window.addEventListener(
+      NOTE_CONFLICT_AUTO_RESOLVED_EVENT,
+      handleAutoResolvedConflict,
+    );
+    return () =>
+      window.removeEventListener(
+        NOTE_CONFLICT_AUTO_RESOLVED_EVENT,
+        handleAutoResolvedConflict,
+      );
   }, [persistPendingConflictSnapshot]);
 
   useEffect(() => {
@@ -957,7 +1168,11 @@ function OrdinaryEditorPane({
         /* flushSave below remains the fallback when a snapshot is unavailable. */
       }
 
-      try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
+      try {
+        editorHandleRef.current?.flushSave();
+      } catch {
+        /* ignore */
+      }
     };
 
     const publishRequestedMirror = (event: Event) => {
@@ -974,11 +1189,23 @@ function OrdinaryEditorPane({
       });
     };
 
-    window.addEventListener(PREPARE_EDITOR_SPLIT_CLOSE_EVENT, prepareSplitClose);
-    window.addEventListener(REQUEST_EDITOR_SPLIT_MIRROR_EVENT, publishRequestedMirror);
+    window.addEventListener(
+      PREPARE_EDITOR_SPLIT_CLOSE_EVENT,
+      prepareSplitClose,
+    );
+    window.addEventListener(
+      REQUEST_EDITOR_SPLIT_MIRROR_EVENT,
+      publishRequestedMirror,
+    );
     return () => {
-      window.removeEventListener(PREPARE_EDITOR_SPLIT_CLOSE_EVENT, prepareSplitClose);
-      window.removeEventListener(REQUEST_EDITOR_SPLIT_MIRROR_EVENT, publishRequestedMirror);
+      window.removeEventListener(
+        PREPARE_EDITOR_SPLIT_CLOSE_EVENT,
+        prepareSplitClose,
+      );
+      window.removeEventListener(
+        REQUEST_EDITOR_SPLIT_MIRROR_EVENT,
+        publishRequestedMirror,
+      );
     };
   }, [actions]);
 
@@ -987,9 +1214,18 @@ function OrdinaryEditorPane({
     setPendingDraft(null);
     // �����ʼǣ������򱾻Ựƫ�����������ݸ�ָ���ʾ������Ȼ���뼴ֻ����
     // û��"�ָ�δ��������"�����壬���������û�����Ϊ��ʧЧ��
-    if (!activeNote || activeNote.isLocked || viewLockedIdsRef.current.has(activeNote.id)) return;
+    if (
+      !activeNote ||
+      activeNote.isLocked ||
+      viewLockedIdsRef.current.has(activeNote.id)
+    )
+      return;
     let draft: NoteDraft | null = null;
-    try { draft = loadDraft(activeNote.id); } catch { draft = null; }
+    try {
+      draft = loadDraft(activeNote.id);
+    } catch {
+      draft = null;
+    }
     if (!draft) return;
     if (
       shouldOfferRestore(
@@ -1003,7 +1239,11 @@ function OrdinaryEditorPane({
       setPendingDraft(draft);
     } else {
       // ʵ��������һ�£������˸��£� �� ֱ������ݸ�����´λ���ʾ
-      try { clearDraft(activeNote.id); } catch { /* ignore */ }
+      try {
+        clearDraft(activeNote.id);
+      } catch {
+        /* ignore */
+      }
     }
   }, [activeNote?.id, activeNote?.version, activeNote?.updatedAt]);
 
@@ -1027,7 +1267,9 @@ function OrdinaryEditorPane({
         content: draft.content,
         contentText: draft.contentText,
       });
-    try { toast.success(t("editor.draftRestored") || "已恢复未保存的修改"); } catch {}
+      try {
+        toast.success(t("editor.draftRestored") || "已恢复未保存的修改");
+      } catch {}
     } catch {
       // handleUpdate �ڲ��Ѵ�������
     }
@@ -1038,7 +1280,11 @@ function OrdinaryEditorPane({
     const draft = pendingDraft;
     if (!draft) return;
     setPendingDraft(null);
-    try { clearDraft(draft.noteId); } catch { /* ignore */ }
+    try {
+      clearDraft(draft.noteId);
+    } catch {
+      /* ignore */
+    }
   }, [pendingDraft]);
 
   // ---------------------------------------------------------------------------
@@ -1049,18 +1295,23 @@ function OrdinaryEditorPane({
   //   2) Phase 3 Y.js CRDT �� awareness����ʾ������������ɫ��
   // ��˱����� useRealtimeNote ֮ǰ������������ʱ��������TDZ��������
   /** ��ǰ��¼�û���Ϣ������ awareness ��ʾ������������ɫ */
-  const [selfUser, setSelfUser] = useState<{ userId: string; username: string } | null>(() => {
+  const [selfUser, setSelfUser] = useState<{
+    userId: string;
+    username: string;
+  } | null>(() => {
     try {
       const cachedId = localStorage.getItem("nowen-self-userid");
       const cachedName = localStorage.getItem("nowen-self-username");
-      if (cachedId && cachedName) return { userId: cachedId, username: cachedName };
+      if (cachedId && cachedName)
+        return { userId: cachedId, username: cachedName };
     } catch {}
     return null;
   });
   useEffect(() => {
     if (selfUser) return;
     let cancelled = false;
-    api.getMe()
+    api
+      .getMe()
       .then((me: any) => {
         if (cancelled || !me?.id) return;
         try {
@@ -1069,11 +1320,19 @@ function OrdinaryEditorPane({
         } catch {}
         setSelfUser({ userId: me.id, username: me.username || me.id });
       })
-      .catch(() => { /* δ��¼/����ʧ�ܾ�Ĭ */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* δ��¼/����ʧ�ܾ�Ĭ */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selfUser]);
 
-  function getCurrentEditorSnapshot(): { content: string; contentText: string; title?: string } | null {
+  function getCurrentEditorSnapshot(): {
+    content: string;
+    contentText: string;
+    title?: string;
+  } | null {
     try {
       const snap = editorHandleRef.current?.getSnapshot?.();
       return snap && typeof snap.content === "string" ? snap : null;
@@ -1084,15 +1343,21 @@ function OrdinaryEditorPane({
 
   function persistCurrentEditorSnapshotDraft(): void {
     const current = activeNoteRef.current;
-    if (!current || current.isLocked || viewLockedIdsRef.current.has(current.id)) return;
+    if (
+      !current ||
+      current.isLocked ||
+      viewLockedIdsRef.current.has(current.id)
+    )
+      return;
     const snapshot = getCurrentEditorSnapshot();
     if (!snapshot) return;
     const title = snapshot.title ?? current.title;
     if (
-      snapshot.content === current.content
-      && snapshot.contentText === current.contentText
-      && title === current.title
-    ) return;
+      snapshot.content === current.content &&
+      snapshot.contentText === current.contentText &&
+      title === current.title
+    )
+      return;
     try {
       saveDraft({
         noteId: current.id,
@@ -1111,12 +1376,15 @@ function OrdinaryEditorPane({
   function hasLocalUnsavedChanges(): boolean {
     const cur = activeNoteRef.current;
     if (!cur) return false;
-    if (syncStatusRef.current === "saving" || !!saveInflightRef.current) return true;
+    if (syncStatusRef.current === "saving" || !!saveInflightRef.current)
+      return true;
     const snap = getCurrentEditorSnapshot();
     if (!snap) return false;
-    return snap.content !== cur.content
-      || snap.contentText !== cur.contentText
-      || (snap.title ?? cur.title) !== cur.title;
+    return (
+      snap.content !== cur.content ||
+      snap.contentText !== cur.contentText ||
+      (snap.title ?? cur.title) !== cur.title
+    );
   }
 
   function getCollabMarkdownSnapshot(): string | null {
@@ -1139,7 +1407,11 @@ function OrdinaryEditorPane({
     });
   }
 
-  function logSkippedRemoteApply(reason: string, noteId: string, remoteVersion: number) {
+  function logSkippedRemoteApply(
+    reason: string,
+    noteId: string,
+    remoteVersion: number,
+  ) {
     const local = activeNoteRef.current;
     const yText = getCollabMarkdownSnapshot();
     console.warn("[EditorPane] skip active note remote refresh", {
@@ -1206,7 +1478,11 @@ function OrdinaryEditorPane({
       const collabDoc = collabYDocRef.current;
       const beforeYText = getCollabMarkdownSnapshot();
       if (collabDoc && (!collabSyncedRef.current || beforeYText === "")) {
-        try { collabProviderRef.current?.requestResync?.(); } catch { /* ignore */ }
+        try {
+          collabProviderRef.current?.requestResync?.();
+        } catch {
+          /* ignore */
+        }
       }
 
       const fresh = await api.getNote(msg.noteId);
@@ -1214,9 +1490,13 @@ function OrdinaryEditorPane({
       if (!latest || latest.id !== msg.noteId) return;
       if (latest.version >= fresh.version) return;
 
-      const freshMarkdown = normalizeToMarkdown(fresh.content, fresh.contentText);
+      const freshMarkdown = normalizeToMarkdown(
+        fresh.content,
+        fresh.contentText,
+      );
       const currentYText = getCollabMarkdownSnapshot();
-      const yTextAlreadyFresh = currentYText !== null && currentYText === freshMarkdown;
+      const yTextAlreadyFresh =
+        currentYText !== null && currentYText === freshMarkdown;
       if (!yTextAlreadyFresh && hasLocalUnsavedChanges()) {
         logSkippedRemoteApply("local-unsaved", msg.noteId, fresh.version);
         return;
@@ -1250,11 +1530,18 @@ function OrdinaryEditorPane({
         });
       }
     } catch (e) {
-      console.warn(`[EditorPane] active note version check failed (${reason}):`, e);
+      console.warn(
+        `[EditorPane] active note version check failed (${reason}):`,
+        e,
+      );
     }
   }
 
-  const { presenceUsers, isConnected, setEditing: rtSetEditing } = useRealtimeNote({
+  const {
+    presenceUsers,
+    isConnected,
+    setEditing: rtSetEditing,
+  } = useRealtimeNote({
     noteId: activeNote?.id ?? null,
     // ��ʽ���� selfUserId��EditorPane ������ selfUser��localStorage ���� + /api/me����
     // ֱ�Ӵ���ȥ������ hook �ڲ�"selfUserId Ϊ null ������"���µ�����ʾ
@@ -1299,7 +1586,10 @@ function OrdinaryEditorPane({
       });
 
       const cur = activeNoteRef.current;
-      if (!isRemoteVersionNewer(cur, { noteId: note.id, version: note.version })) return;
+      if (
+        !isRemoteVersionNewer(cur, { noteId: note.id, version: note.version })
+      )
+        return;
       void applyRemoteNoteUpdate({
         noteId: note.id,
         version: note.version,
@@ -1319,7 +1609,8 @@ function OrdinaryEditorPane({
   // �ƶ��˺�̨�ָ� / ����ָ� / WebSocket ����ʱ���ܴ���ʵʱ��Ϣ������һ�ε�ǰ�ʼǰ汾��
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") void checkActiveNoteRemoteVersion("visible");
+      if (document.visibilityState === "visible")
+        void checkActiveNoteRemoteVersion("visible");
     };
     const onOnline = () => void checkActiveNoteRemoteVersion("online");
     document.addEventListener("visibilitychange", onVisible);
@@ -1351,10 +1642,19 @@ function OrdinaryEditorPane({
    * ע�����˳�����Ҳ���á�������ֻһ�� client��y-collab �൱�ڿղ������������
    * ����������־û��������������Զ��ϲ���
    */
-  const collabReady = !!(activeNote && !activeNote.isLocked && selfUser && editorMode === "md"
-    && !isAndroidNativeRuntime()
-    && !/nowen-encrypted/i.test(activeNote.content || ""));
-  const { doc: collabYDoc, provider: collabProvider, synced: collabSynced } = useYDoc({
+  const collabReady = !!(
+    activeNote &&
+    !activeNote.isLocked &&
+    selfUser &&
+    editorMode === "md" &&
+    !isAndroidNativeRuntime() &&
+    !/nowen-encrypted/i.test(activeNote.content || "")
+  );
+  const {
+    doc: collabYDoc,
+    provider: collabProvider,
+    synced: collabSynced,
+  } = useYDoc({
     noteId: collabReady ? (activeNote?.id ?? null) : null,
     user: selfUser,
     enabled: collabReady,
@@ -1425,7 +1725,8 @@ function OrdinaryEditorPane({
     }
     let cancelled = false;
     setBacklinksLoading(true);
-    api.getBacklinks(activeNote.id)
+    api
+      .getBacklinks(activeNote.id)
       .then((data) => {
         if (!cancelled) {
           setBacklinksCount(data.backlinks.length);
@@ -1441,7 +1742,9 @@ function OrdinaryEditorPane({
           setBacklinksLoading(false);
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeNote?.id]);
 
   /** �� presence �з����û��������ں����ʾ�� */
@@ -1488,7 +1791,11 @@ function OrdinaryEditorPane({
   useEffect(() => {
     const flushLifecycleSave = () => {
       persistCurrentEditorSnapshotDraft();
-      try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
+      try {
+        editorHandleRef.current?.flushSave();
+      } catch {
+        /* ignore */
+      }
     };
     window.addEventListener("beforeunload", flushLifecycleSave);
     window.addEventListener("pagehide", flushLifecycleSave);
@@ -1508,21 +1815,35 @@ function OrdinaryEditorPane({
         return;
       }
       persistCurrentEditorSnapshotDraft();
-      try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
+      try {
+        editorHandleRef.current?.flushSave();
+      } catch {
+        /* ignore */
+      }
     };
     window.addEventListener("nowen:before-note-switch", onBeforeNoteSwitch);
-    return () => window.removeEventListener("nowen:before-note-switch", onBeforeNoteSwitch);
+    return () =>
+      window.removeEventListener(
+        "nowen:before-note-switch",
+        onBeforeNoteSwitch,
+      );
   }, []);
 
   // Delete ��ɾ���ʼǿ�ݼ������ڱ༭��δ�۽�ʱ��Ч��
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Delete" && activeNote
-          && !activeNote.isLocked
-          && !viewLockedIdsRef.current.has(activeNote.id)) {
+      if (
+        e.key === "Delete" &&
+        activeNote &&
+        !activeNote.isLocked &&
+        !viewLockedIdsRef.current.has(activeNote.id)
+      ) {
         // ��齹���Ƿ��ڱ༭���ڲ�������ڱ༭���ڣ�Delete ��Ӧ������ɾ�����֣�
         const activeEl = document.activeElement;
-        const isInEditor = activeEl?.closest(".ProseMirror, .cm-editor") || activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA";
+        const isInEditor =
+          activeEl?.closest(".ProseMirror, .cm-editor") ||
+          activeEl?.tagName === "INPUT" ||
+          activeEl?.tagName === "TEXTAREA";
         if (!isInEditor) {
           e.preventDefault();
           setShowDeleteConfirm(true);
@@ -1543,7 +1864,7 @@ function OrdinaryEditorPane({
     let observer: IntersectionObserver | null = null;
     const frame = requestAnimationFrame(() => {
       const title = editorPaneRootRef.current?.querySelector<HTMLElement>(
-        '[data-mobile-editor-title], [data-markdown-mobile-title]',
+        "[data-mobile-editor-title], [data-markdown-mobile-title]",
       );
       if (!title) return;
       observer = new IntersectionObserver(
@@ -1565,7 +1886,10 @@ function OrdinaryEditorPane({
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest("[data-mobile-note-menu-trigger]")) return;
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(e.target as Node)
+      ) {
         setShowMobileMenu(false);
         setShowMobileMoveMenu(false);
       }
@@ -1577,7 +1901,10 @@ function OrdinaryEditorPane({
   useEffect(() => {
     if (!showDesktopMoreMenu) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (desktopMoreMenuRef.current && !desktopMoreMenuRef.current.contains(e.target as Node)) {
+      if (
+        desktopMoreMenuRef.current &&
+        !desktopMoreMenuRef.current.contains(e.target as Node)
+      ) {
         setShowDesktopMoreMenu(false);
       }
     };
@@ -1592,322 +1919,385 @@ function OrdinaryEditorPane({
     };
   }, [showDesktopMoreMenu]);
 
-  const handleUpdate = useCallback(async (data: NoteEditorUpdatePayload) => {
-    const currentNote = activeNoteRef.current;
-    if (!currentNote || currentNote.isLocked || viewLockedIdsRef.current.has(currentNote.id)) return;
+  const handleUpdate = useCallback(
+    async (data: NoteEditorUpdatePayload) => {
+      const currentNote = activeNoteRef.current;
+      if (
+        !currentNote ||
+        currentNote.isLocked ||
+        viewLockedIdsRef.current.has(currentNote.id)
+      )
+        return;
 
-    if (typeof data.content === "string") {
-      try {
-        const content = stabilizeNoteContentForPersistence(data.content, currentNote.contentFormat);
-        if (content !== data.content) data = { ...data, content };
-      } catch (error) {
-        reportTransientNoteImageSource(error, {
-          operation: "handleEditorUpdate",
-          noteId: currentNote.id,
+      if (typeof data.content === "string") {
+        try {
+          const content = stabilizeNoteContentForPersistence(
+            data.content,
+            currentNote.contentFormat,
+          );
+          if (content !== data.content) data = { ...data, content };
+        } catch (error) {
+          reportTransientNoteImageSource(error, {
+            operation: "handleEditorUpdate",
+            noteId: currentNote.id,
+          });
+          return;
+        }
+      }
+
+      // P0: 如果调度时的 noteId 与当前 activeNote 不一致，说明已切换笔记，跳过保存
+      if (data._noteId && data._noteId !== currentNote.id) {
+        console.warn("[handleUpdate] noteId mismatch, skipping save", {
+          scheduled: data._noteId,
+          current: currentNote.id,
         });
         return;
       }
-    }
 
-    // P0: 如果调度时的 noteId 与当前 activeNote 不一致，说明已切换笔记，跳过保存
-    if (data._noteId && data._noteId !== currentNote.id) {
-      console.warn("[handleUpdate] noteId mismatch, skipping save", { scheduled: data._noteId, current: currentNote.id });
-      return;
-    }
-
-    if (shouldSkipUnchangedTitleOnlyUpdate(currentNote.title, data)) {
-      return;
-    }
-
-    // Keep the app state on the editor's latest local snapshot. The duplicate split pane uses
-    // this state as its live read-only mirror, and a remounted primary editor must never
-    // initialize from the last server acknowledgement while a newer save is still in flight.
-    const localNote = applyEditorUpdateToNote(currentNote, data);
-    if (localNote !== currentNote) {
-      activeNoteRef.current = localNote;
-      actions.setActiveNote(localNote);
-    }
-
-    // P0: 空内容防护已移至后端（notes.ts suspicious_empty_update 拦截）。
-    // 前端不拦截空内容保存，因为：
-    //   1. Tiptap 空文档 JSON 不是空字符串，前端 guard 实际上不拦截 RTE 模式
-    //   2. Markdown 空文档是空字符串，前端 guard 会错误拦截用户主动清空
-    //   3. 后端 guard 同时检查 content 和 contentText，更准确
-
-    // ������ P2-5: ���زݸ�˫���� ����������������������������
-    // ÿ�� onUpdate fire ��**ͬ��**дһ�ݲݸ嵽 localStorage��ֻҪ�����κλ���
-    // ��PUT ʧ�� / fetch ���� / ҳ�汻ɱ�����ˣ��´δ�ͬһ�ʼ����ܴӲݸ�ָ���
-    if (data.content !== undefined) {
-      try {
-        saveDraft({
-          noteId: currentNote.id,
-          editorMode: editorModeRef.current,
-          content: data.content,
-          contentText: data.contentText || "",
-          title: data.title,
-          baseVersion: currentNote.version,
-          savedAt: Date.now(),
-        });
-      } catch { /* ignore quota �ȴ��� */ }
-    }
-
-    // Phase 2: �㲥"�����ڱ༭"��1.5s �������������Զ�ȡ����
-    try { flagEditing(); } catch {}
-    actions.setSyncStatus("saving");
-
-    // ��װ��С�����Ա� 409 ���� server ���ص� currentVersion �ط�һ�Ρ�
-    //
-    // P0-4: 409 �ط�ʱ���ȴӱ༭�������� snapshot ���¹��� payload��
-    //   ������ԭʵ�� sendOnce ��Զ���ó��ν��� handleUpdate ʱ�� data �հ���
-    //   �� data �� 500ms ǰ debounce ʱ�̵����ݡ���� 409 �ȴ� + �ط��ڼ��û�
-    //   �������֣��طžͻ���"��ʱ������"���Ƿ�������°汾����һ�ε� debounce
-    //   PUT �ֻ��� 409������ͬ����ʱ�����ݸ���һ�Σ��� �û��о�"�Ҹ��õ���
-    //   ������ / �༭���Զ�����"��
-    //
-    //   �ķ���ÿ�� sendOnce ����ʱ�����׷� + 409 �طţ������ȳ��Դ�
-    //   editorHandleRef ȡһ������ snapshot���õ��򸲸� content/contentText��
-    //   �׷�ʱ snapshot �� data ����һ�£�����룩�������ÿɺ��ԣ��ط�ʱ
-    //   ��ȷ�����͵���"�û����������ڱ༭���￴��������"��
-    //
-    //   ���� data.content !== undefined������ CRDT-only ������ʱ�Ÿ��ǣ�
-    //   CRDT ģʽ data ���� content���� yjs ͨ��д�أ�������������͵͵����
-    let attemptCount = 0;
-    // ʵ�ʷ��͵����һ�� payload�������� 409 �طű��������� snapshot����
-    // �·� setActiveNote ���� content ʱ���������ǳ�ʼ data������ activeNote
-    // ��������ʵ�洢���ݲ�һ�¡�
-    let lastSentData: { content?: string; contentText?: string; title: string } = data;
-    const sendOnce = (version: number) => {
-      attemptCount++;
-      let effectiveData = data;
-      if (data.content !== undefined && attemptCount > 1) {
-        try {
-          const snap = editorHandleRef.current?.getSnapshot?.();
-          if (snap && typeof snap.content === "string") {
-            effectiveData = {
-              title: data.title,
-              content: snap.content,
-              contentText: snap.contentText,
-            };
-          }
-        } catch {
-          /* getSnapshot ʧ��ʱ���˵�ԭ data������������ */
-        }
+      if (shouldSkipUnchangedTitleOnlyUpdate(currentNote.title, data)) {
+        return;
       }
-      lastSentData = effectiveData;
-      // P0-#2 �޸���CRDT ģʽ�� content δ�� �� ֻͬ�� meta��title����
-      // ���� REST PUT ������ yjs ��д notes.content ������̬����
-      const payload: any = { title: effectiveData.title, version };
-      payload.writeSource = "live-autosave";
-      payload.contentFormat = currentNote.contentFormat;
-      if (effectiveData.content !== undefined) payload.content = effectiveData.content;
-      if (effectiveData.contentText !== undefined) payload.contentText = effectiveData.contentText;
-      return api.updateNote(currentNote.id, payload);
-    };
 
-    // �ѱ��� PUT ע��Ϊ "inflight"���� toggleEditorMode ���л�ǰ await��
-    // ���л�����"���������� REST PUT"�����漰 yjs update ����
-    //
-    // ������ε���ʱ�����ֱ�Ӹ��� ref����һ�ε� handleUpdate Ҳ���� await ���
-    // inflight ���������� FIFO ���У�toggleEditorMode ֻ����"�л��㵱�»�δ���
-    // ����һ�� PUT"��
-    const inflight = (async () => {
-    try {
-      // �ֹ�����ͻ reconcile������˷��� { status: 409, currentVersion: N }��
-      // ������һ���Ļ������� activeNote.version ��Զͣ���ھ�ֵ��֮��ÿ�� debounce
-      // �Զ����涼���ٴ� 409���γ�"409 �籩"�������־���ܿ�����ʮ������ 409����
-      //
-      // putWithReconcile �Ĳ��ԣ��� toggleEditorMode �Ĺ淶�� PUT ����ͬһ��ʵ�֣���
-      //   1) ��ѡ�� err.currentVersion �ط�һ�Σ�
-      //   2) �����û�����汾��ʱ�ٶ����� fetchLatestVersion��GET /notes/:id����
-      //   3) �ڼ��бʼǣ�onAbort���� abort �طţ���ֹ�Ѿɱʼ�����д���±ʼǡ�
-      let updated;
+      // Keep the app state on the editor's latest local snapshot. The duplicate split pane uses
+      // this state as its live read-only mirror, and a remounted primary editor must never
+      // initialize from the last server acknowledgement while a newer save is still in flight.
+      const localNote = applyEditorUpdateToNote(currentNote, data);
+      if (localNote !== currentNote) {
+        activeNoteRef.current = localNote;
+        actions.setActiveNote(localNote);
+      }
+
+      // P0: 空内容防护已移至后端（notes.ts suspicious_empty_update 拦截）。
+      // 前端不拦截空内容保存，因为：
+      //   1. Tiptap 空文档 JSON 不是空字符串，前端 guard 实际上不拦截 RTE 模式
+      //   2. Markdown 空文档是空字符串，前端 guard 会错误拦截用户主动清空
+      //   3. 后端 guard 同时检查 content 和 contentText，更准确
+
+      // ������ P2-5: ���زݸ�˫���� ����������������������������
+      // ÿ�� onUpdate fire ��**ͬ��**дһ�ݲݸ嵽 localStorage��ֻҪ�����κλ���
+      // ��PUT ʧ�� / fetch ���� / ҳ�汻ɱ�����ˣ��´δ�ͬһ�ʼ����ܴӲݸ�ָ���
       if (data.content !== undefined) {
-        // ���ı������� 409 ʱ�����١������� version ä�طž����ġ�������Ḳ��
-        // PC/Web �ձ�������ݡ�����ĳ���ȡԶ�����°棬�������زݸ壬�������ͻ�����
         try {
-          updated = await sendOnce(currentNote.version);
-        } catch (err: any) {
-          if (!is409Error(err)) throw err;
-          if (activeNoteRef.current?.id !== currentNote.id) return;
-          let latestVersion = typeof err?.currentVersion === "number" ? err.currentVersion : undefined;
-          try {
-            const fresh = await api.getNote(currentNote.id);
-            latestVersion = fresh.version;
-            actions.updateNoteInList({
-              id: fresh.id,
-              title: fresh.title,
-              contentText: fresh.contentText,
-              updatedAt: fresh.updatedAt,
-              version: fresh.version,
-            } as any);
-          } catch {
-            /* ��ȫ��ʧ��Ҳ�������زݸ壬�Ժ����û����� */
-          }
-          const snap = getCurrentEditorSnapshot();
-          if (snap) {
-            try {
-              saveDraft({
-                noteId: currentNote.id,
-                editorMode: editorModeRef.current,
-                content: snap.content,
-                contentText: snap.contentText,
-                title: data.title,
-                baseVersion: latestVersion ?? currentNote.version,
-                savedAt: Date.now(),
-              });
-            } catch { /* ignore */ }
-          }
-          actions.setSyncStatus("error");
-          return;
+          saveDraft({
+            noteId: currentNote.id,
+            editorMode: editorModeRef.current,
+            content: data.content,
+            contentText: data.contentText || "",
+            title: data.title,
+            baseVersion: currentNote.version,
+            savedAt: Date.now(),
+          });
+        } catch {
+          /* ignore quota �ȴ��� */
         }
-      } else {
-        updated = await putWithReconcile({
-          initialVersion: currentNote.version,
-          send: sendOnce,
-          fetchLatestVersion: makeFetchLatestNoteVersion(currentNote.id),
-          onAbort: () => activeNoteRef.current?.id !== currentNote.id,
-        });
       }
 
-      if (updated && typeof lastSentData.content === "string") {
-        const committedContent = typeof updated.content === "string" ? updated.content : lastSentData.content;
-        confirmMediaNotePersistence(
-          currentNote.id,
-          committedContent,
-          (updated as Note & { __offlineQueued?: boolean }).__offlineQueued ? "queued" : "saved",
-        );
-      }
+      // Phase 2: �㲥"�����ڱ༭"��1.5s �������������Զ�ȡ����
+      try {
+        flagEditing();
+      } catch {}
+      actions.setSyncStatus("saving");
 
-      // ���ڱ���ıʼ����ǵ�ǰ����ʼ�ʱ����״̬����ֹ�����л�ʱ���Ǵ���ʼǣ�
-      if (activeNoteRef.current?.id === updated.id) {
-        // �ؼ�������Ѹձ���� content / contentText Ҳ��� activeNote��
-        //
-        // ������Ϊʲô֮ǰֻ����Ԫ���ݣ����������� content ������� activeNote
-        // ���ñ仯 �� TiptapEditor �� useEffect([note.content]) ���� setContent
-        // �� ���/���뱻��ϡ�����֮ǰֻ���� version/updatedAt/title��
-        //
-        // ������"�л��༭�� (MD ? RTE)"������������ bug��
-        //   - MD �༭������ �� activeNote.content ���Ǿ� Tiptap JSON��δˢ�£�
-        //   - �е� Tiptap �� TiptapEditor �� note.content �� �������Ǿ� JSON
-        //     �� �û��� MD �����������޸���ȫ"��ʧ"
-        //   - ����ͬ��
-        // ����Ϊ"�����л��Ͷ����ݡ������޸�Ҳ�����"��
-        //
-        // ����취������������༭����ͨ�� lastEmittedContentRef ������
-        // �Ƚ� note.content �Ƿ�����Լ��ϴ��ɳ�ȥ���Ƿݣ��Ǿ����� setContent��
-        // �����궶�������ǣ�������һ���༭����汾�ָ���������ͬ����
-        //
-        // P1-5: content �ֶ�������"ʵ�ʷ��͸�����˵���һ��"��lastSentData��
-        // ������ 409 �ط�ʱȡ������ snapshot���������Ǳհ���ĳ�ʼ data��
-        // ��һ����"�ֹ���д����"���� PUT �ڼ��û��������֣��༭����ǰ snapshot
-        // �� lastSentData ������ȡ�����ʱ����**���� activeNote.content ����**
-        // ���������û��������ݣ���ֻ����Ԫ���ݣ���һ�� debounce �Զ������
-        // �Ѻ�����������ȥ���������Ա����� activeNote ���û��˵��Ծɵİ汾��
-        // �������� TiptapEditor effect ���ؽ��༭�� DOM ����������ˡ�
-        let nextContent = activeNoteRef.current.content;
-        let nextContentText = activeNoteRef.current.contentText;
-        let preserveLocalEditor = false;
-        if (lastSentData.content !== undefined) {
-          let editorSnap: { content: string; contentText: string } | null = null;
+      // ��װ��С�����Ա� 409 ���� server ���ص� currentVersion �ط�һ�Ρ�
+      //
+      // P0-4: 409 �ط�ʱ���ȴӱ༭�������� snapshot ���¹��� payload��
+      //   ������ԭʵ�� sendOnce ��Զ���ó��ν��� handleUpdate ʱ�� data �հ���
+      //   �� data �� 500ms ǰ debounce ʱ�̵����ݡ���� 409 �ȴ� + �ط��ڼ��û�
+      //   �������֣��طžͻ���"��ʱ������"���Ƿ�������°汾����һ�ε� debounce
+      //   PUT �ֻ��� 409������ͬ����ʱ�����ݸ���һ�Σ��� �û��о�"�Ҹ��õ���
+      //   ������ / �༭���Զ�����"��
+      //
+      //   �ķ���ÿ�� sendOnce ����ʱ�����׷� + 409 �طţ������ȳ��Դ�
+      //   editorHandleRef ȡһ������ snapshot���õ��򸲸� content/contentText��
+      //   �׷�ʱ snapshot �� data ����һ�£�����룩�������ÿɺ��ԣ��ط�ʱ
+      //   ��ȷ�����͵���"�û����������ڱ༭���￴��������"��
+      //
+      //   ���� data.content !== undefined������ CRDT-only ������ʱ�Ÿ��ǣ�
+      //   CRDT ģʽ data ���� content���� yjs ͨ��д�أ�������������͵͵����
+      let attemptCount = 0;
+      // ʵ�ʷ��͵����һ�� payload�������� 409 �طű��������� snapshot����
+      // �·� setActiveNote ���� content ʱ���������ǳ�ʼ data������ activeNote
+      // ��������ʵ�洢���ݲ�һ�¡�
+      let lastSentData: {
+        content?: string;
+        contentText?: string;
+        title: string;
+      } = data;
+      const sendOnce = (version: number) => {
+        attemptCount++;
+        let effectiveData = data;
+        if (data.content !== undefined && attemptCount > 1) {
           try {
             const snap = editorHandleRef.current?.getSnapshot?.();
-            if (snap && typeof snap.content === "string") editorSnap = snap as any;
-          } catch { /* ignore */ }
-          const confirmed = resolveConfirmedTiptapContent({
-            serverContent: typeof updated.content === "string" ? updated.content : undefined,
-            serverContentText: typeof updated.contentText === "string" ? updated.contentText : undefined,
-            sentContent: lastSentData.content,
-            sentContentText: lastSentData.contentText,
-            editorSnapshot: editorSnap,
-            fallbackContentText: activeNoteRef.current.contentText,
-          });
-          nextContent = confirmed.content;
-          nextContentText = confirmed.contentText;
-          preserveLocalEditor = confirmed.preserveLocalEditor;
+            if (snap && typeof snap.content === "string") {
+              effectiveData = {
+                title: data.title,
+                content: snap.content,
+                contentText: snap.contentText,
+              };
+            }
+          } catch {
+            /* getSnapshot ʧ��ʱ���˵�ԭ data������������ */
+          }
         }
-        const activeNoteForAck = activeNoteRef.current;
-        if (!activeNoteForAck) return;
-        if (data._saveGeneration && lastSentData.content !== undefined) {
-          editorHandleRef.current?.acknowledgeSave?.({
-            noteId: updated.id,
-            version: updated.version,
-            content: nextContent,
-            saveGeneration: data._saveGeneration,
-            preserveLocalEditor,
-          });
-        }
-        actions.setActiveNote({
-          ...activeNoteForAck,
-          version: updated.version,
-          updatedAt: updated.updatedAt,
-          title: data.title,
-          content: nextContent,
-          contentText: nextContentText,
-        });
-        actions.updateNoteInList({ id: updated.id, title: updated.title, contentText: updated.contentText, updatedAt: updated.updatedAt });
-        actions.updateNoteTab({
-          id: updated.id,
-          title: updated.title,
-          updatedAt: updated.updatedAt,
-          contentFormat: currentNote.contentFormat,
-          isLocked: currentNote.isLocked,
-          isTrashed: currentNote.isTrashed,
-        });
-        actions.setSyncStatus("saved");
-        actions.setLastSynced(new Date().toISOString());
-        // 2���ָ� idle
-        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-        savedTimerRef.current = setTimeout(() => actions.setSyncStatus("idle"), 2000);
+        lastSentData = effectiveData;
+        // P0-#2 �޸���CRDT ģʽ�� content δ�� �� ֻͬ�� meta��title����
+        // ���� REST PUT ������ yjs ��д notes.content ������̬����
+        const payload: any = { title: effectiveData.title, version };
+        payload.writeSource = "live-autosave";
+        payload.contentFormat = currentNote.contentFormat;
+        if (effectiveData.content !== undefined)
+          payload.content = effectiveData.content;
+        if (effectiveData.contentText !== undefined)
+          payload.contentText = effectiveData.contentText;
+        return api.updateNote(currentNote.id, payload);
+      };
 
-        // P2-5: ����ɹ� �� ������زݸ�
-        try { clearDraft(currentNote.id); } catch { /* ignore */ }
-      }
-    } catch (err) {
-      // �бʼ��жϣ�putWithReconcile �ڲ����Ϊ aborted�����������Ĵ���
-      if (isAborted(err)) return;
-      console.warn("[EditorPane] save failed:", err);
+      // �ѱ��� PUT ע��Ϊ "inflight"���� toggleEditorMode ���л�ǰ await��
+      // ���л�����"���������� REST PUT"�����漰 yjs update ����
+      //
+      // ������ε���ʱ�����ֱ�Ӹ��� ref����һ�ε� handleUpdate Ҳ���� await ���
+      // inflight ���������� FIFO ���У�toggleEditorMode ֻ����"�л��㵱�»�δ���
+      // ����һ�� PUT"��
+      const inflight = (async () => {
+        try {
+          // �ֹ�����ͻ reconcile������˷��� { status: 409, currentVersion: N }��
+          // ������һ���Ļ������� activeNote.version ��Զͣ���ھ�ֵ��֮��ÿ�� debounce
+          // �Զ����涼���ٴ� 409���γ�"409 �籩"�������־���ܿ�����ʮ������ 409����
+          //
+          // putWithReconcile �Ĳ��ԣ��� toggleEditorMode �Ĺ淶�� PUT ����ͬһ��ʵ�֣���
+          //   1) ��ѡ�� err.currentVersion �ط�һ�Σ�
+          //   2) �����û�����汾��ʱ�ٶ����� fetchLatestVersion��GET /notes/:id����
+          //   3) �ڼ��бʼǣ�onAbort���� abort �طţ���ֹ�Ѿɱʼ�����д���±ʼǡ�
+          let updated;
+          if (data.content !== undefined) {
+            // ���ı������� 409 ʱ�����١������� version ä�طž����ġ�������Ḳ��
+            // PC/Web �ձ�������ݡ�����ĳ���ȡԶ�����°棬�������زݸ壬�������ͻ�����
+            try {
+              updated = await sendOnce(currentNote.version);
+            } catch (err: any) {
+              if (!is409Error(err)) throw err;
+              if (activeNoteRef.current?.id !== currentNote.id) return;
+              let latestVersion =
+                typeof err?.currentVersion === "number"
+                  ? err.currentVersion
+                  : undefined;
+              try {
+                const fresh = await api.getNote(currentNote.id);
+                latestVersion = fresh.version;
+                actions.updateNoteInList({
+                  id: fresh.id,
+                  title: fresh.title,
+                  contentText: fresh.contentText,
+                  updatedAt: fresh.updatedAt,
+                  version: fresh.version,
+                } as any);
+              } catch {
+                /* ��ȫ��ʧ��Ҳ�������زݸ壬�Ժ����û����� */
+              }
+              const snap = getCurrentEditorSnapshot();
+              if (snap) {
+                try {
+                  saveDraft({
+                    noteId: currentNote.id,
+                    editorMode: editorModeRef.current,
+                    content: snap.content,
+                    contentText: snap.contentText,
+                    title: data.title,
+                    baseVersion: latestVersion ?? currentNote.version,
+                    savedAt: Date.now(),
+                  });
+                } catch {
+                  /* ignore */
+                }
+              }
+              actions.setSyncStatus("error");
+              return;
+            }
+          } else {
+            updated = await putWithReconcile({
+              initialVersion: currentNote.version,
+              send: sendOnce,
+              fetchLatestVersion: makeFetchLatestNoteVersion(currentNote.id),
+              onAbort: () => activeNoteRef.current?.id !== currentNote.id,
+            });
+          }
 
-      // ������ P0-1 ������ӣ����� / ����˲��ɴ�ʹ save �״�ʱ�� ����������������������������
-      // �ѱ༭����ǰ���� snapshot �������߶��У�������ָ����Զ� flush��
-      // ��һ��ʹ�û�"�������¼������������"������Ϊ saveInflight ��������
-      // ������������ �� ��ʹ api.ts ����������δ���� handleOfflineEnqueue
-      // ������ fetch ���� 4xx ������ retryable �����У�Ҳ���ṩһ��������
-      try {
-        const snap = editorHandleRef.current?.getSnapshot?.();
-        if (snap && typeof snap.content === "string") {
-          enqueueOfflineMutation({
-            type: "updateNote",
-            noteId: currentNote.id,
-            url: `/notes/${currentNote.id}`,
-            method: "PUT",
-            body: {
+          if (updated && typeof lastSentData.content === "string") {
+            const committedContent =
+              typeof updated.content === "string"
+                ? updated.content
+                : lastSentData.content;
+            confirmMediaNotePersistence(
+              currentNote.id,
+              committedContent,
+              (updated as Note & { __offlineQueued?: boolean }).__offlineQueued
+                ? "queued"
+                : "saved",
+            );
+          }
+
+          // ���ڱ���ıʼ����ǵ�ǰ����ʼ�ʱ����״̬����ֹ�����л�ʱ���Ǵ���ʼǣ�
+          if (activeNoteRef.current?.id === updated.id) {
+            // �ؼ�������Ѹձ���� content / contentText Ҳ��� activeNote��
+            //
+            // ������Ϊʲô֮ǰֻ����Ԫ���ݣ����������� content ������� activeNote
+            // ���ñ仯 �� TiptapEditor �� useEffect([note.content]) ���� setContent
+            // �� ���/���뱻��ϡ�����֮ǰֻ���� version/updatedAt/title��
+            //
+            // ������"�л��༭�� (MD ? RTE)"������������ bug��
+            //   - MD �༭������ �� activeNote.content ���Ǿ� Tiptap JSON��δˢ�£�
+            //   - �е� Tiptap �� TiptapEditor �� note.content �� �������Ǿ� JSON
+            //     �� �û��� MD �����������޸���ȫ"��ʧ"
+            //   - ����ͬ��
+            // ����Ϊ"�����л��Ͷ����ݡ������޸�Ҳ�����"��
+            //
+            // ����취������������༭����ͨ�� lastEmittedContentRef ������
+            // �Ƚ� note.content �Ƿ�����Լ��ϴ��ɳ�ȥ���Ƿݣ��Ǿ����� setContent��
+            // �����궶�������ǣ�������һ���༭����汾�ָ���������ͬ����
+            //
+            // P1-5: content �ֶ�������"ʵ�ʷ��͸�����˵���һ��"��lastSentData��
+            // ������ 409 �ط�ʱȡ������ snapshot���������Ǳհ���ĳ�ʼ data��
+            // ��һ����"�ֹ���д����"���� PUT �ڼ��û��������֣��༭����ǰ snapshot
+            // �� lastSentData ������ȡ�����ʱ����**���� activeNote.content ����**
+            // ���������û��������ݣ���ֻ����Ԫ���ݣ���һ�� debounce �Զ������
+            // �Ѻ�����������ȥ���������Ա����� activeNote ���û��˵��Ծɵİ汾��
+            // �������� TiptapEditor effect ���ؽ��༭�� DOM ����������ˡ�
+            let nextContent = activeNoteRef.current.content;
+            let nextContentText = activeNoteRef.current.contentText;
+            let preserveLocalEditor = false;
+            if (lastSentData.content !== undefined) {
+              let editorSnap: { content: string; contentText: string } | null =
+                null;
+              try {
+                const snap = editorHandleRef.current?.getSnapshot?.();
+                if (snap && typeof snap.content === "string")
+                  editorSnap = snap as any;
+              } catch {
+                /* ignore */
+              }
+              const confirmed = resolveConfirmedTiptapContent({
+                serverContent:
+                  typeof updated.content === "string"
+                    ? updated.content
+                    : undefined,
+                serverContentText:
+                  typeof updated.contentText === "string"
+                    ? updated.contentText
+                    : undefined,
+                sentContent: lastSentData.content,
+                sentContentText: lastSentData.contentText,
+                editorSnapshot: editorSnap,
+                fallbackContentText: activeNoteRef.current.contentText,
+              });
+              nextContent = confirmed.content;
+              nextContentText = confirmed.contentText;
+              preserveLocalEditor = confirmed.preserveLocalEditor;
+            }
+            const activeNoteForAck = activeNoteRef.current;
+            if (!activeNoteForAck) return;
+            if (data._saveGeneration && lastSentData.content !== undefined) {
+              editorHandleRef.current?.acknowledgeSave?.({
+                noteId: updated.id,
+                version: updated.version,
+                content: nextContent,
+                saveGeneration: data._saveGeneration,
+                preserveLocalEditor,
+              });
+            }
+            actions.setActiveNote({
+              ...activeNoteForAck,
+              version: updated.version,
+              updatedAt: updated.updatedAt,
               title: data.title,
-              content: snap.content,
-              contentText: snap.contentText,
+              content: nextContent,
+              contentText: nextContentText,
+            });
+            actions.updateNoteInList({
+              id: updated.id,
+              title: updated.title,
+              contentText: updated.contentText,
+              updatedAt: updated.updatedAt,
+            });
+            actions.updateNoteTab({
+              id: updated.id,
+              title: updated.title,
+              updatedAt: updated.updatedAt,
               contentFormat: currentNote.contentFormat,
-              version: currentNote.version,
-            },
-          });
-          confirmMediaNotePersistence(currentNote.id, snap.content, "queued");
+              isLocked: currentNote.isLocked,
+              isTrashed: currentNote.isTrashed,
+            });
+            actions.setSyncStatus("saved");
+            actions.setLastSynced(new Date().toISOString());
+            // 2���ָ� idle
+            if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+            savedTimerRef.current = setTimeout(
+              () => actions.setSyncStatus("idle"),
+              2000,
+            );
+
+            // P2-5: ����ɹ� �� ������زݸ�
+            try {
+              clearDraft(currentNote.id);
+            } catch {
+              /* ignore */
+            }
+          }
+        } catch (err) {
+          // �бʼ��жϣ�putWithReconcile �ڲ����Ϊ aborted�����������Ĵ���
+          if (isAborted(err)) return;
+          console.warn("[EditorPane] save failed:", err);
+
+          // ������ P0-1 ������ӣ����� / ����˲��ɴ�ʹ save �״�ʱ�� ����������������������������
+          // �ѱ༭����ǰ���� snapshot �������߶��У�������ָ����Զ� flush��
+          // ��һ��ʹ�û�"�������¼������������"������Ϊ saveInflight ��������
+          // ������������ �� ��ʹ api.ts ����������δ���� handleOfflineEnqueue
+          // ������ fetch ���� 4xx ������ retryable �����У�Ҳ���ṩһ��������
+          try {
+            const snap = editorHandleRef.current?.getSnapshot?.();
+            if (snap && typeof snap.content === "string") {
+              enqueueOfflineMutation({
+                type: "updateNote",
+                noteId: currentNote.id,
+                url: `/notes/${currentNote.id}`,
+                method: "PUT",
+                body: {
+                  title: data.title,
+                  content: snap.content,
+                  contentText: snap.contentText,
+                  contentFormat: currentNote.contentFormat,
+                  version: currentNote.version,
+                },
+              });
+              confirmMediaNotePersistence(
+                currentNote.id,
+                snap.content,
+                "queued",
+              );
+            }
+          } catch (queueErr) {
+            console.warn(
+              "[EditorPane] enqueue offline fallback failed:",
+              queueErr,
+            );
+          }
+
+          actions.setSyncStatus("error");
         }
-      } catch (queueErr) {
-        console.warn("[EditorPane] enqueue offline fallback failed:", queueErr);
-      }
+      })();
 
-      actions.setSyncStatus("error");
-    }
-    })();
-
-    saveInflightRef.current = inflight;
-    try {
-      await inflight;
-    } finally {
-      // ֻ���"�Լ�"ע����Ƿݣ����ڼ������� PUT ע���� promise����������
-      if (saveInflightRef.current === inflight) {
-        saveInflightRef.current = null;
+      saveInflightRef.current = inflight;
+      try {
+        await inflight;
+      } finally {
+        // ֻ���"�Լ�"ע����Ƿݣ����ڼ������� PUT ע���� promise����������
+        if (saveInflightRef.current === inflight) {
+          saveInflightRef.current = null;
+        }
       }
-    }
-  }, [actions, flagEditing]);
+    },
+    [actions, flagEditing],
+  );
 
   // ���� handleUpdateRef ����ָ������ handleUpdate���� P2-5 �ݸ�ָ����ã�
   useEffect(() => {
@@ -1934,21 +2324,22 @@ function OrdinaryEditorPane({
       // current optimistic-lock version. If the Y update already arrived, avoid a
       // redundant PUT/version bump; otherwise persist the editor snapshot and align Y.Doc.
       const persisted = await api.getNote(currentNote.id);
-      const alreadyPersisted = persisted.title === title
-        && persisted.content === content
-        && persisted.contentText === contentText
-        && persisted.contentFormat === currentNote.contentFormat;
+      const alreadyPersisted =
+        persisted.title === title &&
+        persisted.content === content &&
+        persisted.contentText === contentText &&
+        persisted.contentFormat === currentNote.contentFormat;
       const updated = alreadyPersisted
         ? persisted
         : await api.updateNoteConfirmed(currentNote.id, {
-          title,
-          content,
-          contentText,
-          contentFormat: currentNote.contentFormat,
-          version: persisted.version,
-          syncToYjs: true,
-          writeSource: "manual-save",
-        } as any);
+            title,
+            content,
+            contentText,
+            contentFormat: currentNote.contentFormat,
+            version: persisted.version,
+            syncToYjs: true,
+            writeSource: "manual-save",
+          } as any);
       activeNoteRef.current = updated;
       actions.setActiveNote(updated);
       actions.updateNoteInList({
@@ -1969,7 +2360,10 @@ function OrdinaryEditorPane({
       actions.setSyncStatus("saved");
       actions.setLastSynced(new Date().toISOString());
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => actions.setSyncStatus("idle"), 2000);
+      savedTimerRef.current = setTimeout(
+        () => actions.setSyncStatus("idle"),
+        2000,
+      );
     } catch (error) {
       console.warn("[EditorPane] manual sync failed:", error);
       actions.setSyncStatus("error");
@@ -1979,31 +2373,53 @@ function OrdinaryEditorPane({
   const toggleFavorite = useCallback(async () => {
     if (!activeNote || activeNote.isTrashed) return;
     haptic.light();
-    const updated = await api.updateNote(activeNote.id, { isFavorite: activeNote.isFavorite ? 0 : 1 } as any);
+    const updated = await api.updateNote(activeNote.id, {
+      isFavorite: activeNote.isFavorite ? 0 : 1,
+    } as any);
     actions.setActiveNote(updated);
-    actions.updateNoteInList({ id: updated.id, isFavorite: updated.isFavorite });
+    actions.updateNoteInList({
+      id: updated.id,
+      isFavorite: updated.isFavorite,
+    });
   }, [activeNote, actions]);
 
   const togglePin = useCallback(async () => {
     if (!activeNote || activeNote.isTrashed) return;
     haptic.light();
-    const updated = await api.updateNote(activeNote.id, { isPinned: activeNote.isPinned ? 0 : 1 } as any);
+    const updated = await api.updateNote(activeNote.id, {
+      isPinned: activeNote.isPinned ? 0 : 1,
+    } as any);
     actions.setActiveNote(updated);
     actions.updateNoteInList({ id: updated.id, isPinned: updated.isPinned });
   }, [activeNote, actions]);
 
-  const setNoteColorMark = useCallback(async (colorMark: NoteColorMark | null) => {
-    if (!activeNote || activeNote.isTrashed || !canWriteNote(activeNote)) return;
-    haptic.light();
-    const updated = await api.updateNote(activeNote.id, { colorMark });
-    const nextColor = updated.colorMark ?? colorMark;
-    actions.setActiveNote({ ...updated, colorMark: nextColor });
-    actions.updateNoteInList({ id: updated.id, colorMark: nextColor });
-    actions.updateNoteTab({ id: updated.id, colorMark: nextColor } as unknown as Partial<import("@/store/AppContext").OpenNoteTab> & { id: string; });
-    try {
-      window.dispatchEvent(new CustomEvent("nowen:knowledge-tree-changed", { detail: { reason: "note-color-mark-changed" } }));
-    } catch { /* A notification failure must not interrupt editing. */ }
-  }, [activeNote, actions]);
+  const setNoteColorMark = useCallback(
+    async (colorMark: NoteColorMark | null) => {
+      if (!activeNote || activeNote.isTrashed || !canWriteNote(activeNote))
+        return;
+      haptic.light();
+      const updated = await api.updateNote(activeNote.id, { colorMark });
+      const nextColor = updated.colorMark ?? colorMark;
+      actions.setActiveNote({ ...updated, colorMark: nextColor });
+      actions.updateNoteInList({ id: updated.id, colorMark: nextColor });
+      actions.updateNoteTab({
+        id: updated.id,
+        colorMark: nextColor,
+      } as unknown as Partial<import("@/store/AppContext").OpenNoteTab> & {
+        id: string;
+      });
+      try {
+        window.dispatchEvent(
+          new CustomEvent("nowen:knowledge-tree-changed", {
+            detail: { reason: "note-color-mark-changed" },
+          }),
+        );
+      } catch {
+        /* A notification failure must not interrupt editing. */
+      }
+    },
+    [activeNote, actions],
+  );
 
   const toggleLock = useCallback(async () => {
     if (!activeNote || activeNote.isTrashed) return;
@@ -2021,10 +2437,16 @@ function OrdinaryEditorPane({
       });
       return;
     }
-    const updated = await api.updateNote(activeNote.id, { isLocked: activeNote.isLocked ? 0 : 1 } as any);
+    const updated = await api.updateNote(activeNote.id, {
+      isLocked: activeNote.isLocked ? 0 : 1,
+    } as any);
     actions.setActiveNote(updated);
     actions.updateNoteInList({ id: updated.id, isLocked: updated.isLocked });
-    actions.updateNoteTab({ id: updated.id, isLocked: updated.isLocked, updatedAt: updated.updatedAt });
+    actions.updateNoteTab({
+      id: updated.id,
+      isLocked: updated.isLocked,
+      updatedAt: updated.updatedAt,
+    });
     // ���հѿ����е� 1�����������Ͳ����ٶ���ά�ֱ��ػỰ�����������Ѿ����ǡ�
     // ���ѿ����е� 0����������ͬʱ������Ự�ĻỰ��������У�����֤ UI һ�ν�����λ��
     if (!updated.isLocked) {
@@ -2037,29 +2459,34 @@ function OrdinaryEditorPane({
     }
   }, [activeNote, actions, viewLockedIds]);
 
-    // NOTE-IMAGE-EXPORT-01: 导出笔记为图片
-  const handleExportNoteImage = useCallback(async (format: "png" | "jpg") => {
-    if (!activeNote) return;
-    const toastId = toast.info(t("note.exportImageExporting"), 0);
-    try {
-      const ok = await exportNoteAsImage(
-        {
-          id: activeNote.id,
-          title: activeNote.title,
-          content: activeNote.content,
-          contentText: activeNote.contentText,
-          contentFormat: activeNote.contentFormat,
-          updatedAt: activeNote.updatedAt,
-        },
-        { format }
-      );
-      toast.dismiss(toastId);
-      ok ? toast.success(t("note.exportImageSuccess")) : toast.error(t("note.exportImageFailed"));
-    } catch {
-      toast.dismiss(toastId);
-      toast.error(t("note.exportImageFailed"));
-    }
-  }, [activeNote, t]);
+  // NOTE-IMAGE-EXPORT-01: 导出笔记为图片
+  const handleExportNoteImage = useCallback(
+    async (format: "png" | "jpg") => {
+      if (!activeNote) return;
+      const toastId = toast.info(t("note.exportImageExporting"), 0);
+      try {
+        const ok = await exportNoteAsImage(
+          {
+            id: activeNote.id,
+            title: activeNote.title,
+            content: activeNote.content,
+            contentText: activeNote.contentText,
+            contentFormat: activeNote.contentFormat,
+            updatedAt: activeNote.updatedAt,
+          },
+          { format },
+        );
+        toast.dismiss(toastId);
+        ok
+          ? toast.success(t("note.exportImageSuccess"))
+          : toast.error(t("note.exportImageFailed"));
+      } catch {
+        toast.dismiss(toastId);
+        toast.error(t("note.exportImageFailed"));
+      }
+    },
+    [activeNote, t],
+  );
 
   const handlePrintNote = useCallback(async () => {
     if (!activeNote) return;
@@ -2079,15 +2506,26 @@ function OrdinaryEditorPane({
       toast.error(t("note.printFailed"));
     }
   }, [activeNote, t]);
-const moveToTrash = useCallback(async () => {
+  const moveToTrash = useCallback(async () => {
     // ������������Ự�����ʼǲ�����������վ������"�������ʼ�"����ɾ��
-    if (!activeNote || activeNote.isLocked || activeNote.isTrashed || viewLockedIdsRef.current.has(activeNote.id)) return;
+    if (
+      !activeNote ||
+      activeNote.isLocked ||
+      activeNote.isTrashed ||
+      viewLockedIdsRef.current.has(activeNote.id)
+    )
+      return;
     haptic.heavy();
     const noteId = activeNote.id;
-    const currentTabIndex = state.openNoteTabs.findIndex((tab) => tab.id === noteId);
-    const nextTab = userPrefs.enableNoteTabs && currentTabIndex >= 0
-      ? state.openNoteTabs[currentTabIndex + 1] || state.openNoteTabs[currentTabIndex - 1] || null
-      : null;
+    const currentTabIndex = state.openNoteTabs.findIndex(
+      (tab) => tab.id === noteId,
+    );
+    const nextTab =
+      userPrefs.enableNoteTabs && currentTabIndex >= 0
+        ? state.openNoteTabs[currentTabIndex + 1] ||
+          state.openNoteTabs[currentTabIndex - 1] ||
+          null
+        : null;
     actions.setActiveNote(null);
     actions.removeNoteFromList(noteId);
     actions.removeNoteTab(noteId);
@@ -2115,7 +2553,8 @@ const moveToTrash = useCallback(async () => {
         },
       });
     }
-    api.updateNote(noteId, { isTrashed: 1 } as any)
+    api
+      .updateNote(noteId, { isTrashed: 1 } as any)
       .then(() => {
         actions.refreshNotebooks();
         // ˢ���б�������ǰ����"����վ"��ͼ�������ʼ���Ҫ�������֣�
@@ -2123,29 +2562,48 @@ const moveToTrash = useCallback(async () => {
         actions.refreshNotes();
       })
       .catch(console.error);
-  }, [activeNote, actions, loadNote, state.openNoteTabs, t, userPrefs.enableNoteTabs]);
+  }, [
+    activeNote,
+    actions,
+    loadNote,
+    state.openNoteTabs,
+    t,
+    userPrefs.enableNoteTabs,
+  ]);
 
   // BLOCK-LINKS-JUMP-01: 打开笔记回调（用于笔记引用跳转）
-  const handleOpenNote = useCallback(async (noteId: string) => {
-    await loadNote({
-      noteId,
-      summary: { title: t("editor.noteLoading"), notebookId: "" },
-      request: () => api.getNote(noteId),
-      onSuccess: (note) => actions.setActiveNote(note),
-    });
-  }, [actions, loadNote, t]);
+  const handleOpenNote = useCallback(
+    async (noteId: string) => {
+      await loadNote({
+        noteId,
+        summary: { title: t("editor.noteLoading"), notebookId: "" },
+        request: () => api.getNote(noteId),
+        onSuccess: (note) => actions.setActiveNote(note),
+      });
+    },
+    [actions, loadNote, t],
+  );
 
-  const handleTagsChange = useCallback((tags: Tag[]) => {
-    if (!activeNote) return;
-    actions.setActiveNote({ ...activeNote, tags });
-    api.getTags().then(actions.setTags).catch(console.error);
-  }, [activeNote, actions]);
+  const handleTagsChange = useCallback(
+    (tags: Tag[]) => {
+      if (!activeNote) return;
+      actions.setActiveNote({ ...activeNote, tags });
+      api.getTags().then(actions.setTags).catch(console.error);
+    },
+    [activeNote, actions],
+  );
   const handleOpenNoteRef = useRef(handleOpenNote);
   handleOpenNoteRef.current = handleOpenNote;
-  const handleEditorOpenNote = useCallback((noteId: string) => handleOpenNoteRef.current(noteId), []);
+  const handleEditorOpenNote = useCallback(
+    (noteId: string) => handleOpenNoteRef.current(noteId),
+    [],
+  );
   const handleTagsChangeRef = useRef(handleTagsChange);
   handleTagsChangeRef.current = handleTagsChange;
-  const handleEditorTagsChange = useCallback((tags: Tag[]) => handleTagsChangeRef.current(tags), []);
+  const handleEditorTagsChange = useCallback(
+    (tags: Tag[]) => handleTagsChangeRef.current(tags),
+    [],
+  );
 
   // AI ���ɱ���
   const [aiTitleLoading, setAiTitleLoading] = useState(false);
@@ -2157,15 +2615,26 @@ const moveToTrash = useCallback(async () => {
       //    - AI ���ڹ��ڵ� contentText ���ɱ���
       //    - �Ժ� updateNote �� version ��󱻺�˷��� 409 "Version conflict"
       //      ���±�������Ĭʧ�ܣ�֮ǰֻ console.error���û��������κη�������
-      try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
+      try {
+        editorHandleRef.current?.flushSave();
+      } catch {
+        /* ignore */
+      }
 
       // 2) AI ����
-      const titleCtx = buildAiContext({ action: "title", title: activeNote.title, contentText: activeNote.contentText, maxInputTokens: 1500 });
+      const titleCtx = buildAiContext({
+        action: "title",
+        title: activeNote.title,
+        contentText: activeNote.contentText,
+        maxInputTokens: 1500,
+      });
       if (titleCtx.notice) toast.info(titleCtx.notice);
       const rawTitle = await api.aiChat("title", titleCtx.promptText);
-      const cleaned = extractFinalAnswer(rawTitle).replace(/^["‘’“”'']+|["‘’“”'']+$/g, "").trim()
+      const cleaned = extractFinalAnswer(rawTitle)
+        .replace(/^["‘’“”'']+|["‘’“”'']+$/g, "")
+        .trim();
       if (!cleaned) {
-      toast.error(t("editor.aiTitleFailed") || "AI 未返回有效标题");
+        toast.error(t("editor.aiTitleFailed") || "AI 未返回有效标题");
         return;
       }
 
@@ -2173,7 +2642,11 @@ const moveToTrash = useCallback(async () => {
       //    MD �༭�� debounce ��Ȼ�� flush���� AI �����ʱ���û��Կ��ܼ�������
       //    �� ���� �� version ������������� 409�������������±ʼ����� version ���ԡ�
       const doUpdate = async (version: number) =>
-        api.updateNote(activeNote.id, { title: cleaned, contentFormat: activeNote.contentFormat, version } as any);
+        api.updateNote(activeNote.id, {
+          title: cleaned,
+          contentFormat: activeNote.contentFormat,
+          version,
+        } as any);
 
       let updated;
       try {
@@ -2181,7 +2654,10 @@ const moveToTrash = useCallback(async () => {
       } catch (err: any) {
         if (is409Error(err)) {
           actions.setSyncStatus("error");
-          toast.error(t("editor.versionConflict") || "内容已被其他设备更新，请刷新或打开版本历史处理");
+          toast.error(
+            t("editor.versionConflict") ||
+              "内容已被其他设备更新，请刷新或打开版本历史处理",
+          );
           return;
         }
         throw err;
@@ -2190,7 +2666,11 @@ const moveToTrash = useCallback(async () => {
       // 4) ͬ��ǰ��״̬��MarkdownEditor ���ж����� [note.title] effect
       //    ��ѷ��ܿ� title input �� DOM ֵˢ�³��±��⡣
       actions.setActiveNote(updated);
-      actions.updateNoteInList({ id: updated.id, title: updated.title, updatedAt: updated.updatedAt });
+      actions.updateNoteInList({
+        id: updated.id,
+        title: updated.title,
+        updatedAt: updated.updatedAt,
+      });
       actions.updateNoteTab({
         id: updated.id,
         title: updated.title,
@@ -2214,7 +2694,12 @@ const moveToTrash = useCallback(async () => {
     if (!activeNote || !activeNote.contentText || aiTagsLoading) return;
     setAiTagsLoading(true);
     try {
-      const tagsCtx = buildAiContext({ action: "tags", title: activeNote.title, contentText: activeNote.contentText, maxInputTokens: 1800 });
+      const tagsCtx = buildAiContext({
+        action: "tags",
+        title: activeNote.title,
+        contentText: activeNote.contentText,
+        maxInputTokens: 1800,
+      });
       if (tagsCtx.notice) toast.info(tagsCtx.notice);
       const raw = await api.aiChat("tags", tagsCtx.promptText);
       const tagNames = parseAiTags(raw, 5);
@@ -2225,7 +2710,7 @@ const moveToTrash = useCallback(async () => {
       }
       for (const name of tagNames) {
         // ����Ƿ��Ѵ���
-        const existing = state.tags.find(t => t.name === name);
+        const existing = state.tags.find((t) => t.name === name);
         let tagId: string;
         if (existing) {
           tagId = existing.id;
@@ -2235,7 +2720,7 @@ const moveToTrash = useCallback(async () => {
         }
         // ����Ƿ��ѹ���
         const noteTags = activeNote.tags || [];
-        if (!noteTags.find(t => t.id === tagId)) {
+        if (!noteTags.find((t) => t.id === tagId)) {
           await api.addTagToNote(activeNote.id, tagId);
         }
       }
@@ -2243,7 +2728,10 @@ const moveToTrash = useCallback(async () => {
       const updatedNote = await api.getNote(activeNote.id);
       actions.setActiveNote(updatedNote);
       api.getTags().then(actions.setTags).catch(console.error);
-    } catch (e: any) { console.error("AI tags error:", e); toast.error(e?.message || t("editor.aiTagsFailed") || "AI 推荐标签失败"); }
+    } catch (e: any) {
+      console.error("AI tags error:", e);
+      toast.error(e?.message || t("editor.aiTagsFailed") || "AI 推荐标签失败");
+    }
     setAiTagsLoading(false);
   }, [activeNote, actions, state.tags, aiTagsLoading]);
 
@@ -2257,17 +2745,28 @@ const moveToTrash = useCallback(async () => {
     const snap = editorHandleRef.current?.getSnapshot?.();
     const text = (snap?.contentText || activeNote.contentText || "").trim();
     if (!text) {
-      toast.error(t("editor.aiSummaryEmptyContent") || "当前笔记内容为空，无法总结");
+      toast.error(
+        t("editor.aiSummaryEmptyContent") || "当前笔记内容为空，无法总结",
+      );
       return;
     }
     setAiSummaryLoading(true);
     setAiSummaryResult("");
     setShowSummaryDialog(true);
     try {
-      const summaryCtx = buildAiContext({ action: "summarize", title: activeNote.title, contentText: text, maxInputTokens: 1800 });
+      const summaryCtx = buildAiContext({
+        action: "summarize",
+        title: activeNote.title,
+        contentText: text,
+        maxInputTokens: 1800,
+      });
       if (summaryCtx.notice) toast.info(summaryCtx.notice);
       let result: string;
-      if (summaryCtx.strategy === "chunked" && summaryCtx.chunks && summaryCtx.chunks.length > 1) {
+      if (
+        summaryCtx.strategy === "chunked" &&
+        summaryCtx.chunks &&
+        summaryCtx.chunks.length > 1
+      ) {
         const partials: string[] = [];
         for (const chunk of summaryCtx.chunks) {
           const partial = await api.aiChat("summarize", chunk.text);
@@ -2277,9 +2776,9 @@ const moveToTrash = useCallback(async () => {
       } else {
         result = await api.aiChat("summarize", summaryCtx.promptText);
       }
-      result = extractFinalAnswer(result)
+      result = extractFinalAnswer(result);
       if (!result.trim()) {
-      toast.error(t("editor.aiSummaryEmptyResult") || "AI 未返回有效总结");
+        toast.error(t("editor.aiSummaryEmptyResult") || "AI 未返回有效总结");
         setShowSummaryDialog(false);
         return;
       }
@@ -2305,82 +2804,110 @@ const moveToTrash = useCallback(async () => {
 
   const handleSummaryAppend = useCallback(async () => {
     if (!activeNote || !aiSummaryResult) return;
-      const md = "\n\n## AI 总结\n\n" + aiSummaryResult + "\n";
+    const md = "\n\n## AI 总结\n\n" + aiSummaryResult + "\n";
     const appended = editorHandleRef.current?.appendMarkdown?.(md);
     if (!appended) {
       // �༭����֧�� appendMarkdown��fallback ��������
       try {
         await navigator.clipboard.writeText(aiSummaryResult);
-      toast.success(t("editor.aiSummaryCopied") || "已复制到剪贴板，请手动粘贴");
+        toast.success(
+          t("editor.aiSummaryCopied") || "已复制到剪贴板，请手动粘贴",
+        );
       } catch {
-      toast.error(t("editorOps.appendFailed"));
+        toast.error(t("editorOps.appendFailed"));
       }
       return;
     }
     // ��������
-    try { editorHandleRef.current?.flushSave(); } catch { /* ignore */ }
-      toast.success(t("editor.aiSummaryAppended") || "已追加到笔记末尾");
+    try {
+      editorHandleRef.current?.flushSave();
+    } catch {
+      /* ignore */
+    }
+    toast.success(t("editor.aiSummaryAppended") || "已追加到笔记末尾");
     setShowSummaryDialog(false);
   }, [activeNote, aiSummaryResult, t]);
 
   // AI ���� Mermaid
   const [aiMermaidLoading, setAiMermaidLoading] = useState(false);
   const [aiMermaidResult, setAiMermaidResult] = useState("");
-  const [aiMermaidType, setAiMermaidType] = useState<"mermaid_mindmap" | "mermaid_flowchart">("mermaid_mindmap");
+  const [aiMermaidType, setAiMermaidType] = useState<
+    "mermaid_mindmap" | "mermaid_flowchart"
+  >("mermaid_mindmap");
   const [showMermaidDialog, setShowMermaidDialog] = useState(false);
   const [showMindMapInsertDialog, setShowMindMapInsertDialog] = useState(false);
-
 
   useEffect(() => {
     const openMindMapInsert = () => setShowMindMapInsertDialog(true);
     window.addEventListener("nowen:open-mindmap-insert", openMindMapInsert);
-    return () => window.removeEventListener("nowen:open-mindmap-insert", openMindMapInsert);
+    return () =>
+      window.removeEventListener(
+        "nowen:open-mindmap-insert",
+        openMindMapInsert,
+      );
   }, []);
 
-  const handleAIMermaid = useCallback(async (type: "mermaid_mindmap" | "mermaid_flowchart") => {
-    if (!activeNote || aiMermaidLoading) return;
-    const snap = editorHandleRef.current?.getSnapshot?.();
-    const text = (snap?.contentText || activeNote.contentText || "").trim();
-    if (!text) {
-      toast.error(t("editor.aiSummaryEmptyContent") || "当前笔记内容为空");
-      return;
-    }
-    setAiMermaidLoading(true);
-    setAiMermaidResult("");
-    setAiMermaidType(type);
-    setShowMermaidDialog(true);
-    try {
-      const mermaidCtx = buildAiContext({ action: type, title: activeNote.title, contentText: text, maxInputTokens: 3000 });
-      if (mermaidCtx.notice) toast.info(mermaidCtx.notice);
-      let result = await api.aiChat(type, mermaidCtx.promptText)
-      // ��ϴ��ȥ��Χ��
-      result = result.replace(/^```mermaid\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```\s*$/, "").trim();
-      // 从 AI 返回文本中提取 mermaid 源码（AI 可能返回思考过程 + 源码）
-      const mindmapMatch = result.match(/^(mindmap[\s\S]*)/m);
-      const flowchartMatch = result.match(/^(flowchart\s+TD[\s\S]*)/m);
-      if (mindmapMatch) {
-        result = mindmapMatch[1].trimEnd();
-      } else if (flowchartMatch) {
-        result = flowchartMatch[1].trimEnd();
-      }
-      // Sanitize: strip chars that break Mermaid mindmap parsing
-      result = result.replace(/^(\s*\S+\s+)(.*?)(\s*)$/gm, (_m: string, prefix: string, body: string, tail: string) => {
-        return prefix + body.replace(/[[\]{}:|]/g, " ") + tail;
-      });
-      if (!result) {
-      toast.error(t("editor.aiSummaryEmptyResult") || "AI 未返回有效思维导图");
-        setShowMermaidDialog(false);
+  const handleAIMermaid = useCallback(
+    async (type: "mermaid_mindmap" | "mermaid_flowchart") => {
+      if (!activeNote || aiMermaidLoading) return;
+      const snap = editorHandleRef.current?.getSnapshot?.();
+      const text = (snap?.contentText || activeNote.contentText || "").trim();
+      if (!text) {
+        toast.error(t("editor.aiSummaryEmptyContent") || "当前笔记内容为空");
         return;
       }
-      setAiMermaidResult(result);
-    } catch (e: any) {
-      console.error("AI mermaid error:", e);
-      toast.error(e?.message || t("editorOps.generateFailed"));
-      setShowMermaidDialog(false);
-    } finally {
-      setAiMermaidLoading(false);
-    }
-  }, [activeNote, aiMermaidLoading, t]);
+      setAiMermaidLoading(true);
+      setAiMermaidResult("");
+      setAiMermaidType(type);
+      setShowMermaidDialog(true);
+      try {
+        const mermaidCtx = buildAiContext({
+          action: type,
+          title: activeNote.title,
+          contentText: text,
+          maxInputTokens: 3000,
+        });
+        if (mermaidCtx.notice) toast.info(mermaidCtx.notice);
+        let result = await api.aiChat(type, mermaidCtx.promptText);
+        // ��ϴ��ȥ��Χ��
+        result = result
+          .replace(/^```mermaid\s*/i, "")
+          .replace(/^```\s*/i, "")
+          .replace(/\s*```\s*$/, "")
+          .trim();
+        // 从 AI 返回文本中提取 mermaid 源码（AI 可能返回思考过程 + 源码）
+        const mindmapMatch = result.match(/^(mindmap[\s\S]*)/m);
+        const flowchartMatch = result.match(/^(flowchart\s+TD[\s\S]*)/m);
+        if (mindmapMatch) {
+          result = mindmapMatch[1].trimEnd();
+        } else if (flowchartMatch) {
+          result = flowchartMatch[1].trimEnd();
+        }
+        // Sanitize: strip chars that break Mermaid mindmap parsing
+        result = result.replace(
+          /^(\s*\S+\s+)(.*?)(\s*)$/gm,
+          (_m: string, prefix: string, body: string, tail: string) => {
+            return prefix + body.replace(/[[\]{}:|]/g, " ") + tail;
+          },
+        );
+        if (!result) {
+          toast.error(
+            t("editor.aiSummaryEmptyResult") || "AI 未返回有效思维导图",
+          );
+          setShowMermaidDialog(false);
+          return;
+        }
+        setAiMermaidResult(result);
+      } catch (e: any) {
+        console.error("AI mermaid error:", e);
+        toast.error(e?.message || t("editorOps.generateFailed"));
+        setShowMermaidDialog(false);
+      } finally {
+        setAiMermaidLoading(false);
+      }
+    },
+    [activeNote, aiMermaidLoading, t],
+  );
 
   const handleMermaidInsert = useCallback(() => {
     if (!activeNote || !aiMermaidResult) return;
@@ -2388,24 +2915,35 @@ const moveToTrash = useCallback(async () => {
     const appended = editorHandleRef.current?.appendMarkdown?.(md);
     if (!appended) {
       try {
-        navigator.clipboard.writeText("```mermaid\n" + aiMermaidResult + "\n```");
-      toast.success(t("editor.aiSummaryCopied") || "已复制到剪贴板，请手动粘贴");
-    } catch { toast.error(t("common.copyFailed")); }
+        navigator.clipboard.writeText(
+          "```mermaid\n" + aiMermaidResult + "\n```",
+        );
+        toast.success(
+          t("editor.aiSummaryCopied") || "已复制到剪贴板，请手动粘贴",
+        );
+      } catch {
+        toast.error(t("common.copyFailed"));
+      }
       return;
     }
-    try { editorHandleRef.current?.flushSave(); } catch {}
-      toast.success(t("editorOps.inserted"));
+    try {
+      editorHandleRef.current?.flushSave();
+    } catch {}
+    toast.success(t("editorOps.inserted"));
     setShowMermaidDialog(false);
   }, [activeNote, aiMermaidResult, t]);
   /** 将 Mermaid mindmap 源码解析为 MindMapData */
-  const parseMermaidToMindMap = useCallback((source: string): MindMapData | null => {
-    try {
-      const data = parseMermaidMindmap(source);
-      return normalizeMindMapData(data);
-    } catch {
-      return null;
-    }
-  }, []);
+  const parseMermaidToMindMap = useCallback(
+    (source: string): MindMapData | null => {
+      try {
+        const data = parseMermaidMindmap(source);
+        return normalizeMindMapData(data);
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
 
   const [mermaidSavingMindMap, setMermaidSavingMindMap] = useState(false);
   const handleMermaidSaveAsMindMap = useCallback(async () => {
@@ -2417,8 +2955,12 @@ const moveToTrash = useCallback(async () => {
     }
     setMermaidSavingMindMap(true);
     try {
-      const title = data.root.text.slice(0, 50) || t("editorOps.mindmapDefaultTitle");
-      const created = await api.createMindMap({ title, data: JSON.stringify(data) });
+      const title =
+        data.root.text.slice(0, 50) || t("editorOps.mindmapDefaultTitle");
+      const created = await api.createMindMap({
+        title,
+        data: JSON.stringify(data),
+      });
       toast.success(t("editorOps.mindmapSaved"));
       setShowMermaidDialog(false);
       // 通知 MindMapEditor 打开新图
@@ -2434,39 +2976,54 @@ const moveToTrash = useCallback(async () => {
     }
   }, [aiMermaidResult, parseMermaidToMindMap]);
 
-  const handleMoveToNotebook = useCallback(async (notebookId: string) => {
-    if (!activeNote || notebookId === activeNote.notebookId) return;
-    // ���� try/catch����˶Կ繤�����ƶ��᷵�� 400 CROSS_WORKSPACE_MOVE_FORBIDDEN��
-    // ���������ð�ݳ� "Uncaught (in promise)" ����������ʶ������������ȷ��ʾ��
-    try {
-      const updated = await api.updateNote(activeNote.id, { notebookId } as any);
-      actions.setActiveNote(updated);
-      actions.updateNoteInList({ id: updated.id, notebookId: updated.notebookId });
-      actions.updateNoteTab({ id: updated.id, notebookId: updated.notebookId, updatedAt: updated.updatedAt });
-      setShowMoveDropdown(false);
-      actions.refreshNotebooks();
-    } catch (e: any) {
-      const msg = String(e?.message || "");
-      if (/CROSS_WORKSPACE_MOVE_FORBIDDEN/.test(msg)) {
-      toast.error(t("editorOps.crossSpaceMove"));
-      } else {
-      toast.error(msg || t("editorOps.moveFailed"));
+  const handleMoveToNotebook = useCallback(
+    async (notebookId: string) => {
+      if (!activeNote || notebookId === activeNote.notebookId) return;
+      // ���� try/catch����˶Կ繤�����ƶ��᷵�� 400 CROSS_WORKSPACE_MOVE_FORBIDDEN��
+      // ���������ð�ݳ� "Uncaught (in promise)" ����������ʶ������������ȷ��ʾ��
+      try {
+        const updated = await api.updateNote(activeNote.id, {
+          notebookId,
+        } as any);
+        actions.setActiveNote(updated);
+        actions.updateNoteInList({
+          id: updated.id,
+          notebookId: updated.notebookId,
+        });
+        actions.updateNoteTab({
+          id: updated.id,
+          notebookId: updated.notebookId,
+          updatedAt: updated.updatedAt,
+        });
+        setShowMoveDropdown(false);
+        actions.refreshNotebooks();
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        if (/CROSS_WORKSPACE_MOVE_FORBIDDEN/.test(msg)) {
+          toast.error(t("editorOps.crossSpaceMove"));
+        } else {
+          toast.error(msg || t("editorOps.moveFailed"));
+        }
+        setShowMoveDropdown(false);
       }
-      setShowMoveDropdown(false);
-    }
-  }, [activeNote, actions]);
+    },
+    [activeNote, actions],
+  );
 
   // ---- P3��AI �Զ����ཨ�� ----
   // ���"AI �������"��һ�� /ai/classify���� top-3 ������Ⱦ����������ڡ�
   // ��������ڼ䰴ť disabled��ʧ��ʱ�� toast ��ʾ���������û���ѡ��
   // ÿ�� activeNote �仯��ս��飬���⿴����һ���ʼǵľɽ����
-  const [aiSuggestions, setAiSuggestions] = useState<{
-    notebookId: string;
-    notebookName: string;
-    path: string;
-    confidence: number;
-    reason: string;
-  }[] | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<
+    | {
+        notebookId: string;
+        notebookName: string;
+        path: string;
+        confidence: number;
+        reason: string;
+      }[]
+    | null
+  >(null);
   const [aiClassifyLoading, setAiClassifyLoading] = useState(false);
 
   useEffect(() => {
@@ -2484,10 +3041,14 @@ const moveToTrash = useCallback(async () => {
       );
       setAiSuggestions(filtered);
       if (filtered.length === 0) {
-      toast.info(t("editor.aiClassifyNoSuggestion") || "AI 未找到合适的工作笔记本");
+        toast.info(
+          t("editor.aiClassifyNoSuggestion") || "AI 未找到合适的工作笔记本",
+        );
       }
     } catch (e: any) {
-      toast.error(e?.message || t("editor.aiClassifyFailed") || "AI 自动分类失败");
+      toast.error(
+        e?.message || t("editor.aiClassifyFailed") || "AI 自动分类失败",
+      );
     } finally {
       setAiClassifyLoading(false);
     }
@@ -2509,7 +3070,7 @@ const moveToTrash = useCallback(async () => {
   // ��ǰ�ʼ������ʼǱ�������·�������м��
   const currentPath = useMemo(
     () => findPathById(state.notebooks, activeNote?.notebookId),
-    [state.notebooks, activeNote?.notebookId]
+    [state.notebooks, activeNote?.notebookId],
   );
 
   // ���� �ʼǼ����йǼ��� ����
@@ -2518,7 +3079,9 @@ const moveToTrash = useCallback(async () => {
     return (
       <NoteLoadingSkeleton
         state={noteLoadingState}
-        onRetry={() => { void retryNoteLoad(); }}
+        onRetry={() => {
+          void retryNoteLoad();
+        }}
         onBack={() => actions.setMobileView("list")}
         loadingLabel={t("editor.noteLoading")}
         errorTitle={t("noteList.loadErrorTitle")}
@@ -2536,14 +3099,18 @@ const moveToTrash = useCallback(async () => {
             ���� activeNote ʱ��ĻһƬ�հף��û��Ҳ����ص��б�����ڣ�ϵͳ���ؼ�
             ��Ȼ�ܴ��� onBackToList���������û�/���Ƶ��������²���ֱ�ۣ���������
             ����"��ʼ�û��Ӧ"�����ﲹһ���ƶ��˿ɼ��ķ���������İ�����Ϊ���ס� */}
-        <header data-adaptive-editor-empty-header className="flex items-center gap-2 px-3 py-2 border-b border-app-border bg-app-surface/50 md:hidden" style={{ paddingTop: 'calc(var(--safe-area-top) + 8px)' }}>
+        <header
+          data-adaptive-editor-empty-header
+          className="flex items-center gap-2 px-3 py-2 border-b border-app-border bg-app-surface/50 md:hidden"
+          style={{ paddingTop: "calc(var(--safe-area-top) + 8px)" }}
+        >
           <button
             data-adaptive-editor-back
             onClick={() => actions.setMobileView("list")}
             className="flex items-center text-accent-primary py-1.5 px-1.5 -ml-1.5 rounded-lg active:bg-app-hover"
           >
             <ChevronLeft size={24} />
-            <span className="text-sm font-medium">{t('editor.back')}</span>
+            <span className="text-sm font-medium">{t("editor.back")}</span>
           </button>
         </header>
         <div className="flex-1 flex items-center justify-center px-6">
@@ -2551,34 +3118,98 @@ const moveToTrash = useCallback(async () => {
           <div className="text-center hidden md:flex flex-col items-center">
             <div className="relative mb-6">
               <div className="w-20 h-20 rounded-2xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center">
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" className="text-accent-primary/30">
-                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <polyline points="14,2 14,8 20,8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <line x1="8" y1="13" x2="16" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                  <line x1="8" y1="17" x2="12" y2="17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="text-accent-primary/30"
+                >
+                  <path
+                    d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <polyline
+                    points="14,2 14,8 20,8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <line
+                    x1="8"
+                    y1="13"
+                    x2="16"
+                    y2="13"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <line
+                    x1="8"
+                    y1="17"
+                    x2="12"
+                    y2="17"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </div>
               <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-accent-primary/10 border border-accent-primary/15 flex items-center justify-center">
                 <span className="text-accent-primary/50 text-xs">?</span>
               </div>
             </div>
-            <p className="text-tx-secondary text-sm font-medium mb-1">{t('editor.selectNote')}</p>
-            <p className="text-tx-tertiary text-xs max-w-[220px] leading-relaxed">{t('editor.orCreateNew')}</p>
+            <p className="text-tx-secondary text-sm font-medium mb-1">
+              {t("editor.selectNote")}
+            </p>
+            <p className="text-tx-tertiary text-xs max-w-[220px] leading-relaxed">
+              {t("editor.orCreateNew")}
+            </p>
             <div className="flex items-center gap-3 mt-5">
-              <kbd className="px-2 py-1 rounded-md bg-app-hover border border-app-border text-[10px] text-tx-tertiary font-mono">Alt+N</kbd>
-<span className="text-[10px] text-tx-tertiary">{t("editor.newNoteShortcut") || "新建笔记"}</span>
+              <kbd className="px-2 py-1 rounded-md bg-app-hover border border-app-border text-[10px] text-tx-tertiary font-mono">
+                Alt+N
+              </kbd>
+              <span className="text-[10px] text-tx-tertiary">
+                {t("editor.newNoteShortcut") || "新建笔记"}
+              </span>
             </div>
           </div>
           {/* �ƶ��˼򻯿�̬�������� header ����ṩ�����ɵ㽻���� */}
           <div className="text-center md:hidden flex flex-col items-center">
             <div className="w-16 h-16 rounded-2xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center mb-4">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-accent-primary/30">
-                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <polyline points="14,2 14,8 20,8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                className="text-accent-primary/30"
+              >
+                <path
+                  d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <polyline
+                  points="14,2 14,8 20,8"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
-            <p className="text-tx-secondary text-sm font-medium mb-1">{t('editor.selectNote')}</p>
-            <p className="text-tx-tertiary text-xs max-w-[240px] leading-relaxed">{t('editor.orCreateNew')}</p>
+            <p className="text-tx-secondary text-sm font-medium mb-1">
+              {t("editor.selectNote")}
+            </p>
+            <p className="text-tx-tertiary text-xs max-w-[240px] leading-relaxed">
+              {t("editor.orCreateNew")}
+            </p>
           </div>
         </div>
       </div>
@@ -2587,158 +3218,226 @@ const moveToTrash = useCallback(async () => {
 
   return (
     <EditorToolbarHost>
-    <>
-      <MobileEditorToolbarPortal location="leading">
-        {compactMobileEditing ? (
-          <button
-            data-adaptive-editor-back
-            onClick={() => actions.setMobileView("list")}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-accent-primary active:bg-app-hover"
-            aria-label={t('editor.back')}
-          >
-            <ChevronLeft size={21} />
-          </button>
-        ) : null}
-      </MobileEditorToolbarPortal>
-      <MobileEditorToolbarPortal location="trailing">
-        {compactMobileEditing ? (
-          <div className="flex items-center gap-1">
-            <SyncStatusBadge saving={syncStatus === "saving" || syncStatus === "error"} />
-            <Button
-              data-mobile-note-menu-trigger
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={() => {
-                const nextOpen = !showMobileMenu;
-                if (nextOpen) window.dispatchEvent(new CustomEvent('nowen:close-search'));
-                setShowMobileMenu(nextOpen);
-                setShowMobileMoveMenu(false);
-              }}
-              aria-label={t('common.more')}
+      <>
+        <MobileEditorToolbarPortal location="leading">
+          {compactMobileEditing ? (
+            <button
+              data-adaptive-editor-back
+              onClick={() => actions.setMobileView("list")}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-accent-primary active:bg-app-hover"
+              aria-label={t("editor.back")}
             >
-              <MoreHorizontal size={17} />
-            </Button>
-          </div>
-        ) : null}
-      </MobileEditorToolbarPortal>
-    <motion.div
-      ref={editorPaneRootRef}
-      key={activeNote.id}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: reduceMotion ? 0 : 0.15 }}
-      className="flex-1 flex flex-col bg-app-bg overflow-hidden transition-colors relative"
-    >
-      {/* �ʼ��л� loading ���� */}
-      <AnimatePresence>
-        {noteLoading && (
-          <motion.div
-            key={`note-loading-${noteLoadingState.requestId}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.14, ease: "easeOut" }}
-            className="absolute inset-0 z-50"
-          >
-            <NoteLoadingSkeleton
-              mode="overlay"
-              state={noteLoadingState}
-              onRetry={() => { void retryNoteLoad(); }}
-              onBack={() => actions.setMobileView("list")}
-              loadingLabel={t("editor.noteLoading")}
-              errorTitle={t("noteList.loadErrorTitle")}
-              errorDescription={t("noteList.loadErrorDesc")}
-              retryLabel={t("noteList.retryLoad")}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {/* Mobile Editor Header �� iOS ���˫�нṹ
+              <ChevronLeft size={21} />
+            </button>
+          ) : null}
+        </MobileEditorToolbarPortal>
+        <MobileEditorToolbarPortal location="trailing">
+          {compactMobileEditing ? (
+            <div className="flex items-center gap-1">
+              <SyncStatusBadge
+                saving={syncStatus === "saving" || syncStatus === "error"}
+              />
+              <Button
+                data-mobile-note-menu-trigger
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => {
+                  const nextOpen = !showMobileMenu;
+                  if (nextOpen)
+                    window.dispatchEvent(new CustomEvent("nowen:close-search"));
+                  setShowMobileMenu(nextOpen);
+                  setShowMobileMoveMenu(false);
+                }}
+                aria-label={t("common.more")}
+              >
+                <MoreHorizontal size={17} />
+              </Button>
+            </div>
+          ) : null}
+        </MobileEditorToolbarPortal>
+        <motion.div
+          ref={editorPaneRootRef}
+          key={activeNote.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reduceMotion ? 0 : 0.15 }}
+          className="flex-1 flex flex-col bg-app-bg overflow-hidden transition-colors relative"
+        >
+          {/* �ʼ��л� loading ���� */}
+          <AnimatePresence>
+            {noteLoading && (
+              <motion.div
+                key={`note-loading-${noteLoadingState.requestId}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  duration: reduceMotion ? 0 : 0.14,
+                  ease: "easeOut",
+                }}
+                className="absolute inset-0 z-50"
+              >
+                <NoteLoadingSkeleton
+                  mode="overlay"
+                  state={noteLoadingState}
+                  onRetry={() => {
+                    void retryNoteLoad();
+                  }}
+                  onBack={() => actions.setMobileView("list")}
+                  loadingLabel={t("editor.noteLoading")}
+                  errorTitle={t("noteList.loadErrorTitle")}
+                  errorDescription={t("noteList.loadErrorDesc")}
+                  retryLabel={t("noteList.retryLoad")}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* Mobile Editor Header �� iOS ���˫�нṹ
           �� 1 �У����� + ���м���ʼǱ�·����+ ͬ��״̬
           �� 2 �У���ǰ�ʼǱ��⣨�ضϣ�+ �ղ� + ����
           ˵����
             - С���������ޣ�ԭ��һ���� 5 ��ͼ�갴ť�Ѽ�ѹ���ҿ������ʼǱ�·������⣻
             - ��/�ö�����Ƶ���أ�Ų�� ? �˵����˵����ﷴӳ��ǰ״̬��
             - Presence ͷ����С�����岻���ƶ��˲���Ⱦ������˱����� */}
-      <header
-        data-mobile-editor-compact={compactMobileEditing ? "true" : "false"}
-        className={cn("flex flex-col border-b border-app-border bg-app-surface/50 md:hidden", compactMobileEditing && "hidden")}
-        style={{ paddingTop: 'var(--safe-area-top)' }}
-      >
-        {/* �� 1 �У����� + ���м + ͬ�� */}
-        <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
-          <button
-            data-adaptive-editor-back
-            onClick={() => actions.setMobileView("list")}
-            className="flex items-center text-accent-primary py-1 px-1 -ml-1 rounded-lg active:bg-app-hover shrink-0"
-            aria-label={t('editor.back')}
-          >
-            <ChevronLeft size={22} />
-          </button>
-          {/* ���м������·�������һ�μӴ�ǿ���������ɹ�������ضϳ� "..."
-              �������"�ƶ����ʼǱ�"�˵�������������м�ɵ��������һ�£� */}
-          <button
-            onClick={() => { setShowMobileMenu(true); setShowMobileMoveMenu(true); }}
-            className="flex-1 min-w-0 flex items-center gap-1 text-xs text-tx-tertiary active:bg-app-hover rounded-md px-1.5 py-1 overflow-hidden"
-            title={t('editor.moveToNotebook')}
-          >
-            {mobileTitlePinned ? (
-              <span className="min-w-0 truncate text-sm font-semibold text-tx-primary">
-                {activeNote.title || t('editor.untitled')}
-              </span>
-            ) : currentPath.length > 0 ? (
-              <span className="flex min-w-0 items-center gap-1 overflow-hidden">
-                {currentPath.map((nb, idx) => {
-                  const isLast = idx === currentPath.length - 1;
-                  return (
-                    <React.Fragment key={nb.id}>
-                      {idx > 0 && <ChevronRight size={10} className="text-tx-tertiary/60 shrink-0" />}
-                      <span className={cn("flex min-w-0 items-center gap-0.5", isLast ? "text-tx-secondary font-medium" : "shrink-0")}>
-                        <span className="leading-none">{getNotebookIcon(nb.icon)}</span>
-                        <span className={cn("truncate", isLast ? "max-w-[120px]" : "max-w-[64px]")}>{nb.name}</span>
-                      </span>
-                    </React.Fragment>
-                  );
-                })}
-              </span>
-            ) : (
-              <span className="shrink-0 leading-none">{getNotebookIcon()}</span>
+          <header
+            data-mobile-editor-compact={compactMobileEditing ? "true" : "false"}
+            className={cn(
+              "flex flex-col border-b border-app-border bg-app-surface/50 md:hidden",
+              compactMobileEditing && "hidden",
             )}
-          </button>
-          <div className="shrink-0">
-            <SyncIndicator syncStatus={syncStatus} lastSyncedAt={lastSyncedAt} onManualSync={handleManualSync} />
-          </div>
-          {/* 多设备同步状态：与上面的"保存状态"分开显示。
+            style={{ paddingTop: "var(--safe-area-top)" }}
+          >
+            {/* �� 1 �У����� + ���м + ͬ�� */}
+            <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
+              <button
+                data-adaptive-editor-back
+                onClick={() => actions.setMobileView("list")}
+                className="flex items-center text-accent-primary py-1 px-1 -ml-1 rounded-lg active:bg-app-hover shrink-0"
+                aria-label={t("editor.back")}
+              >
+                <ChevronLeft size={22} />
+              </button>
+              {/* ���м������·�������һ�μӴ�ǿ���������ɹ�������ضϳ� "..."
+              �������"�ƶ����ʼǱ�"�˵�������������м�ɵ��������һ�£� */}
+              <button
+                onClick={() => {
+                  setShowMobileMenu(true);
+                  setShowMobileMoveMenu(true);
+                }}
+                className="flex-1 min-w-0 flex items-center gap-1 text-xs text-tx-tertiary active:bg-app-hover rounded-md px-1.5 py-1 overflow-hidden"
+                title={t("editor.moveToNotebook")}
+              >
+                {mobileTitlePinned ? (
+                  <span className="min-w-0 truncate text-sm font-semibold text-tx-primary">
+                    {activeNote.title || t("editor.untitled")}
+                  </span>
+                ) : currentPath.length > 0 ? (
+                  <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                    {currentPath.map((nb, idx) => {
+                      const isLast = idx === currentPath.length - 1;
+                      return (
+                        <React.Fragment key={nb.id}>
+                          {idx > 0 && (
+                            <ChevronRight
+                              size={10}
+                              className="text-tx-tertiary/60 shrink-0"
+                            />
+                          )}
+                          <span
+                            className={cn(
+                              "flex min-w-0 items-center gap-0.5",
+                              isLast
+                                ? "text-tx-secondary font-medium"
+                                : "shrink-0",
+                            )}
+                          >
+                            <span className="leading-none">
+                              {getNotebookIcon(nb.icon)}
+                            </span>
+                            <span
+                              className={cn(
+                                "truncate",
+                                isLast ? "max-w-[120px]" : "max-w-[64px]",
+                              )}
+                            >
+                              {nb.name}
+                            </span>
+                          </span>
+                        </React.Fragment>
+                      );
+                    })}
+                  </span>
+                ) : (
+                  <span className="shrink-0 leading-none">
+                    {getNotebookIcon()}
+                  </span>
+                )}
+              </button>
+              <div className="shrink-0">
+                <SyncIndicator
+                  syncStatus={syncStatus}
+                  lastSyncedAt={lastSyncedAt}
+                  onManualSync={handleManualSync}
+                />
+              </div>
+              {/* 多设备同步状态：与上面的"保存状态"分开显示。
               本地写入成功就是"已保存"，同步失败只叫"等待同步"，
               绝不能让一次网络抖动显示成"保存失败"。
               Android 保留轻量文字，未开启同步时不渲染。 */}
-          {!compactMobileEditing && <SyncStatusBadge saving={syncStatus === "saving" || syncStatus === "error"} />}
-          <span className="flex shrink-0 items-center gap-0.5" aria-hidden="true">
-            {activeNote.isLocked || isViewLocked ? <Lock size={12} className={activeNote.isLocked ? "text-orange-500" : "text-tx-tertiary"} /> : null}
-            {activeNote.isPinned ? <Pin size={12} className="text-accent-primary fill-accent-primary" /> : null}
-            {activeNote.isFavorite ? <Star size={12} className="text-amber-400 fill-amber-400" /> : null}
-          </span>
-          <Button
-            data-mobile-note-menu-trigger
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={() => {
-              const nextOpen = !showMobileMenu;
-              if (nextOpen) window.dispatchEvent(new CustomEvent('nowen:close-search'));
-              setShowMobileMenu(nextOpen);
-              setShowMobileMoveMenu(false);
-            }}
-            aria-label={t('common.more')}
-          >
-            <MoreHorizontal size={17} />
-          </Button>
-        </div>
-      </header>
+              {!compactMobileEditing && (
+                <SyncStatusBadge
+                  saving={syncStatus === "saving" || syncStatus === "error"}
+                />
+              )}
+              <span
+                className="flex shrink-0 items-center gap-0.5"
+                aria-hidden="true"
+              >
+                {activeNote.isLocked || isViewLocked ? (
+                  <Lock
+                    size={12}
+                    className={
+                      activeNote.isLocked
+                        ? "text-orange-500"
+                        : "text-tx-tertiary"
+                    }
+                  />
+                ) : null}
+                {activeNote.isPinned ? (
+                  <Pin
+                    size={12}
+                    className="text-accent-primary fill-accent-primary"
+                  />
+                ) : null}
+                {activeNote.isFavorite ? (
+                  <Star size={12} className="text-amber-400 fill-amber-400" />
+                ) : null}
+              </span>
+              <Button
+                data-mobile-note-menu-trigger
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => {
+                  const nextOpen = !showMobileMenu;
+                  if (nextOpen)
+                    window.dispatchEvent(new CustomEvent("nowen:close-search"));
+                  setShowMobileMenu(nextOpen);
+                  setShowMobileMoveMenu(false);
+                }}
+                aria-label={t("common.more")}
+              >
+                <MoreHorizontal size={17} />
+              </Button>
+            </div>
+          </header>
 
-      {/* Mobile document actions popover: triggers live in breadcrumb or compact editor toolbar. */}
-          <div className="absolute right-2 top-[calc(var(--safe-area-top)+2.75rem)] z-[60] shrink-0 md:hidden" ref={mobileMenuRef}>
+          {/* Mobile document actions popover: triggers live in breadcrumb or compact editor toolbar. */}
+          <div
+            className="absolute right-2 top-[calc(var(--safe-area-top)+2.75rem)] z-[60] shrink-0 md:hidden"
+            ref={mobileMenuRef}
+          >
             <Button
               data-mobile-note-menu-trigger
               variant="ghost"
@@ -2746,7 +3445,8 @@ const moveToTrash = useCallback(async () => {
               className="hidden"
               onClick={() => {
                 const nextOpen = !showMobileMenu;
-                if (nextOpen) window.dispatchEvent(new CustomEvent('nowen:close-search'));
+                if (nextOpen)
+                  window.dispatchEvent(new CustomEvent("nowen:close-search"));
                 setShowMobileMenu(nextOpen);
                 setShowMobileMoveMenu(false);
               }}
@@ -2770,40 +3470,79 @@ const moveToTrash = useCallback(async () => {
                   {/* �ö� / ȡ���ö� */}
                   <button
                     onClick={() => {
-                      window.dispatchEvent(new CustomEvent('nowen:open-search'));
+                      window.dispatchEvent(
+                        new CustomEvent("nowen:open-search"),
+                      );
                       setShowMobileMenu(false);
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Search size={15} className="text-tx-tertiary" />
-                    <span>{t('editor.searchInNote')}</span>
+                    <span>{t("editor.searchInNote")}</span>
                   </button>
                   <button
-                    onClick={() => { toggleFavorite(); setShowMobileMenu(false); }}
+                    onClick={() => {
+                      toggleFavorite();
+                      setShowMobileMenu(false);
+                    }}
                     disabled={isTrashed}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    <Star size={15} className={cn(activeNote.isFavorite ? "text-amber-400 fill-amber-400" : "text-tx-tertiary")} />
-                    <span>{activeNote.isFavorite ? t('editor.unfavoriteTooltip') : t('editor.favoriteTooltip')}</span>
+                    <Star
+                      size={15}
+                      className={cn(
+                        activeNote.isFavorite
+                          ? "text-amber-400 fill-amber-400"
+                          : "text-tx-tertiary",
+                      )}
+                    />
+                    <span>
+                      {activeNote.isFavorite
+                        ? t("editor.unfavoriteTooltip")
+                        : t("editor.favoriteTooltip")}
+                    </span>
                   </button>
                   <button
-                    onClick={() => { toggleLock(); setShowMobileMenu(false); }}
+                    onClick={() => {
+                      toggleLock();
+                      setShowMobileMenu(false);
+                    }}
                     disabled={isTrashed}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    {effectiveLocked
-                      ? <Lock size={15} className="text-orange-500" />
-                      : <Unlock size={15} className="text-tx-tertiary" />}
-                    <span>{effectiveLocked ? t('editor.unlockTooltip') : t('editor.lockTooltip')}</span>
+                    {effectiveLocked ? (
+                      <Lock size={15} className="text-orange-500" />
+                    ) : (
+                      <Unlock size={15} className="text-tx-tertiary" />
+                    )}
+                    <span>
+                      {effectiveLocked
+                        ? t("editor.unlockTooltip")
+                        : t("editor.lockTooltip")}
+                    </span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   <button
-                    onClick={() => { togglePin(); setShowMobileMenu(false); }}
+                    onClick={() => {
+                      togglePin();
+                      setShowMobileMenu(false);
+                    }}
                     disabled={!!activeNote.isLocked || isTrashed}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    <Pin size={15} className={cn(activeNote.isPinned ? "text-accent-primary fill-accent-primary" : "text-tx-tertiary")} />
-                    <span>{activeNote.isPinned ? t('editor.unpinTooltip') : t('editor.pinTooltip')}</span>
+                    <Pin
+                      size={15}
+                      className={cn(
+                        activeNote.isPinned
+                          ? "text-accent-primary fill-accent-primary"
+                          : "text-tx-tertiary",
+                      )}
+                    />
+                    <span>
+                      {activeNote.isPinned
+                        ? t("editor.unpinTooltip")
+                        : t("editor.pinTooltip")}
+                    </span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* �ƶ��ʼǱ� */}
@@ -2813,7 +3552,9 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
                     <FolderInput size={15} className="text-tx-tertiary" />
-                    <span className="flex-1 text-left">{t('editor.moveToNotebook')}</span>
+                    <span className="flex-1 text-left">
+                      {t("editor.moveToNotebook")}
+                    </span>
                     <ChevronRight size={14} className="text-tx-tertiary" />
                   </button>
                   {/* �ƶ��ʼǱ��Ӳ˵� */}
@@ -2853,9 +3594,12 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <ListTree size={15} className="text-tx-tertiary" />
-                    <span>{t('editor.showOutline')}</span>
+                    <span>{t("editor.showOutline")}</span>
                   </button>
-                  <NoteThemeMenuSelect noteId={activeNote.id} disabled={!canWriteNote(activeNote)} />
+                  <NoteThemeMenuSelect
+                    noteId={activeNote.id}
+                    disabled={!canWriteNote(activeNote)}
+                  />
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* AI ���ɱ��� */}
                   <button
@@ -2863,11 +3607,22 @@ const moveToTrash = useCallback(async () => {
                       handleAITitle();
                       setShowMobileMenu(false);
                     }}
-                    disabled={aiTitleLoading || !activeNote.contentText || effectiveLocked}
+                    disabled={
+                      aiTitleLoading ||
+                      !activeNote.contentText ||
+                      effectiveLocked
+                    }
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    {aiTitleLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <Type size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiGenerateTitle')}</span>
+                    {aiTitleLoading ? (
+                      <Loader2
+                        size={15}
+                        className="animate-spin text-violet-500"
+                      />
+                    ) : (
+                      <Type size={15} className="text-violet-500" />
+                    )}
+                    <span>{t("editor.aiGenerateTitle")}</span>
                   </button>
                   {/* AI �Ƽ���ǩ */}
                   <button
@@ -2875,11 +3630,22 @@ const moveToTrash = useCallback(async () => {
                       handleAITags();
                       setShowMobileMenu(false);
                     }}
-                    disabled={aiTagsLoading || !activeNote.contentText || effectiveLocked}
+                    disabled={
+                      aiTagsLoading ||
+                      !activeNote.contentText ||
+                      effectiveLocked
+                    }
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    {aiTagsLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <TagIcon size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiSuggestTags')}</span>
+                    {aiTagsLoading ? (
+                      <Loader2
+                        size={15}
+                        className="animate-spin text-violet-500"
+                      />
+                    ) : (
+                      <TagIcon size={15} className="text-violet-500" />
+                    )}
+                    <span>{t("editor.aiSuggestTags")}</span>
                   </button>
                   {/* AI �ܽ� */}
                   <button
@@ -2887,11 +3653,22 @@ const moveToTrash = useCallback(async () => {
                       handleAISummary();
                       setShowMobileMenu(false);
                     }}
-                    disabled={aiSummaryLoading || !activeNote.contentText || effectiveLocked}
+                    disabled={
+                      aiSummaryLoading ||
+                      !activeNote.contentText ||
+                      effectiveLocked
+                    }
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
                   >
-                    {aiSummaryLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <Sparkles size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiSummary')}</span>
+                    {aiSummaryLoading ? (
+                      <Loader2
+                        size={15}
+                        className="animate-spin text-violet-500"
+                      />
+                    ) : (
+                      <Sparkles size={15} className="text-violet-500" />
+                    )}
+                    <span>{t("editor.aiSummary")}</span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* ���� */}
@@ -2903,7 +3680,7 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Share2 size={15} className="text-emerald-500" />
-                    <span>{t('editor.shareNote')}</span>
+                    <span>{t("editor.shareNote")}</span>
                   </button>
                   {/* �汾��ʷ */}
                   <button
@@ -2914,7 +3691,7 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <History size={15} className="text-violet-500" />
-                    <span>{t('editor.versionHistory')}</span>
+                    <span>{t("editor.versionHistory")}</span>
                   </button>
                   {/* ���� */}
                   <button
@@ -2925,7 +3702,7 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <MessageCircle size={15} className="text-blue-500" />
-                    <span>{t('editor.noteComments')}</span>
+                    <span>{t("editor.noteComments")}</span>
                   </button>
                   {/* 反向链接 BACKLINKS-02 */}
                   <button
@@ -2937,9 +3714,13 @@ const moveToTrash = useCallback(async () => {
                   >
                     <Link2 size={15} className="text-emerald-500" />
                     <span>反向链接</span>
-                    {!backlinksLoading && backlinksCount !== null && backlinksCount > 0 && (
-                      <span className="ml-auto text-xs text-tx-tertiary">{backlinksCount}</span>
-                    )}
+                    {!backlinksLoading &&
+                      backlinksCount !== null &&
+                      backlinksCount > 0 && (
+                        <span className="ml-auto text-xs text-tx-tertiary">
+                          {backlinksCount}
+                        </span>
+                      )}
                   </button>
                   {/* ����Ŀ¼ */}
                   <button
@@ -2950,7 +3731,7 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Paperclip size={15} className="text-amber-500" />
-                    <span>{t('editor.attachments')}</span>
+                    <span>{t("editor.attachments")}</span>
                   </button>
                   {canSplitDocument && onSplitDocument && (
                     <button
@@ -2975,14 +3756,25 @@ const moveToTrash = useCallback(async () => {
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                       >
-                        {htmlPreviewMode ? <Pencil size={15} className="text-amber-500" /> : <Eye size={15} className="text-blue-500" />}
-                        <span>{htmlPreviewMode ? t("editor.htmlPreview.switchToEdit") : t("editor.htmlPreview.switchToPreview")}</span>
+                        {htmlPreviewMode ? (
+                          <Pencil size={15} className="text-amber-500" />
+                        ) : (
+                          <Eye size={15} className="text-blue-500" />
+                        )}
+                        <span>
+                          {htmlPreviewMode
+                            ? t("editor.htmlPreview.switchToEdit")
+                            : t("editor.htmlPreview.switchToPreview")}
+                        </span>
                       </button>
                     </>
                   )}
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   <button
-                    onClick={() => { setShowMobileMenu(false); handlePrintNote(); }}
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      handlePrintNote();
+                    }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Printer size={15} className="text-tx-tertiary" />
@@ -2990,14 +3782,20 @@ const moveToTrash = useCallback(async () => {
                   </button>
                   {/* NOTE-IMAGE-EXPORT-01: 导出为图片 */}
                   <button
-                    onClick={() => { setShowMobileMenu(false); handleExportNoteImage("png"); }}
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      handleExportNoteImage("png");
+                    }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Image size={15} className="text-tx-tertiary" />
                     <span>{t("note.exportAsPng")}</span>
                   </button>
                   <button
-                    onClick={() => { setShowMobileMenu(false); handleExportNoteImage("jpg"); }}
+                    onClick={() => {
+                      setShowMobileMenu(false);
+                      handleExportNoteImage("jpg");
+                    }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors"
                   >
                     <Image size={15} className="text-tx-tertiary" />
@@ -3014,349 +3812,489 @@ const moveToTrash = useCallback(async () => {
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-500 active:bg-red-50 dark:active:bg-red-900/20 transition-colors disabled:opacity-40"
                   >
                     <Trash2 size={15} />
-                    <span>{t('editor.trashTooltip')}</span>
+                    <span>{t("editor.trashTooltip")}</span>
                   </button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-      {/* Mobile Outline Panel (ȫ������) */}
-      <AnimatePresence>
-        {showMobileOutline && (
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed inset-0 z-40 bg-app-surface flex flex-col md:hidden"
-            style={{ paddingTop: 'var(--safe-area-top)' }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
-              <div className="flex items-center gap-1.5 text-sm font-semibold text-tx-primary">
-                <ListTree size={16} className="text-accent-primary" />
-                <span>{t('editor.outline')}</span>
-              </div>
-              <button
-                onClick={() => setShowMobileOutline(false)}
-                className="p-1.5 rounded-md hover:bg-app-hover text-tx-secondary transition-colors"
+          {/* Mobile Outline Panel (ȫ������) */}
+          <AnimatePresence>
+            {showMobileOutline && (
+              <motion.div
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="fixed inset-0 z-40 bg-app-surface flex flex-col md:hidden"
+                style={{ paddingTop: "var(--safe-area-top)" }}
               >
-                <X size={18} />
-              </button>
-            </div>
-            <ScrollArea className="flex-1">
-              <div className="py-2 px-2">
-                {headings.length === 0 ? (
-                  <div className="px-3 py-12 text-center">
-                    <p className="text-sm text-tx-tertiary">{t('editor.noHeadings')}</p>
-                    <p className="text-xs text-tx-tertiary mt-1">{t('editor.noHeadingsHint')}</p>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-tx-primary">
+                    <ListTree size={16} className="text-accent-primary" />
+                    <span>{t("editor.outline")}</span>
                   </div>
-                ) : (
-                  headings.map((h) => (
-                    <button
-                      key={h.id}
-                      onClick={() => {
-                        scrollToRef.current?.(h.pos);
-                        setShowMobileOutline(false);
-                      }}
-                      className={cn(
-                        "w-full text-left px-4 py-2.5 text-sm transition-colors active:bg-app-hover rounded-lg",
-                        h.level === 1 && "font-medium text-tx-primary",
-                        h.level === 2 && "text-tx-secondary",
-                        h.level === 3 && "text-tx-tertiary",
-                      )}
-                      style={{ paddingLeft: `${(h.level - 1) * 16 + 16}px` }}
-                    >
-                      <span className={cn(
-                        "inline-block w-2 h-2 rounded-full mr-2.5 shrink-0 align-middle",
-                        h.level === 1 && "bg-accent-primary",
-                        h.level === 2 && "bg-accent-primary/50",
-                        h.level === 3 && "bg-tx-tertiary/50",
-                      )} />
-                      {h.text || t('editor.untitled')}
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* macOS 窗口标题条：顶部空白 + 居中应用名；整条可拖动 / 双击最大化；下方编辑器工具栏随之下沉 */}
-      <div className="hidden md:flex items-center justify-center h-7 shrink-0 editor-window-titlebar" data-electron-titlebar>
-        <span className="editor-window-titlebar__title">nowen note</span>
-      </div>
-      {/* Desktop Editor Header */}
-      <div className="hidden md:flex min-w-0 items-center justify-between gap-3 px-4 py-2 border-b border-app-border bg-app-surface/30 transition-colors">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <div className="relative min-w-0 flex-1">
-          <button
-            onClick={() => setShowMoveDropdown(!showMoveDropdown)}
-            className="flex min-w-0 max-w-full items-center gap-1 overflow-hidden text-xs text-tx-tertiary hover:text-tx-secondary transition-colors rounded-md px-1.5 py-1 hover:bg-app-hover"
-            title={t('editor.moveToNotebook')}
-          >
-            {currentPath.length > 0 ? (
-              <span className="flex min-w-0 items-center gap-1 overflow-hidden">
-                {currentPath.map((nb, idx) => {
-                  const isLast = idx === currentPath.length - 1;
-                  // ĩ�������������ضϣ�min-w-0 + ���� shrink-0�����м�α��ֽ��ղ�����
-                  // ֮ǰ���жζ��� shrink-0 + truncate������ truncate ʧЧ�������� emoji/��ͷ�Ӿ��ص�
-                  return (
-                    <React.Fragment key={nb.id}>
-                      {idx > 0 && <ChevronRight size={11} className="text-tx-tertiary/60 shrink-0" />}
-                      <span
-                        className={cn(
-                          "flex items-center gap-1",
-                          isLast ? "min-w-0 text-tx-secondary font-medium" : "shrink-0"
-                        )}
-                      >
-                        <span className="shrink-0 leading-none">{getNotebookIcon(nb.icon)}</span>
-                        <span className={cn("truncate", isLast ? "max-w-[180px]" : "max-w-[120px]")}>
-                          {nb.name}
-                        </span>
-                      </span>
-                    </React.Fragment>
-                  );
-                })}
-              </span>
-            ) : (
-              <span className="shrink-0 leading-none">{getNotebookIcon()}</span>
+                  <button
+                    onClick={() => setShowMobileOutline(false)}
+                    className="p-1.5 rounded-md hover:bg-app-hover text-tx-secondary transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <ScrollArea className="flex-1">
+                  <div className="py-2 px-2">
+                    {headings.length === 0 ? (
+                      <div className="px-3 py-12 text-center">
+                        <p className="text-sm text-tx-tertiary">
+                          {t("editor.noHeadings")}
+                        </p>
+                        <p className="text-xs text-tx-tertiary mt-1">
+                          {t("editor.noHeadingsHint")}
+                        </p>
+                      </div>
+                    ) : (
+                      headings.map((h) => (
+                        <button
+                          key={h.id}
+                          onClick={() => {
+                            scrollToRef.current?.(h.pos);
+                            setShowMobileOutline(false);
+                          }}
+                          className={cn(
+                            "w-full text-left px-4 py-2.5 text-sm transition-colors active:bg-app-hover rounded-lg",
+                            h.level === 1 && "font-medium text-tx-primary",
+                            h.level === 2 && "text-tx-secondary",
+                            h.level === 3 && "text-tx-tertiary",
+                          )}
+                          style={{
+                            paddingLeft: `${(h.level - 1) * 16 + 16}px`,
+                          }}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-2 h-2 rounded-full mr-2.5 shrink-0 align-middle",
+                              h.level === 1 && "bg-accent-primary",
+                              h.level === 2 && "bg-accent-primary/50",
+                              h.level === 3 && "bg-tx-tertiary/50",
+                            )}
+                          />
+                          {h.text || t("editor.untitled")}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </motion.div>
             )}
-            <ChevronDown size={12} className="shrink-0 ml-0.5" />
-          </button>
-          {showMoveDropdown && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowMoveDropdown(false)} />
-              <div
-                ref={moveDropdownRef}
-                        className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-zinc-950 border border-app-border rounded-lg shadow-xl z-50 py-1 max-h-96 overflow-auto"
-                style={{ animation: "contextMenuIn 0.12s ease-out" }}
-              >
-                {/* ���� P3��AI ������� ����
+          </AnimatePresence>
+
+          {/* Desktop Editor Header */}
+          <div className="hidden md:flex min-w-0 items-center justify-between gap-3 px-4 py-2 border-b border-app-border bg-app-surface/30 transition-colors">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div className="relative min-w-0 flex-1">
+                <button
+                  onClick={() => setShowMoveDropdown(!showMoveDropdown)}
+                  className="flex min-w-0 max-w-full items-center gap-1 overflow-hidden text-xs text-tx-tertiary hover:text-tx-secondary transition-colors rounded-md px-1.5 py-1 hover:bg-app-hover"
+                  title={t("editor.moveToNotebook")}
+                >
+                  {currentPath.length > 0 ? (
+                    <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                      {currentPath.map((nb, idx) => {
+                        const isLast = idx === currentPath.length - 1;
+                        // ĩ�������������ضϣ�min-w-0 + ���� shrink-0�����м�α��ֽ��ղ�����
+                        // ֮ǰ���жζ��� shrink-0 + truncate������ truncate ʧЧ�������� emoji/��ͷ�Ӿ��ص�
+                        return (
+                          <React.Fragment key={nb.id}>
+                            {idx > 0 && (
+                              <ChevronRight
+                                size={11}
+                                className="text-tx-tertiary/60 shrink-0"
+                              />
+                            )}
+                            <span
+                              className={cn(
+                                "flex items-center gap-1",
+                                isLast
+                                  ? "min-w-0 text-tx-secondary font-medium"
+                                  : "shrink-0",
+                              )}
+                            >
+                              <span className="shrink-0 leading-none">
+                                {getNotebookIcon(nb.icon)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "truncate",
+                                  isLast ? "max-w-[180px]" : "max-w-[120px]",
+                                )}
+                              >
+                                {nb.name}
+                              </span>
+                            </span>
+                          </React.Fragment>
+                        );
+                      })}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 leading-none">
+                      {getNotebookIcon()}
+                    </span>
+                  )}
+                  <ChevronDown size={12} className="shrink-0 ml-0.5" />
+                </button>
+                {showMoveDropdown && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowMoveDropdown(false)}
+                    />
+                    <div
+                      ref={moveDropdownRef}
+                      className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-zinc-950 border border-app-border rounded-lg shadow-xl z-50 py-1 max-h-96 overflow-auto"
+                      style={{ animation: "contextMenuIn 0.12s ease-out" }}
+                    >
+                      {/* ���� P3��AI ������� ����
                     ���ڶ�������λ�ã����������� �� չʾ���� �� ������ƶ���
                     ���鲻����"ȫ���ʼǱ�"��ѡ�б����û����ֶ��߹��档 */}
-                <div className="px-2 pt-1 pb-0.5">
-                  <button
-                    onClick={handleAiClassify}
-                    disabled={aiClassifyLoading}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
-                    title={t('editor.aiClassifyTip') || "���ڱʼ������Ƽ�Ŀ��ʼǱ�"}
-                  >
-                    {aiClassifyLoading ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Sparkles size={12} />
-                    )}
-                    <span className="flex-1 text-left">
-                      {aiClassifyLoading
-                        ? (t('editor.aiClassifyLoading') || "AI ���ڷ�����")
-                        : (t('editor.aiClassifyAction') || "AI �������")}
-                    </span>
-                  </button>
-                  {aiSuggestions && aiSuggestions.length > 0 && (
-                    <div className="mt-1 pl-1 border-l-2 border-violet-200 dark:border-violet-500/30 ml-1.5 flex flex-col gap-0.5">
-                      {aiSuggestions.map((s) => (
+                      <div className="px-2 pt-1 pb-0.5">
                         <button
-                          key={s.notebookId}
-                          onClick={() => handleMoveToNotebook(s.notebookId)}
-                          className="group w-full flex items-start gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
-                          title={s.reason || s.path}
+                          onClick={handleAiClassify}
+                          disabled={aiClassifyLoading}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
+                          title={
+                            t("editor.aiClassifyTip") || "���ڱʼ������Ƽ�Ŀ��ʼǱ�"
+                          }
                         >
-                          <FolderInput size={11} className="mt-0.5 shrink-0 text-violet-500" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate text-tx-primary group-hover:text-violet-600 dark:group-hover:text-violet-400">
-                                {s.path}
-                              </span>
-                              <span className="shrink-0 text-[10px] text-violet-500/80 font-mono">
-                                {Math.round(s.confidence * 100)}%
-                              </span>
-                            </div>
-                            {s.reason && (
-                              <div className="text-[10px] text-tx-tertiary truncate mt-0.5">
-                                {s.reason}
-                              </div>
-                            )}
-                          </div>
+                          {aiClassifyLoading ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Sparkles size={12} />
+                          )}
+                          <span className="flex-1 text-left">
+                            {aiClassifyLoading
+                              ? t("editor.aiClassifyLoading") || "AI ���ڷ�����"
+                              : t("editor.aiClassifyAction") || "AI �������"}
+                          </span>
                         </button>
-                      ))}
+                        {aiSuggestions && aiSuggestions.length > 0 && (
+                          <div className="mt-1 pl-1 border-l-2 border-violet-200 dark:border-violet-500/30 ml-1.5 flex flex-col gap-0.5">
+                            {aiSuggestions.map((s) => (
+                              <button
+                                key={s.notebookId}
+                                onClick={() =>
+                                  handleMoveToNotebook(s.notebookId)
+                                }
+                                className="group w-full flex items-start gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors text-left"
+                                title={s.reason || s.path}
+                              >
+                                <FolderInput
+                                  size={11}
+                                  className="mt-0.5 shrink-0 text-violet-500"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate text-tx-primary group-hover:text-violet-600 dark:group-hover:text-violet-400">
+                                      {s.path}
+                                    </span>
+                                    <span className="shrink-0 text-[10px] text-violet-500/80 font-mono">
+                                      {Math.round(s.confidence * 100)}%
+                                    </span>
+                                  </div>
+                                  {s.reason && (
+                                    <div className="text-[10px] text-tx-tertiary truncate mt-0.5">
+                                      {s.reason}
+                                    </div>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="px-3 py-1.5 mt-1 text-[10px] font-medium text-tx-tertiary border-t border-b border-app-border">
+                        {t("editor.moveToLabel")}
+                      </div>
+                      <div className="px-1 pb-1 pt-1">
+                        {notebookTree.map((nb) => (
+                          <MoveTreeItem
+                            key={nb.id}
+                            notebook={nb}
+                            depth={0}
+                            currentId={activeNote.notebookId}
+                            onSelect={handleMoveToNotebook}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                <div className="px-3 py-1.5 mt-1 text-[10px] font-medium text-tx-tertiary border-t border-b border-app-border">
-                  {t('editor.moveToLabel')}
-                </div>
-                <div className="px-1 pb-1 pt-1">
-                  {notebookTree.map((nb) => (
-                    <MoveTreeItem
-                      key={nb.id}
-                      notebook={nb}
-                      depth={0}
-                      currentId={activeNote.notebookId}
-                      onSelect={handleMoveToNotebook}
-                    />
-                  ))}
-                </div>
+                  </>
+                )}
               </div>
-            </>
-          )}
-          </div>
-          {collabYDoc && (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded border border-accent-primary/20 bg-accent-primary/5 px-1.5 py-0.5 text-[10px] font-medium text-accent-primary"
-              title="Live 协同编辑"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-accent-primary animate-pulse" />
-              Live
-            </span>
-          )}
-          <NoteColorMarkPicker
-            value={activeNote.colorMark}
-            disabled={effectiveLocked || activeNote.isTrashed === 1 || !canWriteNote(activeNote)}
-            onChange={setNoteColorMark}
-          />
-          <button
-            type="button"
-            data-note-format-switch=""
-            disabled={modeSwitching || effectiveLocked || noteIsHtml || !canWriteNote(activeNote)}
-            onClick={async () => {
-              const targetFormat = activeNote.contentFormat === "markdown" ? "tiptap-json" : "markdown";
-              const targetLabel = targetFormat === "markdown" ? t("note.format.markdown") : t("note.format.richText");
-              const ok = await confirm({
-                title: t("note.format.convertTitle", { target: targetLabel }),
-                description: t("note.format.convertDesc"),
-                confirmText: t("note.format.convertConfirm"),
-                cancelText: t("common.cancel", { defaultValue: "取消" }),
-              });
-              if (!ok) return;
-              await convertActiveNoteFormat({ noteId: activeNote.id, targetFormat });
-            }}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-              activeNote.contentFormat === "markdown"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/15"
-                : "border-app-border bg-app-hover text-tx-tertiary hover:bg-app-active hover:text-tx-secondary",
-            )}
-            title={activeNote.contentFormat === "markdown" ? t("note.format.convertToRichText") : t("note.format.convertToMarkdown")}
-            aria-label={activeNote.contentFormat === "markdown" ? t("note.format.convertToRichText") : t("note.format.convertToMarkdown")}
-          >
-            {activeNote.contentFormat === "markdown" ? <FileCode size={11} /> : <FileText size={11} />}
-            {activeNote.contentFormat === "markdown" ? t("note.format.markdownShort") : t("note.format.richTextShort")}
-          </button>
-        </div>
+              {collabYDoc && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-accent-primary/20 bg-accent-primary/5 px-1.5 py-0.5 text-[10px] font-medium text-accent-primary"
+                  title="Live 协同编辑"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent-primary animate-pulse" />
+                  Live
+                </span>
+              )}
+              <NoteColorMarkPicker
+                value={activeNote.colorMark}
+                disabled={
+                  effectiveLocked ||
+                  activeNote.isTrashed === 1 ||
+                  !canWriteNote(activeNote)
+                }
+                onChange={setNoteColorMark}
+              />
+              <button
+                type="button"
+                data-note-format-switch=""
+                disabled={
+                  modeSwitching ||
+                  effectiveLocked ||
+                  noteIsHtml ||
+                  !canWriteNote(activeNote)
+                }
+                onClick={async () => {
+                  const targetFormat =
+                    activeNote.contentFormat === "markdown"
+                      ? "tiptap-json"
+                      : "markdown";
+                  const targetLabel =
+                    targetFormat === "markdown"
+                      ? t("note.format.markdown")
+                      : t("note.format.richText");
+                  const ok = await confirm({
+                    title: t("note.format.convertTitle", {
+                      target: targetLabel,
+                    }),
+                    description: t("note.format.convertDesc"),
+                    confirmText: t("note.format.convertConfirm"),
+                    cancelText: t("common.cancel", { defaultValue: "取消" }),
+                  });
+                  if (!ok) return;
+                  await convertActiveNoteFormat({
+                    noteId: activeNote.id,
+                    targetFormat,
+                  });
+                }}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                  activeNote.contentFormat === "markdown"
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/15"
+                    : "border-app-border bg-app-hover text-tx-tertiary hover:bg-app-active hover:text-tx-secondary",
+                )}
+                title={
+                  activeNote.contentFormat === "markdown"
+                    ? t("note.format.convertToRichText")
+                    : t("note.format.convertToMarkdown")
+                }
+                aria-label={
+                  activeNote.contentFormat === "markdown"
+                    ? t("note.format.convertToRichText")
+                    : t("note.format.convertToMarkdown")
+                }
+              >
+                {activeNote.contentFormat === "markdown" ? (
+                  <FileCode size={11} />
+                ) : (
+                  <FileText size={11} />
+                )}
+                {activeNote.contentFormat === "markdown"
+                  ? t("note.format.markdownShort")
+                  : t("note.format.richTextShort")}
+              </button>
+            </div>
 
-        {/* Sync Indicator + Grouped Actions */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          {/* ͬ��״̬ */}
-          <SyncIndicator
-            syncStatus={syncStatus}
-            lastSyncedAt={lastSyncedAt}
-            onManualSync={handleManualSync}
-          />
+            {/* Sync Indicator + Grouped Actions */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {/* ͬ��״̬ */}
+              <SyncIndicator
+                syncStatus={syncStatus}
+                lastSyncedAt={lastSyncedAt}
+                onManualSync={handleManualSync}
+              />
 
-          <div className="h-4 w-px shrink-0 bg-app-border" />
+              <div className="h-4 w-px shrink-0 bg-app-border" />
 
-          {/* �༭������ */}
-          <div className="flex shrink-0 items-center gap-0.5 bg-app-hover/50 rounded-lg px-1 py-0.5">
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 rounded-md"
-              onClick={toggleLock}
-              title={effectiveLocked ? t('editor.unlockTooltip') : t('editor.lockTooltip')}
-            >
-              {effectiveLocked
-                ? <Lock size={14} className={activeNote.isLocked ? "text-orange-500" : "text-tx-tertiary"} />
-                : <Unlock size={14} />}
-            </Button>
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 rounded-md"
-              onClick={togglePin}
-              title={activeNote.isPinned ? t('editor.unpinTooltip') : t('editor.pinTooltip')}
-            >
-              <Pin size={14} className={cn(activeNote.isPinned && "text-accent-primary fill-accent-primary")} />
-            </Button>
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 rounded-md"
-              onClick={toggleFavorite}
-              title={activeNote.isFavorite ? t('editor.unfavoriteTooltip') : t('editor.favoriteTooltip')}
-            >
-              <Star size={14} className={cn(activeNote.isFavorite && "text-amber-400 fill-amber-400")} />
-            </Button>
-          </div>
+              {/* �༭������ */}
+              <div className="flex shrink-0 items-center gap-0.5 bg-app-hover/50 rounded-lg px-1 py-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={toggleLock}
+                  title={
+                    effectiveLocked
+                      ? t("editor.unlockTooltip")
+                      : t("editor.lockTooltip")
+                  }
+                >
+                  {effectiveLocked ? (
+                    <Lock
+                      size={14}
+                      className={
+                        activeNote.isLocked
+                          ? "text-orange-500"
+                          : "text-tx-tertiary"
+                      }
+                    />
+                  ) : (
+                    <Unlock size={14} />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={togglePin}
+                  title={
+                    activeNote.isPinned
+                      ? t("editor.unpinTooltip")
+                      : t("editor.pinTooltip")
+                  }
+                >
+                  <Pin
+                    size={14}
+                    className={cn(
+                      activeNote.isPinned &&
+                        "text-accent-primary fill-accent-primary",
+                    )}
+                  />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={toggleFavorite}
+                  title={
+                    activeNote.isFavorite
+                      ? t("editor.unfavoriteTooltip")
+                      : t("editor.favoriteTooltip")
+                  }
+                >
+                  <Star
+                    size={14}
+                    className={cn(
+                      activeNote.isFavorite && "text-amber-400 fill-amber-400",
+                    )}
+                  />
+                </Button>
+              </div>
 
-          {/* ���� */}
-          <Button
-            variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-            onClick={() => setShowShareModal(true)}
-            title={t('editor.shareNote')}
-          >
-            <Share2 size={14} className="text-emerald-500" />
-          </Button>
+              {/* ���� */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={() => setShowShareModal(true)}
+                title={t("editor.shareNote")}
+              >
+                <Share2 size={14} className="text-emerald-500" />
+              </Button>
 
-          <Button
-            variant="ghost" size="icon" className="relative h-7 w-7 shrink-0"
-            onClick={() => setShowBacklinksPanel(true)}
-            title="反向链接"
-          >
-            <Link2 size={14} className="text-emerald-500" />
-            {!backlinksLoading && backlinksCount !== null && backlinksCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[9px] leading-none text-white">
-                {backlinksCount > 99 ? "99+" : backlinksCount}
-              </span>
-            )}
-          </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-7 w-7 shrink-0"
+                onClick={() => setShowBacklinksPanel(true)}
+                title="反向链接"
+              >
+                <Link2 size={14} className="text-emerald-500" />
+                {!backlinksLoading &&
+                  backlinksCount !== null &&
+                  backlinksCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-[14px] min-w-[14px] items-center justify-center rounded-full bg-emerald-500 px-0.5 text-[9px] leading-none text-white">
+                      {backlinksCount > 99 ? "99+" : backlinksCount}
+                    </span>
+                  )}
+              </Button>
 
-          {noteIsHtml && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={handleToggleHtmlPreviewMode}
-              title={htmlPreviewMode ? t("editor.htmlPreview.switchToEditTooltip") : t("editor.htmlPreview.switchToPreviewTooltip")}
-              aria-label={htmlPreviewMode ? t("editor.htmlPreview.switchToEdit") : t("editor.htmlPreview.switchToPreview")}
-            >
-              {htmlPreviewMode
-                ? <Pencil size={14} className="text-amber-500" />
-                : <Eye size={14} className="text-blue-500" />}
-            </Button>
-          )}
+              {noteIsHtml && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={handleToggleHtmlPreviewMode}
+                  title={
+                    htmlPreviewMode
+                      ? t("editor.htmlPreview.switchToEditTooltip")
+                      : t("editor.htmlPreview.switchToPreviewTooltip")
+                  }
+                  aria-label={
+                    htmlPreviewMode
+                      ? t("editor.htmlPreview.switchToEdit")
+                      : t("editor.htmlPreview.switchToPreview")
+                  }
+                >
+                  {htmlPreviewMode ? (
+                    <Pencil size={14} className="text-amber-500" />
+                  ) : (
+                    <Eye size={14} className="text-blue-500" />
+                  )}
+                </Button>
+              )}
 
-          <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-violet-500/5 px-1 py-0.5 dark:bg-violet-500/10">
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 rounded-md"
-              onClick={handleAITitle}
-              disabled={aiTitleLoading || !activeNote.contentText || effectiveLocked}
-              title={t('editor.aiGenerateTitle')}
-            >
-              {aiTitleLoading ? <Loader2 size={14} className="animate-spin text-violet-500" /> : <Type size={14} className="text-violet-500" />}
-            </Button>
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 rounded-md"
-              onClick={handleAITags}
-              disabled={aiTagsLoading || !activeNote.contentText || effectiveLocked}
-              title={t('editor.aiSuggestTags')}
-            >
-              {aiTagsLoading ? <Loader2 size={14} className="animate-spin text-violet-500" /> : <TagIcon size={14} className="text-violet-500" />}
-            </Button>
-          </div>
+              <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-violet-500/5 px-1 py-0.5 dark:bg-violet-500/10">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={handleAITitle}
+                  disabled={
+                    aiTitleLoading || !activeNote.contentText || effectiveLocked
+                  }
+                  title={t("editor.aiGenerateTitle")}
+                >
+                  {aiTitleLoading ? (
+                    <Loader2
+                      size={14}
+                      className="animate-spin text-violet-500"
+                    />
+                  ) : (
+                    <Type size={14} className="text-violet-500" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-md"
+                  onClick={handleAITags}
+                  disabled={
+                    aiTagsLoading || !activeNote.contentText || effectiveLocked
+                  }
+                  title={t("editor.aiSuggestTags")}
+                >
+                  {aiTagsLoading ? (
+                    <Loader2
+                      size={14}
+                      className="animate-spin text-violet-500"
+                    />
+                  ) : (
+                    <TagIcon size={14} className="text-violet-500" />
+                  )}
+                </Button>
+              </div>
 
-          {state.editorFullscreen && (
-            <Button
-              data-note-workspace-focus-exit=""
-              variant="ghost"
-              size="icon"
-              className="order-last h-7 w-7 shrink-0 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/15 hover:text-accent-primary"
-              onClick={exitEditorFullscreen}
-              title={t("workspaceLayout.exitFocus")}
-              aria-label={t("workspaceLayout.exitFocus")}
-            >
-              <Minimize2 size={14} />
-            </Button>
-          )}
+              {state.editorFullscreen && (
+                <Button
+                  data-note-workspace-focus-exit=""
+                  variant="ghost"
+                  size="icon"
+                  className="order-last h-7 w-7 shrink-0 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/15 hover:text-accent-primary"
+                  onClick={exitEditorFullscreen}
+                  title={t("workspaceLayout.exitFocus")}
+                  aria-label={t("workspaceLayout.exitFocus")}
+                >
+                  <Minimize2 size={14} />
+                </Button>
+              )}
 
-          {/* �༭��ģʽ�л���MD / Tiptap�� */}
-          {/*
+              {/* �༭��ģʽ�л���MD / Tiptap�� */}
+              {/*
             ����Ѷ���ͨ�û����أ����ļ����� SHOW_EDITOR_MODE_TOGGLE ע�ͣ���
             URL `?md=1|0` ��Ȼ��Ч��toggleEditorMode ����Э�鱣�����·���
 
@@ -3374,663 +4312,886 @@ const moveToTrash = useCallback(async () => {
               ��ť���ֿɵ������ CRDT ��δ sync ֻ�� toast ��ִ���л���sync ��ɺ�
               �ٵ㼴��˳���л�����Զ��������"��ť����"����״̬��
           */}
-          {SHOW_EDITOR_MODE_TOGGLE && (
-            <button
-              onClick={toggleEditorMode}
-              disabled={modeSwitching}
-              title={
-                modeSwitching
-                  ? t("editor.modeSwitch.switching")
-                  : editorMode === "md"
-                  ? t("editor.modeSwitch.toTiptap")
-                  : t("editor.modeSwitch.toMd")
-              }
-              className={cn(
-                "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-mono font-medium transition-colors border",
-                editorMode === "md"
-                  ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 hover:bg-accent-primary/15"
-                  : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active",
-                modeSwitching && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <FileCode size={12} />
-              <span>{editorMode === "md" ? "MD" : "RTE"}</span>
-            </button>
-          )}
-
-          {!state.editorFullscreen && (
-            <Button
-              data-editor-outline-toggle="desktop-toolbar"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-7 w-7 shrink-0",
-                showDesktopOutline && "bg-accent-primary/10 text-accent-primary",
-              )}
-              onClick={() => setShowOutline((open) => !open)}
-              title={showDesktopOutline ? t('editor.hideOutline') : t('editor.showOutline')}
-              aria-label={showDesktopOutline ? t('editor.hideOutline') : t('editor.showOutline')}
-              aria-pressed={showDesktopOutline}
-            >
-              <ListTree size={14} />
-            </Button>
-          )}
-
-          {(!userPrefs.enableNoteTabs || state.openNoteTabs.length === 0 || state.editorSplit) && (
-            <EditorToolbarExpandSlot location="header" />
-          )}
-          <div data-editor-more-menu="desktop" className="relative shrink-0" ref={desktopMoreMenuRef}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setShowDesktopMoreMenu((open) => !open)}
-              title={t("tiptap.moreMenu") || "更多"}
-              aria-label={t("tiptap.moreMenu") || "更多"}
-            >
-              <MoreHorizontal size={14} />
-            </Button>
-            <AnimatePresence>
-              {showDesktopMoreMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                  transition={{ duration: 0.12 }}
-                  className="absolute right-0 top-full z-50 mt-1 w-72 overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-app-border bg-app-elevated py-1 shadow-xl"
-                  style={{ maxHeight: `calc(${noteMenuViewport.height}px - 6rem - env(safe-area-inset-bottom, 0px))` }}
-                >
-                  <div className="px-3 py-2 border-b border-app-border">
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-tx-tertiary">
-                      <span>{activeNote.contentFormat === "markdown" ? t('note.format.markdown') : t('note.format.richText')}</span>
-                      {noteIsHtml && <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-blue-500">HTML</span>}
-                    </div>
-                    <div className="mt-1">
-                      <PresenceBar users={presenceUsers} isConnected={isConnected} />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => { setShowMoveDropdown(true); setShowDesktopMoreMenu(false); }}
-                    disabled={isTrashed}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    <FolderInput size={15} className="text-tx-tertiary" />
-                    <span>{t('editor.moveToNotebook')}</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowAttachmentsPanel(true); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <Paperclip size={15} className="text-amber-500" />
-                    <span>{t('editor.attachments')}</span>
-                  </button>
-                  <NoteThemeMenuSelect noteId={activeNote.id} disabled={!canWriteNote(activeNote)} />
-                  {canSplitDocument && onSplitDocument && (
-                    <button
-                      onClick={() => { onSplitDocument(); setShowDesktopMoreMenu(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                    >
-                      <Scissors size={15} className="text-accent-primary" />
-                      <span>拆分文档</span>
-                    </button>
+              {SHOW_EDITOR_MODE_TOGGLE && (
+                <button
+                  onClick={toggleEditorMode}
+                  disabled={modeSwitching}
+                  title={
+                    modeSwitching
+                      ? t("editor.modeSwitch.switching")
+                      : editorMode === "md"
+                        ? t("editor.modeSwitch.toTiptap")
+                        : t("editor.modeSwitch.toMd")
+                  }
+                  className={cn(
+                    "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-mono font-medium transition-colors border",
+                    editorMode === "md"
+                      ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 hover:bg-accent-primary/15"
+                      : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active",
+                    modeSwitching && "opacity-50 cursor-not-allowed",
                   )}
+                >
+                  <FileCode size={12} />
+                  <span>{editorMode === "md" ? "MD" : "RTE"}</span>
+                </button>
+              )}
 
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  <button
-                    onClick={() => { setShowVersionHistory(true); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <History size={15} className="text-violet-500" />
-                    <span>{t('editor.versionHistory')}</span>
-                  </button>
-                  <button
-                    onClick={() => { setShowCommentPanel(true); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <MessageCircle size={15} className="text-blue-500" />
-                    <span>{t('editor.noteComments')}</span>
-                  </button>
+              {!state.editorFullscreen && (
+                <Button
+                  data-editor-outline-toggle="desktop-toolbar"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-7 w-7 shrink-0",
+                    showDesktopOutline &&
+                      "bg-accent-primary/10 text-accent-primary",
+                  )}
+                  onClick={() => setShowOutline((open) => !open)}
+                  title={
+                    showDesktopOutline
+                      ? t("editor.hideOutline")
+                      : t("editor.showOutline")
+                  }
+                  aria-label={
+                    showDesktopOutline
+                      ? t("editor.hideOutline")
+                      : t("editor.showOutline")
+                  }
+                  aria-pressed={showDesktopOutline}
+                >
+                  <ListTree size={14} />
+                </Button>
+              )}
 
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  <button
-                    onClick={() => { handlePrintNote(); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <Printer size={15} className="text-tx-tertiary" />
-                    <span>{t("note.print")}</span>
-                  </button>
-                  <button
-                    onClick={() => { handleExportNoteImage("png"); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <Image size={15} className="text-tx-tertiary" />
-                    <span>{t("note.exportAsPng")}</span>
-                  </button>
-                  <button
-                    onClick={() => { handleExportNoteImage("jpg"); setShowDesktopMoreMenu(false); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
-                  >
-                    <Image size={15} className="text-tx-tertiary" />
-                    <span>{t("note.exportAsJpg")}</span>
-                  </button>
+              {(!userPrefs.enableNoteTabs ||
+                state.openNoteTabs.length === 0 ||
+                state.editorSplit) && (
+                <EditorToolbarExpandSlot location="header" />
+              )}
+              <div
+                data-editor-more-menu="desktop"
+                className="relative shrink-0"
+                ref={desktopMoreMenuRef}
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setShowDesktopMoreMenu((open) => !open)}
+                  title={t("tiptap.moreMenu") || "更多"}
+                  aria-label={t("tiptap.moreMenu") || "更多"}
+                >
+                  <MoreHorizontal size={14} />
+                </Button>
+                <AnimatePresence>
+                  {showDesktopMoreMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute right-0 top-full z-50 mt-1 w-72 overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-app-border bg-app-elevated py-1 shadow-xl"
+                      style={{
+                        maxHeight: `calc(${noteMenuViewport.height}px - 6rem - env(safe-area-inset-bottom, 0px))`,
+                      }}
+                    >
+                      <div className="px-3 py-2 border-b border-app-border">
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-tx-tertiary">
+                          <span>
+                            {activeNote.contentFormat === "markdown"
+                              ? t("note.format.markdown")
+                              : t("note.format.richText")}
+                          </span>
+                          {noteIsHtml && (
+                            <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-blue-500">
+                              HTML
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1">
+                          <PresenceBar
+                            users={presenceUsers}
+                            isConnected={isConnected}
+                          />
+                        </div>
+                      </div>
 
-                  {noteIsHtml && (
-                    <>
-                      <div className="h-px bg-app-border mx-2 my-0.5" />
                       <button
-                        onClick={async () => {
+                        onClick={() => {
+                          setShowMoveDropdown(true);
                           setShowDesktopMoreMenu(false);
-                          await handleToggleHtmlPreviewMode();
+                        }}
+                        disabled={isTrashed}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
+                      >
+                        <FolderInput size={15} className="text-tx-tertiary" />
+                        <span>{t("editor.moveToNotebook")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAttachmentsPanel(true);
+                          setShowDesktopMoreMenu(false);
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
                       >
-                        {htmlPreviewMode ? <Pencil size={15} className="text-amber-500" /> : <Eye size={15} className="text-blue-500" />}
-                        <span>{htmlPreviewMode ? t("editor.htmlPreview.switchToEdit") : t("editor.htmlPreview.switchToPreview")}</span>
+                        <Paperclip size={15} className="text-amber-500" />
+                        <span>{t("editor.attachments")}</span>
                       </button>
-                    </>
+                      <NoteThemeMenuSelect
+                        noteId={activeNote.id}
+                        disabled={!canWriteNote(activeNote)}
+                      />
+                      {canSplitDocument && onSplitDocument && (
+                        <button
+                          onClick={() => {
+                            onSplitDocument();
+                            setShowDesktopMoreMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                        >
+                          <Scissors size={15} className="text-accent-primary" />
+                          <span>拆分文档</span>
+                        </button>
+                      )}
+
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={() => {
+                          setShowVersionHistory(true);
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                      >
+                        <History size={15} className="text-violet-500" />
+                        <span>{t("editor.versionHistory")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCommentPanel(true);
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                      >
+                        <MessageCircle size={15} className="text-blue-500" />
+                        <span>{t("editor.noteComments")}</span>
+                      </button>
+
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={() => {
+                          handlePrintNote();
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                      >
+                        <Printer size={15} className="text-tx-tertiary" />
+                        <span>{t("note.print")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleExportNoteImage("png");
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                      >
+                        <Image size={15} className="text-tx-tertiary" />
+                        <span>{t("note.exportAsPng")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleExportNoteImage("jpg");
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                      >
+                        <Image size={15} className="text-tx-tertiary" />
+                        <span>{t("note.exportAsJpg")}</span>
+                      </button>
+
+                      {noteIsHtml && (
+                        <>
+                          <div className="h-px bg-app-border mx-2 my-0.5" />
+                          <button
+                            onClick={async () => {
+                              setShowDesktopMoreMenu(false);
+                              await handleToggleHtmlPreviewMode();
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors"
+                          >
+                            {htmlPreviewMode ? (
+                              <Pencil size={15} className="text-amber-500" />
+                            ) : (
+                              <Eye size={15} className="text-blue-500" />
+                            )}
+                            <span>
+                              {htmlPreviewMode
+                                ? t("editor.htmlPreview.switchToEdit")
+                                : t("editor.htmlPreview.switchToPreview")}
+                            </span>
+                          </button>
+                        </>
+                      )}
+
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={() => {
+                          handleAISummary();
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        disabled={
+                          aiSummaryLoading ||
+                          !activeNote.contentText ||
+                          effectiveLocked
+                        }
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
+                      >
+                        {aiSummaryLoading ? (
+                          <Loader2
+                            size={15}
+                            className="animate-spin text-violet-500"
+                          />
+                        ) : (
+                          <Sparkles size={15} className="text-violet-500" />
+                        )}
+                        <span>{t("editor.aiSummary")}</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleAIMermaid("mermaid_mindmap");
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        disabled={
+                          aiMermaidLoading ||
+                          !activeNote.contentText ||
+                          effectiveLocked
+                        }
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
+                      >
+                        {aiMermaidLoading ? (
+                          <Loader2
+                            size={15}
+                            className="animate-spin text-violet-500"
+                          />
+                        ) : (
+                          <Network size={15} className="text-violet-500" />
+                        )}
+                        <span>{t("editor.aiGenMindMap") || "AI 思维导图"}</span>
+                      </button>
+
+                      <div className="h-px bg-app-border mx-2 my-0.5" />
+                      <button
+                        onClick={() => {
+                          moveToTrash();
+                          setShowDesktopMoreMenu(false);
+                        }}
+                        disabled={effectiveLocked}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                      >
+                        <Trash2 size={15} />
+                        <span>{t("editor.trashTooltip")}</span>
+                      </button>
+                    </motion.div>
                   )}
-
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  <button
-                    onClick={() => { handleAISummary(); setShowDesktopMoreMenu(false); }}
-                    disabled={aiSummaryLoading || !activeNote.contentText || effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    {aiSummaryLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <Sparkles size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiSummary')}</span>
-                  </button>
-                  <button
-                    onClick={() => { handleAIMermaid("mermaid_mindmap"); setShowDesktopMoreMenu(false); }}
-                    disabled={aiMermaidLoading || !activeNote.contentText || effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
-                  >
-                    {aiMermaidLoading ? <Loader2 size={15} className="animate-spin text-violet-500" /> : <Network size={15} className="text-violet-500" />}
-                    <span>{t('editor.aiGenMindMap') || "AI 思维导图"}</span>
-                  </button>
-
-                  <div className="h-px bg-app-border mx-2 my-0.5" />
-                  <button
-                    onClick={() => { moveToTrash(); setShowDesktopMoreMenu(false); }}
-                    disabled={effectiveLocked}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
-                  >
-                    <Trash2 size={15} />
-                    <span>{t('editor.trashTooltip')}</span>
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-        </div>
-      </div>
-
-      {userPrefs.enableNoteTabs && !state.editorSplit && <NoteTabsBar />}
-
-      {/* Editor (HTML Ԥ�� / MD / Tiptap ��ģʽ����) + Outline */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="note-theme-surface flex-1 overflow-hidden relative" data-note-id={activeNote.id}>
-          {/* Phase 2: ʵʱЭ����������� / Զ�̸��� / Զ��ɾ�������� absolute ���㣬��ռ�ĵ���������ҳ�涶�� */}
-          {false && pendingDraft ? (
-            <div
-              className="absolute top-2 left-2 right-2 z-30 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 shadow-sm flex items-center justify-between gap-2"
-              role="alert"
-            >
-              <div className="text-sm leading-snug">
-{t("editor.draftFound") || "检测到未保存的修改"}
-                <span className="ml-2 opacity-70">
-                  ({new Date(pendingDraft?.savedAt ?? Date.now()).toLocaleString()})
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="h-7 px-2 text-xs"
-                  onClick={handleRestoreDraft}
-                >
-{t("editor.draftRestore") || "恢复"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2 text-xs"
-                  onClick={handleDiscardDraft}
-                >
-{t("editor.draftDiscard") || "丢弃"}
-                </Button>
+                </AnimatePresence>
               </div>
             </div>
-          ) : null}
-          {/* ErrorBoundary �������ֱ༭�����бʼ�Ϊ key���������Զ����ã�
+          </div>
+
+          {userPrefs.enableNoteTabs && !state.editorSplit && <NoteTabsBar />}
+
+          {/* Editor (HTML Ԥ�� / MD / Tiptap ��ģʽ����) + Outline */}
+          <div className="flex-1 flex overflow-hidden">
+            <div
+              className="note-theme-surface flex-1 overflow-hidden relative"
+              data-note-id={activeNote.id}
+            >
+              {/* Phase 2: ʵʱЭ����������� / Զ�̸��� / Զ��ɾ�������� absolute ���㣬��ռ�ĵ���������ҳ�涶�� */}
+              {false && pendingDraft ? (
+                <div
+                  className="absolute top-2 left-2 right-2 z-30 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 shadow-sm flex items-center justify-between gap-2"
+                  role="alert"
+                >
+                  <div className="text-sm leading-snug">
+                    {t("editor.draftFound") || "检测到未保存的修改"}
+                    <span className="ml-2 opacity-70">
+                      (
+                      {new Date(
+                        pendingDraft?.savedAt ?? Date.now(),
+                      ).toLocaleString()}
+                      )
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-7 px-2 text-xs"
+                      onClick={handleRestoreDraft}
+                    >
+                      {t("editor.draftRestore") || "恢复"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={handleDiscardDraft}
+                    >
+                      {t("editor.draftDiscard") || "丢弃"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {/* ErrorBoundary �������ֱ༭�����бʼ�Ϊ key���������Զ����ã�
               �ײ㻹�ܴ� console �� [EditorErrorBoundary] ��־�� window.__lastDirtyDoc */}
-          <EditorErrorBoundary resetKey={activeNote.id}>
-          {/* 文件夹同步的 PDF / DOCX 笔记默认直接显示原文件，并隐藏内部同步元数据。 */}
-          {isFolderSyncAttachmentNote(activeNote.content) ? (
-            <FolderSyncAttachmentPreviewPane
-              key={`folder-sync-attachment-${activeNote.id}-${activeNote.version}`}
-              noteId={activeNote.id}
-              revision={activeNote.version}
-              content={activeNote.content}
-              onOpenAttachmentDirectory={() => setShowAttachmentsPanel(true)}
-            />
-          ) : activeNote.contentFormat === "markdown" ? (
-            <MarkdownEditor
-              // useYDoc only exposes the document after y:sync. Remount at that point so
-              // CodeMirror gains yCollab without disabling normal saves while unsynced.
-              key={collabYDoc ? `md-native-y-${activeNote.id}` : `md-native-${activeNote.id}`}
-              ref={editorHandleRef}
-              note={activeNote}
-              onUpdate={handleUpdate}
-              onLocalUpdate={handleLocalMirrorUpdate}
-              onTagsChange={handleTagsChange}
-              onHeadingsChange={setHeadings}
-              onEditorReady={handleEditorReady}
-              editable={canEditActiveNote && !effectiveLocked && !modeSwitching}
-              yDoc={collabYDoc}
-              awareness={collabProvider?.awareness ?? null}
-            />
-          ) : shouldRenderHtmlPreview ? (
-            <HtmlPreviewPane
-              key={`html-${activeNote.id}`}
-              ref={editorHandleRef}
-              note={activeNote}
-              onUpdate={handleUpdate}
-              onLocalUpdate={handleLocalMirrorUpdate}
-              onTagsChange={handleTagsChange}
-              onHeadingsChange={setHeadings}
-              onEditorReady={handleEditorReady}
-              editable={false}
-            />
-          ) : editorMode === "md" ? (
-            <MarkdownEditor
-              // Phase 3: key �� CRDT ����̬���л� provider ʱǿ���ؽ��༭����
-              // ���� yCollab ��չ������ʱ���� yText ������״̬����
-              key={collabYDoc ? `md-y-${activeNote.id}` : `md-${activeNote.id}`}
-              ref={editorHandleRef}
-              note={activeNote}
-              onUpdate={handleUpdate}
-              onTagsChange={handleTagsChange}
-              onHeadingsChange={setHeadings}
-              onEditorReady={handleEditorReady}
-              // UX3��ģʽ�л��ڼ䶳��༭�������û��� mount��unmount ��������֣�
-              // ��������������һ�༭����������������"�ڶ�����"����
-              editable={canEditActiveNote && !effectiveLocked && !modeSwitching}
-              yDoc={collabYDoc}
-              awareness={collabProvider?.awareness ?? null}
-            />
-          ) : (
-            <PhaseAPerfProfiler>
-              <TiptapEditor
-                ref={editorHandleRef}
-                note={activeNote}
-                onUpdate={handleEditorUpdate}
-                onTagsChange={handleEditorTagsChange}
-                onHeadingsChange={setHeadings}
-                onEditorReady={handleEditorReady}
-                onOpenNote={handleEditorOpenNote}
-                editable={canEditActiveNote && !effectiveLocked && !modeSwitching}
-                searchQuery={state.searchQuery}
-              />
-            </PhaseAPerfProfiler>
-          )}
-          </EditorErrorBoundary>
-          {/*
+              <EditorErrorBoundary resetKey={activeNote.id}>
+                {/* 文件夹同步的 PDF / DOCX 笔记默认直接显示原文件，并隐藏内部同步元数据。 */}
+                {isFolderSyncAttachmentNote(activeNote.content) ? (
+                  <FolderSyncAttachmentPreviewPane
+                    key={`folder-sync-attachment-${activeNote.id}-${activeNote.version}`}
+                    noteId={activeNote.id}
+                    revision={activeNote.version}
+                    content={activeNote.content}
+                    onOpenAttachmentDirectory={() =>
+                      setShowAttachmentsPanel(true)
+                    }
+                  />
+                ) : activeNote.contentFormat === "markdown" ? (
+                  <MarkdownEditor
+                    // useYDoc only exposes the document after y:sync. Remount at that point so
+                    // CodeMirror gains yCollab without disabling normal saves while unsynced.
+                    key={
+                      collabYDoc
+                        ? `md-native-y-${activeNote.id}`
+                        : `md-native-${activeNote.id}`
+                    }
+                    ref={editorHandleRef}
+                    note={activeNote}
+                    onUpdate={handleUpdate}
+                    onLocalUpdate={handleLocalMirrorUpdate}
+                    onTagsChange={handleTagsChange}
+                    onHeadingsChange={setHeadings}
+                    onEditorReady={handleEditorReady}
+                    editable={
+                      canEditActiveNote && !effectiveLocked && !modeSwitching
+                    }
+                    yDoc={collabYDoc}
+                    awareness={collabProvider?.awareness ?? null}
+                  />
+                ) : shouldRenderHtmlPreview ? (
+                  <HtmlPreviewPane
+                    key={`html-${activeNote.id}`}
+                    ref={editorHandleRef}
+                    note={activeNote}
+                    onUpdate={handleUpdate}
+                    onLocalUpdate={handleLocalMirrorUpdate}
+                    onTagsChange={handleTagsChange}
+                    onHeadingsChange={setHeadings}
+                    onEditorReady={handleEditorReady}
+                    editable={false}
+                  />
+                ) : editorMode === "md" ? (
+                  <MarkdownEditor
+                    // Phase 3: key �� CRDT ����̬���л� provider ʱǿ���ؽ��༭����
+                    // ���� yCollab ��չ������ʱ���� yText ������״̬����
+                    key={
+                      collabYDoc
+                        ? `md-y-${activeNote.id}`
+                        : `md-${activeNote.id}`
+                    }
+                    ref={editorHandleRef}
+                    note={activeNote}
+                    onUpdate={handleUpdate}
+                    onTagsChange={handleTagsChange}
+                    onHeadingsChange={setHeadings}
+                    onEditorReady={handleEditorReady}
+                    // UX3��ģʽ�л��ڼ䶳��༭�������û��� mount��unmount ��������֣�
+                    // ��������������һ�༭����������������"�ڶ�����"����
+                    editable={
+                      canEditActiveNote && !effectiveLocked && !modeSwitching
+                    }
+                    yDoc={collabYDoc}
+                    awareness={collabProvider?.awareness ?? null}
+                  />
+                ) : (
+                  <PhaseAPerfProfiler>
+                    <TiptapEditor
+                      ref={editorHandleRef}
+                      note={activeNote}
+                      onUpdate={handleEditorUpdate}
+                      onTagsChange={handleEditorTagsChange}
+                      onHeadingsChange={setHeadings}
+                      onEditorReady={handleEditorReady}
+                      onOpenNote={handleEditorOpenNote}
+                      editable={
+                        canEditActiveNote && !effectiveLocked && !modeSwitching
+                      }
+                      searchQuery={state.searchQuery}
+                    />
+                  </PhaseAPerfProfiler>
+                )}
+              </EditorErrorBoundary>
+              {/*
             UX1/UX2���༭���л��� overlay��
             - ���ڵ�ǰ�༭���Ϸ����赲���� / �Ӿ���ʾ"�л���"��
             - AnimatePresence �ý�������ƽ��������"��"һ�£�
             - pointer-events-auto �����ص��Ҳ��ֹ Tiptap/CM6 ��ѡ�����ƻ���
           */}
-          <AnimatePresence>
-            {modeSwitching && (
-              <motion.div
-                key="editor-mode-switching-overlay"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 z-20 flex items-center justify-center bg-app-bg/60 backdrop-blur-sm pointer-events-auto"
-              >
-                <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-app-elevated border border-app-border shadow-sm text-sm text-tx-secondary">
-                  <Loader2 size={14} className="animate-spin text-accent-primary" />
-                  <span>{t("editor.modeSwitch.switchingLabel")}</span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      {/* �������� */}
-      {showShareModal && (
-        <ShareModal
-          noteId={activeNote.id}
-          noteTitle={activeNote.title}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
-
-      {/* �汾��ʷ */}
-      {showVersionHistory && (
-        <VersionHistoryPanel
-          noteId={activeNote.id}
-          noteTitle={activeNote.title}
-          onRestore={(updated) => {
-            try { editorHandleRef.current?.discardPending?.(); } catch { /* ignore */ }
-            try { clearDraft(updated.id); } catch { /* ignore */ }
-            skipNextSwitchFlushForNoteIdRef.current = updated.id;
-            actions.setActiveNote(updated);
-            actions.updateNoteInList({
-              id: updated.id,
-              title: updated.title,
-              contentText: updated.contentText,
-              updatedAt: updated.updatedAt,
-              version: updated.version,
-              isPinned: updated.isPinned,
-              isTrashed: updated.isTrashed,
-              notebookId: updated.notebookId,
-              workspaceId: updated.workspaceId,
-            });
-            actions.updateNoteTab({
-              id: updated.id,
-              title: updated.title,
-              notebookId: updated.notebookId,
-              workspaceId: updated.workspaceId,
-              contentFormat: updated.contentFormat,
-              isLocked: updated.isLocked,
-              isTrashed: updated.isTrashed,
-              updatedAt: updated.updatedAt,
-            });
-            actions.setSyncStatus("saved");
-            actions.setLastSynced(new Date().toISOString());
-          }}
-          onClose={() => setShowVersionHistory(false)}
-        />
-      )}
-
-      {/* ������� */}
-      {showCommentPanel && (
-        <CommentPanel
-          noteId={activeNote.id}
-          noteTitle={activeNote.title}
-          onClose={() => setShowCommentPanel(false)}
-        />
-      )}
-
-      {/* 反向链接 BACKLINKS-02 */}
-      {showBacklinksPanel && (
-        <BacklinksPanel
-          noteId={activeNote.id}
-          noteTitle={activeNote.title}
-          onClose={() => setShowBacklinksPanel(false)}
-        />
-      )}
-
-      {/* ����Ŀ¼��� */}
-      {showAttachmentsPanel && (
-        <NoteAttachmentsPanel
-          noteId={activeNote.id}
-          noteTitle={activeNote.title}
-          onClose={() => setShowAttachmentsPanel(false)}
-        />
-      )}
-
-      {/* Delete ��ɾ��ȷ�ϵ��� */}
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowDeleteConfirm(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-app-surface border border-app-border rounded-xl shadow-2xl p-6 max-w-sm mx-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <Trash2 size={18} className="text-red-500" />
-                </div>
-                <h3 className="text-base font-semibold text-tx-primary">{t('sidebar.deleteNoteTitle')}</h3>
-              </div>
-              <p className="text-sm text-tx-secondary mb-5">{t('sidebar.deleteNoteConfirm')}</p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 text-sm rounded-lg bg-app-hover text-tx-secondary hover:bg-app-active transition-colors"
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    moveToTrash();
-                  }}
-                  className="px-4 py-2 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
-                >
-                  {t('sidebar.confirmDeleteNote')}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
-      {/* AI �ܽᵯ�� */}
-      <AnimatePresence>
-        {showSummaryDialog && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-            onClick={() => { if (!aiSummaryLoading) setShowSummaryDialog(false); }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
-            >
-              {/* ������ */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-app-border">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={16} className="text-violet-500" />
-<h3 className="text-sm font-semibold text-tx-primary">{t("editor.aiSummaryTitle") || "单篇笔记总结"}</h3>
-                </div>
-                <button
-                  onClick={() => { if (!aiSummaryLoading) setShowSummaryDialog(false); }}
-                  className="p-1 rounded hover:bg-app-hover text-tx-secondary transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-              {/* ������ */}
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                {aiSummaryLoading ? (
-                  <div className="flex flex-col items-center justify-center py-10 gap-3">
-                    <Loader2 size={24} className="animate-spin text-violet-500" />
-                    <span className="text-sm text-tx-secondary">{t("editor.aiSummaryGenerating") || "正在生成总结..."}</span>
-                  </div>
-                ) : (
-                  <div className="text-sm text-tx-primary whitespace-pre-wrap leading-relaxed">
-                    {aiSummaryResult}
-                  </div>
+              <AnimatePresence>
+                {modeSwitching && (
+                  <motion.div
+                    key="editor-mode-switching-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 z-20 flex items-center justify-center bg-app-bg/60 backdrop-blur-sm pointer-events-auto"
+                  >
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-app-elevated border border-app-border shadow-sm text-sm text-tx-secondary">
+                      <Loader2
+                        size={14}
+                        className="animate-spin text-accent-primary"
+                      />
+                      <span>{t("editor.modeSwitch.switchingLabel")}</span>
+                    </div>
+                  </motion.div>
                 )}
-              </div>
-              {/* ������ */}
-              {!aiSummaryLoading && aiSummaryResult && (
-                <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-app-border">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleSummaryCopy}>
-                      {t("editor.aiSummaryCopy") || "复制"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleSummaryAppend}>
-                      {t("editor.aiSummaryAppend") || "追加到文末"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleAISummary}>
-                      {t("editor.aiSummaryRegenerate") || "重新生成"}
-                    </Button>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowSummaryDialog(false)}>
-                    {t("editor.aiSummaryClose") || "关闭"}
-                  </Button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </AnimatePresence>
+            </div>
+            {/* �������� */}
+            {showShareModal && (
+              <ShareModal
+                noteId={activeNote.id}
+                noteTitle={activeNote.title}
+                onClose={() => setShowShareModal(false)}
+              />
+            )}
 
-      {/* AI Mermaid Ԥ������ */}
-      <MindMapEmbedInsertDialog
-        open={showMindMapInsertDialog && !!activeNote && !effectiveLocked && !isTrashed && !noteIsFullHtmlDoc && canEditActiveNote}
-        workspaceId={activeNote?.workspaceId ?? null}
-        onClose={() => setShowMindMapInsertDialog(false)}
-        onInsert={(id) => {
-          if (!activeNote || activeNoteRef.current?.id !== activeNote.id || effectiveLocked || isTrashed || noteIsFullHtmlDoc || !canEditActiveNote) return false;
-          const markdown = `\n\n![[mindmap:${id}]]\n\n`;
-          const editorHandle = editorHandleRef.current;
-          const insertedAtCursor = editorHandle?.insertMarkdownAtCursor?.(markdown) === true;
-          const inserted = insertedAtCursor || editorHandle?.appendMarkdown?.(markdown) === true;
-          if (inserted) {
-            editorHandle?.flushSave?.();
-            toast.success("已插入思维导图");
-          }
-          return inserted;
-        }}
-      />
-      <AnimatePresence>
-        {showMermaidDialog && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
-            onClick={() => { if (!aiMermaidLoading) setShowMermaidDialog(false); }}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-            >
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-app-border">
-                <div className="flex items-center gap-2">
-                  <Network size={16} className="text-violet-500" />
-                  <h3 className="text-sm font-semibold text-tx-primary">{aiMermaidType === "mermaid_mindmap" ? "AI 思维导图" : "AI 流程图"}</h3>
-                </div>
-                <button onClick={() => { if (!aiMermaidLoading) setShowMermaidDialog(false); }} className="p-1 rounded hover:bg-app-hover text-tx-secondary transition-colors">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                {aiMermaidLoading ? (
-                  <div className="flex flex-col items-center justify-center py-10 gap-3">
-                    <Loader2 size={24} className="animate-spin text-violet-500" />
-                    <span className="text-sm text-tx-secondary">正在生成...</span>
-                  </div>
-                ) : aiMermaidResult ? (
-                  <div className="rounded-lg border border-app-border overflow-hidden">
-                    <MermaidView source={aiMermaidResult} debounceMs={0} />
-                  </div>
-                ) : null}
-              </div>
-              {!aiMermaidLoading && aiMermaidResult && (
-                <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-app-border">
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(aiMermaidResult); toast.success("已复制"); }}>
-                      复制源码
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleMermaidInsert}>
-                      插入笔记
-                    </Button>
-                    {aiMermaidType === "mermaid_mindmap" && (
-                      <Button variant="outline" size="sm" onClick={handleMermaidSaveAsMindMap} disabled={mermaidSavingMindMap}>
-                        {mermaidSavingMindMap ? "保存中..." : "保存为思维导图"}
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => handleAIMermaid(aiMermaidType)}>
-                      重新生成
-                    </Button>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setShowMermaidDialog(false)}>关闭</Button>
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {/* HTML Ԥ�� �� �༭ģʽ�л�ȷ�ϵ��� */}
-      <AnimatePresence>
-        {showHtmlEditWarning && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-            onClick={() => setShowHtmlEditWarning(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-app-surface border border-app-border rounded-xl shadow-2xl p-6 max-w-sm mx-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-                  <Pencil size={18} className="text-amber-500" />
-                </div>
-                <h3 className="text-base font-semibold text-tx-primary">
-                  {t("editor.htmlPreview.editWarningTitle")}
-                </h3>
-              </div>
-              <p className="text-sm text-tx-secondary mb-5">
-                {t("editor.htmlPreview.editWarningMessage")}
-              </p>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setShowHtmlEditWarning(false)}
-                  className="px-4 py-2 text-sm rounded-lg bg-app-hover text-tx-secondary hover:bg-app-active transition-colors"
+            {/* �汾��ʷ */}
+            {showVersionHistory && (
+              <VersionHistoryPanel
+                noteId={activeNote.id}
+                noteTitle={activeNote.title}
+                onRestore={(updated) => {
+                  try {
+                    editorHandleRef.current?.discardPending?.();
+                  } catch {
+                    /* ignore */
+                  }
+                  try {
+                    clearDraft(updated.id);
+                  } catch {
+                    /* ignore */
+                  }
+                  skipNextSwitchFlushForNoteIdRef.current = updated.id;
+                  actions.setActiveNote(updated);
+                  actions.updateNoteInList({
+                    id: updated.id,
+                    title: updated.title,
+                    contentText: updated.contentText,
+                    updatedAt: updated.updatedAt,
+                    version: updated.version,
+                    isPinned: updated.isPinned,
+                    isTrashed: updated.isTrashed,
+                    notebookId: updated.notebookId,
+                    workspaceId: updated.workspaceId,
+                  });
+                  actions.updateNoteTab({
+                    id: updated.id,
+                    title: updated.title,
+                    notebookId: updated.notebookId,
+                    workspaceId: updated.workspaceId,
+                    contentFormat: updated.contentFormat,
+                    isLocked: updated.isLocked,
+                    isTrashed: updated.isTrashed,
+                    updatedAt: updated.updatedAt,
+                  });
+                  actions.setSyncStatus("saved");
+                  actions.setLastSynced(new Date().toISOString());
+                }}
+                onClose={() => setShowVersionHistory(false)}
+              />
+            )}
+
+            {/* ������� */}
+            {showCommentPanel && (
+              <CommentPanel
+                noteId={activeNote.id}
+                noteTitle={activeNote.title}
+                onClose={() => setShowCommentPanel(false)}
+              />
+            )}
+
+            {/* 反向链接 BACKLINKS-02 */}
+            {showBacklinksPanel && (
+              <BacklinksPanel
+                noteId={activeNote.id}
+                noteTitle={activeNote.title}
+                onClose={() => setShowBacklinksPanel(false)}
+              />
+            )}
+
+            {/* ����Ŀ¼��� */}
+            {showAttachmentsPanel && (
+              <NoteAttachmentsPanel
+                noteId={activeNote.id}
+                noteTitle={activeNote.title}
+                onClose={() => setShowAttachmentsPanel(false)}
+              />
+            )}
+
+            {/* Delete ��ɾ��ȷ�ϵ��� */}
+            <AnimatePresence>
+              {showDeleteConfirm && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                  onClick={() => setShowDeleteConfirm(false)}
                 >
-                  {t("editor.htmlPreview.editWarningCancel")}
-                </button>
-                <button
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="bg-app-surface border border-app-border rounded-xl shadow-2xl p-6 max-w-sm mx-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                        <Trash2 size={18} className="text-red-500" />
+                      </div>
+                      <h3 className="text-base font-semibold text-tx-primary">
+                        {t("sidebar.deleteNoteTitle")}
+                      </h3>
+                    </div>
+                    <p className="text-sm text-tx-secondary mb-5">
+                      {t("sidebar.deleteNoteConfirm")}
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="px-4 py-2 text-sm rounded-lg bg-app-hover text-tx-secondary hover:bg-app-active transition-colors"
+                      >
+                        {t("common.cancel")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(false);
+                          moveToTrash();
+                        }}
+                        className="px-4 py-2 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+                      >
+                        {t("sidebar.confirmDeleteNote")}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* AI �ܽᵯ�� */}
+            <AnimatePresence>
+              {showSummaryDialog && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
                   onClick={() => {
-                    setShowHtmlEditWarning(false);
-                    setHtmlPreviewMode(false);
+                    if (!aiSummaryLoading) setShowSummaryDialog(false);
                   }}
-                  className="px-4 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
                 >
-                  {t("editor.htmlPreview.editWarningConfirm")}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                  >
+                    {/* ������ */}
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-app-border">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={16} className="text-violet-500" />
+                        <h3 className="text-sm font-semibold text-tx-primary">
+                          {t("editor.aiSummaryTitle") || "单篇笔记总结"}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (!aiSummaryLoading) setShowSummaryDialog(false);
+                        }}
+                        className="p-1 rounded hover:bg-app-hover text-tx-secondary transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {/* ������ */}
+                    <div className="flex-1 overflow-y-auto px-5 py-4">
+                      {aiSummaryLoading ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-3">
+                          <Loader2
+                            size={24}
+                            className="animate-spin text-violet-500"
+                          />
+                          <span className="text-sm text-tx-secondary">
+                            {t("editor.aiSummaryGenerating") ||
+                              "正在生成总结..."}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-tx-primary whitespace-pre-wrap leading-relaxed">
+                          {aiSummaryResult}
+                        </div>
+                      )}
+                    </div>
+                    {/* ������ */}
+                    {!aiSummaryLoading && aiSummaryResult && (
+                      <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-app-border">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSummaryCopy}
+                          >
+                            {t("editor.aiSummaryCopy") || "复制"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSummaryAppend}
+                          >
+                            {t("editor.aiSummaryAppend") || "追加到文末"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAISummary}
+                          >
+                            {t("editor.aiSummaryRegenerate") || "重新生成"}
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowSummaryDialog(false)}
+                        >
+                          {t("editor.aiSummaryClose") || "关闭"}
+                        </Button>
+                      </div>
+                    )}
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-      {showDesktopOutline && (
-          <OutlinePanel
-            headings={headings}
-            width={outlineWidth}
-            onSelect={(pos) => scrollToRef.current?.(pos)}
-            onClose={() => setShowOutline(false)}
-            onResizeStart={handleOutlineResizeStart}
-            onResetWidth={handleOutlineWidthReset}
-          />
-        )}
-      </div>
-    </motion.div>
-    </>
+            {/* AI Mermaid Ԥ������ */}
+            <MindMapEmbedInsertDialog
+              open={
+                showMindMapInsertDialog &&
+                !!activeNote &&
+                !effectiveLocked &&
+                !isTrashed &&
+                !noteIsFullHtmlDoc &&
+                canEditActiveNote
+              }
+              workspaceId={activeNote?.workspaceId ?? null}
+              onClose={() => setShowMindMapInsertDialog(false)}
+              onInsert={(id) => {
+                if (
+                  !activeNote ||
+                  activeNoteRef.current?.id !== activeNote.id ||
+                  effectiveLocked ||
+                  isTrashed ||
+                  noteIsFullHtmlDoc ||
+                  !canEditActiveNote
+                )
+                  return false;
+                const markdown = `\n\n![[mindmap:${id}]]\n\n`;
+                const editorHandle = editorHandleRef.current;
+                const insertedAtCursor =
+                  editorHandle?.insertMarkdownAtCursor?.(markdown) === true;
+                const inserted =
+                  insertedAtCursor ||
+                  editorHandle?.appendMarkdown?.(markdown) === true;
+                if (inserted) {
+                  editorHandle?.flushSave?.();
+                  toast.success("已插入思维导图");
+                }
+                return inserted;
+              }}
+            />
+            <AnimatePresence>
+              {showMermaidDialog && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+                  onClick={() => {
+                    if (!aiMermaidLoading) setShowMermaidDialog(false);
+                  }}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+                  >
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-app-border">
+                      <div className="flex items-center gap-2">
+                        <Network size={16} className="text-violet-500" />
+                        <h3 className="text-sm font-semibold text-tx-primary">
+                          {aiMermaidType === "mermaid_mindmap"
+                            ? "AI 思维导图"
+                            : "AI 流程图"}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (!aiMermaidLoading) setShowMermaidDialog(false);
+                        }}
+                        className="p-1 rounded hover:bg-app-hover text-tx-secondary transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-5 py-4">
+                      {aiMermaidLoading ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-3">
+                          <Loader2
+                            size={24}
+                            className="animate-spin text-violet-500"
+                          />
+                          <span className="text-sm text-tx-secondary">
+                            正在生成...
+                          </span>
+                        </div>
+                      ) : aiMermaidResult ? (
+                        <div className="rounded-lg border border-app-border overflow-hidden">
+                          <MermaidView
+                            source={aiMermaidResult}
+                            debounceMs={0}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                    {!aiMermaidLoading && aiMermaidResult && (
+                      <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-app-border">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(aiMermaidResult);
+                              toast.success("已复制");
+                            }}
+                          >
+                            复制源码
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleMermaidInsert}
+                          >
+                            插入笔记
+                          </Button>
+                          {aiMermaidType === "mermaid_mindmap" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleMermaidSaveAsMindMap}
+                              disabled={mermaidSavingMindMap}
+                            >
+                              {mermaidSavingMindMap
+                                ? "保存中..."
+                                : "保存为思维导图"}
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAIMermaid(aiMermaidType)}
+                          >
+                            重新生成
+                          </Button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowMermaidDialog(false)}
+                        >
+                          关闭
+                        </Button>
+                      </div>
+                    )}
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {/* HTML Ԥ�� �� �༭ģʽ�л�ȷ�ϵ��� */}
+            <AnimatePresence>
+              {showHtmlEditWarning && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                  onClick={() => setShowHtmlEditWarning(false)}
+                >
+                  <motion.div
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.95, opacity: 0 }}
+                    className="bg-app-surface border border-app-border rounded-xl shadow-2xl p-6 max-w-sm mx-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                        <Pencil size={18} className="text-amber-500" />
+                      </div>
+                      <h3 className="text-base font-semibold text-tx-primary">
+                        {t("editor.htmlPreview.editWarningTitle")}
+                      </h3>
+                    </div>
+                    <p className="text-sm text-tx-secondary mb-5">
+                      {t("editor.htmlPreview.editWarningMessage")}
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setShowHtmlEditWarning(false)}
+                        className="px-4 py-2 text-sm rounded-lg bg-app-hover text-tx-secondary hover:bg-app-active transition-colors"
+                      >
+                        {t("editor.htmlPreview.editWarningCancel")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowHtmlEditWarning(false);
+                          setHtmlPreviewMode(false);
+                        }}
+                        className="px-4 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                      >
+                        {t("editor.htmlPreview.editWarningConfirm")}
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {showDesktopOutline && (
+              <OutlinePanel
+                headings={headings}
+                width={outlineWidth}
+                onSelect={(pos) => scrollToRef.current?.(pos)}
+                onClose={() => setShowOutline(false)}
+                onResizeStart={handleOutlineResizeStart}
+                onResetWidth={handleOutlineWidthReset}
+              />
+            )}
+          </div>
+        </motion.div>
+      </>
     </EditorToolbarHost>
   );
 }
@@ -4068,7 +5229,7 @@ function OutlinePanel({
       <div className="flex items-center justify-between px-3 py-2 border-b border-app-border">
         <div className="flex items-center gap-1.5 text-xs font-medium text-tx-secondary">
           <ListTree size={13} className="text-accent-primary" />
-          <span>{t('editor.outline')}</span>
+          <span>{t("editor.outline")}</span>
         </div>
         <button
           onClick={onClose}
@@ -4081,8 +5242,12 @@ function OutlinePanel({
         <div className="py-1">
           {headings.length === 0 ? (
             <div className="px-3 py-6 text-center">
-              <p className="text-[11px] text-tx-tertiary">{t('editor.noHeadings')}</p>
-              <p className="text-[10px] text-tx-tertiary mt-1">{t('editor.noHeadingsHint')}</p>
+              <p className="text-[11px] text-tx-tertiary">
+                {t("editor.noHeadings")}
+              </p>
+              <p className="text-[10px] text-tx-tertiary mt-1">
+                {t("editor.noHeadingsHint")}
+              </p>
             </div>
           ) : (
             headings.map((h) => (
@@ -4098,13 +5263,15 @@ function OutlinePanel({
                 style={{ paddingLeft: `${(h.level - 1) * 12 + 12}px` }}
                 title={h.text}
               >
-                <span className={cn(
-                  "inline-block w-1.5 h-1.5 rounded-full mr-2 shrink-0 align-middle",
-                  h.level === 1 && "bg-accent-primary",
-                  h.level === 2 && "bg-accent-primary/50",
-                  h.level === 3 && "bg-tx-tertiary/50",
-                )} />
-                {h.text || t('editor.untitled')}
+                <span
+                  className={cn(
+                    "inline-block w-1.5 h-1.5 rounded-full mr-2 shrink-0 align-middle",
+                    h.level === 1 && "bg-accent-primary",
+                    h.level === 2 && "bg-accent-primary/50",
+                    h.level === 3 && "bg-tx-tertiary/50",
+                  )}
+                />
+                {h.text || t("editor.untitled")}
               </button>
             ))
           )}
@@ -4141,7 +5308,10 @@ function buildTree(notebooks: Notebook[]): Notebook[] {
 }
 
 /* �Ӹ���ָ�� id ������·���������������������мչʾ */
-function findPathById(notebooks: Notebook[], id: string | null | undefined): Notebook[] {
+function findPathById(
+  notebooks: Notebook[],
+  id: string | null | undefined,
+): Notebook[] {
   if (!id) return [];
   const byId = new Map(notebooks.map((n) => [n.id, n]));
   const path: Notebook[] = [];
@@ -4166,7 +5336,10 @@ function getNotebookIcon(icon?: string | null): string {
 
 /* ===== �༭������"�ƶ��ʼǱ�"������Ŀ��������Ŀ¼�ṹ����һ�£� ===== */
 function MoveTreeItem({
-  notebook, depth, currentId, onSelect,
+  notebook,
+  depth,
+  currentId,
+  onSelect,
 }: {
   notebook: Notebook;
   depth: number;
@@ -4197,13 +5370,16 @@ function MoveTreeItem({
           "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm transition-colors",
           isCurrent
             ? "opacity-40 cursor-not-allowed text-tx-tertiary"
-            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary"
+            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary",
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
       >
         {hasChildren ? (
           <span
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(!expanded);
+            }}
             className="w-4 h-4 flex items-center justify-center shrink-0 cursor-pointer hover:text-tx-primary"
           >
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -4211,21 +5387,27 @@ function MoveTreeItem({
         ) : (
           <span className="w-4 h-4 shrink-0" />
         )}
-        <span className="text-base shrink-0">{getNotebookIcon(notebook.icon)}</span>
+        <span className="text-base shrink-0">
+          {getNotebookIcon(notebook.icon)}
+        </span>
         <span className="truncate flex-1 text-left">{notebook.name}</span>
         {isCurrent && (
-          <span className="ml-auto text-[10px] text-tx-tertiary shrink-0">{t('common.current')}</span>
+          <span className="ml-auto text-[10px] text-tx-tertiary shrink-0">
+            {t("common.current")}
+          </span>
         )}
       </button>
-      {hasChildren && expanded && notebook.children!.map((child) => (
-        <MoveTreeItem
-          key={child.id}
-          notebook={child}
-          depth={depth + 1}
-          currentId={currentId}
-          onSelect={onSelect}
-        />
-      ))}
+      {hasChildren &&
+        expanded &&
+        notebook.children!.map((child) => (
+          <MoveTreeItem
+            key={child.id}
+            notebook={child}
+            depth={depth + 1}
+            currentId={currentId}
+            onSelect={onSelect}
+          />
+        ))}
     </div>
   );
 }
@@ -4245,29 +5427,44 @@ function SyncIndicator({
   // 失败、排队和离线状态继续保留在同步状态机中，但不再主动展示为失败提示。
   // 手动同步入口仍保持可见，真正冲突继续走独立的冲突处理流程。
   const displayStatus: SyncStatus =
-    syncStatus === "error" || syncStatus === "queued" || syncStatus === "offline"
+    syncStatus === "error" ||
+    syncStatus === "queued" ||
+    syncStatus === "offline"
       ? "idle"
       : syncStatus;
   const formatFullTime = (ts: string) => {
-    try { return new Date(ts).toLocaleString(); } catch { return ts; }
+    try {
+      return new Date(ts).toLocaleString();
+    } catch {
+      return ts;
+    }
   };
 
   const getTooltip = () => {
     switch (displayStatus) {
-      case "saving": return t('editor.saving');
+      case "saving":
+        return t("editor.saving");
       case "saved":
         return lastSyncedAt
-          ? `${t('editor.allSaved')}：${formatFullTime(lastSyncedAt)}`
-          : t('editor.allSaved');
+          ? `${t("editor.allSaved")}：${formatFullTime(lastSyncedAt)}`
+          : t("editor.allSaved");
       default:
         if (lastSyncedAt) {
           const diff = Date.now() - new Date(lastSyncedAt).getTime();
-          if (diff < 10_000) return t('editor.justSaved');
-          if (diff < 60_000) return t('editor.savedSecondsAgo', { count: Math.floor(diff / 1000) });
-          if (diff < 3600_000) return t('editor.savedMinutesAgo', { count: Math.floor(diff / 60_000) });
-          return t('editor.savedHoursAgo', { count: Math.floor(diff / 3600_000) });
+          if (diff < 10_000) return t("editor.justSaved");
+          if (diff < 60_000)
+            return t("editor.savedSecondsAgo", {
+              count: Math.floor(diff / 1000),
+            });
+          if (diff < 3600_000)
+            return t("editor.savedMinutesAgo", {
+              count: Math.floor(diff / 60_000),
+            });
+          return t("editor.savedHoursAgo", {
+            count: Math.floor(diff / 3600_000),
+          });
         }
-        return t('editor.clickToSync');
+        return t("editor.clickToSync");
     }
   };
 
@@ -4285,7 +5482,10 @@ function SyncIndicator({
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1, rotate: 360 }}
             exit={{ opacity: 0, scale: 0.5 }}
-            transition={{ rotate: { repeat: Infinity, duration: 1, ease: "linear" }, opacity: { duration: 0.15 } }}
+            transition={{
+              rotate: { repeat: Infinity, duration: 1, ease: "linear" },
+              opacity: { duration: 0.15 },
+            }}
           >
             <RefreshCw size={13} className="text-accent-primary" />
           </motion.div>
@@ -4309,21 +5509,29 @@ function SyncIndicator({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            <Cloud size={13} className="text-tx-tertiary group-hover:text-tx-secondary transition-colors" />
+            <Cloud
+              size={13}
+              className="text-tx-tertiary group-hover:text-tx-secondary transition-colors"
+            />
           </motion.div>
         )}
       </AnimatePresence>
 
-      <span className={cn(
-        android ? "whitespace-nowrap transition-colors" : "hidden whitespace-nowrap sm:inline transition-colors",
-        displayStatus === "saving" && "text-accent-primary",
-        displayStatus === "saved" && "text-green-500",
-        displayStatus === "idle" && "text-tx-tertiary group-hover:text-tx-secondary",
-      )}>
-        {displayStatus === "saving" && t('editor.savingStatus')}
+      <span
+        className={cn(
+          android
+            ? "whitespace-nowrap transition-colors"
+            : "hidden whitespace-nowrap sm:inline transition-colors",
+          displayStatus === "saving" && "text-accent-primary",
+          displayStatus === "saved" && "text-green-500",
+          displayStatus === "idle" &&
+            "text-tx-tertiary group-hover:text-tx-secondary",
+        )}
+      >
+        {displayStatus === "saving" && t("editor.savingStatus")}
         {displayStatus === "saved" && (
           <>
-            {android ? "已保存到本机" : t('editor.savedStatus')}
+            {android ? "已保存到本机" : t("editor.savedStatus")}
             {!android && lastSyncedAt && (
               <span className="ml-1 opacity-70">
                 · {new Date(lastSyncedAt).toLocaleTimeString()}
@@ -4331,11 +5539,17 @@ function SyncIndicator({
             )}
           </>
         )}
-        {displayStatus === "idle" && (
-          lastSyncedAt
-            ? <>{t('editor.synced')}<span className="ml-1 opacity-70">· {new Date(lastSyncedAt).toLocaleTimeString()}</span></>
-            : t('editor.sync')
-        )}
+        {displayStatus === "idle" &&
+          (lastSyncedAt ? (
+            <>
+              {t("editor.synced")}
+              <span className="ml-1 opacity-70">
+                · {new Date(lastSyncedAt).toLocaleTimeString()}
+              </span>
+            </>
+          ) : (
+            t("editor.sync")
+          ))}
       </span>
     </button>
   );

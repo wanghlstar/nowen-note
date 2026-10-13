@@ -7,7 +7,10 @@ import WorkspaceIssues from "@/components/issues/WorkspaceIssues";
 import NotificationCenter from "@/components/issues/NotificationCenter";
 import CommentManagementCenter from "@/components/CommentManagementCenter";
 import { openNoteComment } from "@/lib/noteCommentNavigation";
-import { openWorkspaceIssue, parseIssueAppPath } from "@/lib/workspaceIssueNavigation";
+import {
+  openWorkspaceIssue,
+  parseIssueAppPath,
+} from "@/lib/workspaceIssueNavigation";
 import NavRail from "@/components/NavRail";
 import SettingsModal from "@/components/SettingsModal";
 import { useRailMode } from "@/hooks/useRailMode";
@@ -29,24 +32,53 @@ import LoginPage from "@/components/LoginPage";
 import QuickLoginGate from "@/components/QuickLoginGate";
 import QuickLoginEnrollDialog from "@/components/QuickLoginEnrollDialog";
 import WhatsNewModal, { useWhatsNew } from "@/components/WhatsNewModal";
-import { AppProvider, useApp, useAppActions, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, DEFAULT_SIDEBAR_WIDTH, MIN_NOTELIST_WIDTH, MAX_NOTELIST_WIDTH, DEFAULT_NOTELIST_WIDTH } from "@/store/AppContext";
+import {
+  AppProvider,
+  useApp,
+  useAppActions,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+  MIN_NOTELIST_WIDTH,
+  MAX_NOTELIST_WIDTH,
+  DEFAULT_NOTELIST_WIDTH,
+} from "@/store/AppContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-import { UserPreferencesProvider, useUserPreferences } from "@/hooks/useUserPreferences";
+import {
+  UserPreferencesProvider,
+  useUserPreferences,
+} from "@/hooks/useUserPreferences";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Toaster from "@/components/Toaster";
 import { User } from "@/types";
-import { getBaseUrl, getServerUrl, setServerUrl, clearServerUrl, broadcastLogout } from "@/lib/api";
+import {
+  getBaseUrl,
+  getServerUrl,
+  setServerUrl,
+  clearServerUrl,
+  broadcastLogout,
+} from "@/lib/api";
 import { markNewNoteForImmediateEdit } from "@/lib/newNoteImmediateEdit";
 import { TASK_VIEW_SHELL_CLASS } from "@/lib/taskLayout";
 import { useReminderNotifier } from "@/components/tasks/useReminderNotifier";
 import { resolveEditorFocusLayout } from "@/lib/editorFocusLayout";
 import { resolveMediumNoteListWidth } from "@/lib/adaptiveWindowLayout";
 import { useAdaptiveWindowLayout } from "@/hooks/useAdaptiveWindowLayout";
-import { bootstrap as syncBootstrap, teardown as syncTeardown, syncNow } from "@/lib/syncEngine";
+import {
+  bootstrap as syncBootstrap,
+  teardown as syncTeardown,
+  syncNow,
+} from "@/lib/syncEngine";
 import { realtime } from "@/lib/realtime";
 import { deleteNotes as deleteLocalNotes } from "@/lib/localStore";
-import { useBackButton, hideSplashScreen, useStatusBarSync, useKeyboardLayout, isNativePlatform } from "@/hooks/useCapacitor";
+import {
+  useBackButton,
+  hideSplashScreen,
+  useStatusBarSync,
+  useKeyboardLayout,
+  isNativePlatform,
+} from "@/hooks/useCapacitor";
 import { useDesktopMenuBridge } from "@/hooks/useDesktopMenuBridge";
 import {
   detectShortcutPlatform,
@@ -62,7 +94,10 @@ import NoteWorkspaceLayoutController from "@/components/NoteWorkspaceLayoutContr
 import WechatClipboardBridge from "@/components/WechatClipboardBridge";
 import NoteDeepLinkBridge from "@/components/NoteDeepLinkBridge";
 import { PhaseAPerfProfiler } from "@/components/PhaseAPerfProfiler";
-import { isAccountLoginHistorySupported, saveAccountLoginHistory } from "@/lib/accountLoginHistory";
+import {
+  isAccountLoginHistorySupported,
+  saveAccountLoginHistory,
+} from "@/lib/accountLoginHistory";
 import SidebarSearchExperienceBridge from "@/components/SidebarSearchExperienceBridge";
 import FloatingLayerHost from "@/components/FloatingLayerHost";
 import { isNativeClientRuntime, stripServerBasePath } from "@/lib/serverUrl";
@@ -108,18 +143,29 @@ function normalizeAuthUrl(url: string): string {
 function isLoopbackAuthUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return u.hostname === "127.0.0.1" || u.hostname === "localhost" || (u.hostname === "::1" || u.hostname === "[::1]");
+    return (
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "localhost" ||
+      u.hostname === "::1" ||
+      u.hostname === "[::1]"
+    );
   } catch {
     return false;
   }
 }
 
 function getAuthCacheScope(serverUrl: string): string {
-  const origin = typeof window !== "undefined" && window.location.origin.startsWith("http")
-    ? window.location.origin
-    : "";
-  const isDesktop = typeof window !== "undefined" && !!(window as any).nowenDesktop?.isDesktop;
-  if (isDesktop && ((serverUrl && isLoopbackAuthUrl(serverUrl)) || (!serverUrl && origin && isLoopbackAuthUrl(origin)))) {
+  const origin =
+    typeof window !== "undefined" && window.location.origin.startsWith("http")
+      ? window.location.origin
+      : "";
+  const isDesktop =
+    typeof window !== "undefined" && !!(window as any).nowenDesktop?.isDesktop;
+  if (
+    isDesktop &&
+    ((serverUrl && isLoopbackAuthUrl(serverUrl)) ||
+      (!serverUrl && origin && isLoopbackAuthUrl(origin)))
+  ) {
     return "local-desktop";
   }
   if (serverUrl) return normalizeAuthUrl(serverUrl);
@@ -137,9 +183,11 @@ function decodeUserFromToken(token: string): User | null {
     if (!payload) return null;
     const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
     const json = decodeURIComponent(
-      Array.from(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")))
+      Array.from(
+        atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")),
+      )
         .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
-        .join("")
+        .join(""),
     );
     const data = JSON.parse(json) as { userId?: string; username?: string };
     if (!data.userId || !data.username) return null;
@@ -162,7 +210,9 @@ function saveCachedAuthUser(scope: string, token: string, user: User): void {
       getAuthUserCacheKey(scope),
       JSON.stringify({ token, user, cachedAt: Date.now() }),
     );
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function loadCachedAuthUser(scope: string, token: string): User | null {
@@ -171,25 +221,34 @@ function loadCachedAuthUser(scope: string, token: string): User | null {
     if (raw) {
       const cached = JSON.parse(raw) as { token?: string; user?: User };
       const decoded = decodeUserFromToken(token);
-      if (cached.user?.id && (cached.token === token || cached.user.id === decoded?.id)) {
+      if (
+        cached.user?.id &&
+        (cached.token === token || cached.user.id === decoded?.id)
+      ) {
         return cached.user;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return decodeUserFromToken(token);
 }
 
 function isVerifyNetworkFailure(err: any): boolean {
-  return err?.networkLike === true
-    || err?.name === "RefreshUnavailableError"
-    || err?.name === "AbortError"
-    || err instanceof TypeError;
+  return (
+    err?.networkLike === true ||
+    err?.name === "RefreshUnavailableError" ||
+    err?.name === "AbortError" ||
+    err instanceof TypeError
+  );
 }
 
 function getTokenExpiresAt(token: string): number | null {
   try {
     const encoded = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")));
+    const payload = JSON.parse(
+      atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")),
+    );
     return typeof payload?.exp === "number" ? payload.exp * 1000 : null;
   } catch {
     return null;
@@ -213,7 +272,9 @@ function WebUiDisabledPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 px-6 text-center text-zinc-600">
       <main className="max-w-lg rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-zinc-900 mb-3">网页端已被管理员关闭</h1>
+        <h1 className="text-xl font-semibold text-zinc-900 mb-3">
+          网页端已被管理员关闭
+        </h1>
         <p className="text-sm leading-7">
           当前服务器仅提供 API 服务。请使用 Nowen Note 桌面客户端连接该服务器。
         </p>
@@ -229,31 +290,36 @@ function SidebarResizeHandle() {
   const startX = useRef(0);
   const startWidth = useRef(0);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-    startX.current = e.clientX;
-    startWidth.current = state.sidebarWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      startX.current = e.clientX;
+      startWidth.current = state.sidebarWidth;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDragging.current) return;
-      const newWidth = startWidth.current + (ev.clientX - startX.current);
-      actions.setSidebarWidth(Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, newWidth)));
-    };
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        const newWidth = startWidth.current + (ev.clientX - startX.current);
+        actions.setSidebarWidth(
+          Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, newWidth)),
+        );
+      };
 
-    const handleMouseUp = () => {
-      isDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
+      const handleMouseUp = () => {
+        isDragging.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  }, [state.sidebarWidth, actions]);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [state.sidebarWidth, actions],
+  );
 
   if (state.sidebarCollapsed) return null;
 
@@ -276,31 +342,36 @@ function NoteListResizeHandle() {
   const startX = useRef(0);
   const startWidth = useRef(0);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-    startX.current = e.clientX;
-    startWidth.current = state.noteListWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      startX.current = e.clientX;
+      startWidth.current = state.noteListWidth;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
 
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDragging.current) return;
-      const newWidth = startWidth.current + (ev.clientX - startX.current);
-      actions.setNoteListWidth(Math.max(MIN_NOTELIST_WIDTH, Math.min(MAX_NOTELIST_WIDTH, newWidth)));
-    };
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!isDragging.current) return;
+        const newWidth = startWidth.current + (ev.clientX - startX.current);
+        actions.setNoteListWidth(
+          Math.max(MIN_NOTELIST_WIDTH, Math.min(MAX_NOTELIST_WIDTH, newWidth)),
+        );
+      };
 
-    const handleMouseUp = () => {
-      isDragging.current = false;
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
+      const handleMouseUp = () => {
+        isDragging.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  }, [state.noteListWidth, actions]);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    },
+    [state.noteListWidth, actions],
+  );
 
   if (state.noteListCollapsed) return null;
 
@@ -314,7 +385,6 @@ function NoteListResizeHandle() {
     </div>
   );
 }
-
 
 /**
  * P3: 侧边栏边缘滑动手势 Hook
@@ -377,7 +447,11 @@ function useSwipeGesture({
       // 确保是水平滑动而非垂直滑动
       if (deltaY > Math.abs(deltaX) * SWIPE_MAX_Y_RATIO) return;
 
-      if (deltaX > SWIPE_MIN_DISTANCE && touchStartX.current <= EDGE_THRESHOLD && !mobileSidebarOpen) {
+      if (
+        deltaX > SWIPE_MIN_DISTANCE &&
+        touchStartX.current <= EDGE_THRESHOLD &&
+        !mobileSidebarOpen
+      ) {
         onSwipeRight();
       } else if (deltaX < -SWIPE_MIN_DISTANCE && mobileSidebarOpen) {
         onSwipeLeft();
@@ -386,7 +460,9 @@ function useSwipeGesture({
       isSwiping.current = false;
     };
 
-    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
     return () => {
@@ -400,9 +476,15 @@ function AppLayout() {
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
-  const [mindMapRoute, setMindMapRoute] = useState<MindMapAppRoute>(() => getCurrentMindMapAppRoute());
-  const [sheetRoute, setSheetRoute] = useState<SheetAppRoute>(() => getCurrentSheetAppRoute());
-  const [issueRoute, setIssueRoute] = useState(() => parseIssueAppPath(resolveCurrentAppPathname()));
+  const [mindMapRoute, setMindMapRoute] = useState<MindMapAppRoute>(() =>
+    getCurrentMindMapAppRoute(),
+  );
+  const [sheetRoute, setSheetRoute] = useState<SheetAppRoute>(() =>
+    getCurrentSheetAppRoute(),
+  );
+  const [issueRoute, setIssueRoute] = useState(() =>
+    parseIssueAppPath(resolveCurrentAppPathname()),
+  );
   const [notificationCount, setNotificationCount] = useState(0);
   const [appPathReady, setAppPathReady] = useState(false);
 
@@ -452,7 +534,8 @@ function AppLayout() {
     const currentRoute = getCurrentMindMapAppRoute();
     const currentIssueRoute = parseIssueAppPath(resolveCurrentAppPathname());
     if (state.viewMode === "trash") {
-      if (resolveCurrentAppPathname() !== "/trash") replaceAppPathState("/trash");
+      if (resolveCurrentAppPathname() !== "/trash")
+        replaceAppPathState("/trash");
       return;
     }
     if (resolveCurrentAppPathname() === "/trash") replaceAppPathState("/");
@@ -500,31 +583,40 @@ function AppLayout() {
   const showSidebar = editorFocusLayout.showSidebar;
   const showDesktopNoteList = editorFocusLayout.showNoteList;
   const adaptiveWindow = useAdaptiveWindowLayout();
-  const mediumNoteWorkspace = adaptiveWindow.windowClass === "medium"
-    && !state.editorFullscreen
-    && !state.editorSplit;
+  const mediumNoteWorkspace =
+    adaptiveWindow.windowClass === "medium" &&
+    !state.editorFullscreen &&
+    !state.editorSplit;
   const persistentNoteList = showDesktopNoteList || mediumNoteWorkspace;
   const noteListWidth = mediumNoteWorkspace
     ? resolveMediumNoteListWidth(adaptiveWindow.width)
     : state.noteListWidth;
-  const sidebarBackdropPointerStart = useRef<{ x: number; y: number } | null>(null);
+  const sidebarBackdropPointerStart = useRef<{ x: number; y: number } | null>(
+    null,
+  );
 
-  const handleSidebarBackdropPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.target !== e.currentTarget) return;
-    sidebarBackdropPointerStart.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  const handleSidebarBackdropPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      sidebarBackdropPointerStart.current = { x: e.clientX, y: e.clientY };
+    },
+    [],
+  );
 
-  const handleSidebarBackdropPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const start = sidebarBackdropPointerStart.current;
-    sidebarBackdropPointerStart.current = null;
-    if (!start || e.target !== e.currentTarget) return;
+  const handleSidebarBackdropPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const start = sidebarBackdropPointerStart.current;
+      sidebarBackdropPointerStart.current = null;
+      if (!start || e.target !== e.currentTarget) return;
 
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    if (dx * dx + dy * dy <= 64) {
-      actions.setMobileSidebar(false);
-    }
-  }, [actions]);
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (dx * dx + dy * dy <= 64) {
+        actions.setMobileSidebar(false);
+      }
+    },
+    [actions],
+  );
 
   const handleSidebarBackdropPointerCancel = useCallback(() => {
     sidebarBackdropPointerStart.current = null;
@@ -544,7 +636,8 @@ function AppLayout() {
   useEffect(() => {
     const onOpen = () => setCommandPaletteOpen(true);
     window.addEventListener("nowen:open-command-palette", onOpen);
-    return () => window.removeEventListener("nowen:open-command-palette", onOpen);
+    return () =>
+      window.removeEventListener("nowen:open-command-palette", onOpen);
   }, []);
 
   useEffect(() => {
@@ -567,7 +660,9 @@ function AppLayout() {
       // Android 已登录客户端的 Native SQLite + Sync V2 是唯一同步写入链路。
       // WebSocket 重连不得再触发旧版 IndexedDB 全量补拉，避免双引擎争用与重复加载。
       if (isAndroidNativeRuntime()) return;
-      void syncNow().catch((e) => console.warn("[App] sync after realtime open failed:", e));
+      void syncNow().catch((e) =>
+        console.warn("[App] sync after realtime open failed:", e),
+      );
     });
     return off;
   }, []);
@@ -578,16 +673,23 @@ function AppLayout() {
       const noteId = msg?.noteId || msg?.id;
       if (!noteId) return;
       if (state.activeNote?.id === noteId) {
-        console.log("[App] note:deleted for active note, closing editor", { noteId, trashed: msg.trashed });
+        console.log("[App] note:deleted for active note, closing editor", {
+          noteId,
+          trashed: msg.trashed,
+        });
         actions.setActiveNote(null);
         actions.removeNoteTab(noteId);
-        import("@/lib/toast").then(({ toast }) => {
-          if (msg.trashed) {
-            toast.info(t('noteList.noteMovedToTrash') || "该笔记已被移入回收站");
-          } else {
-            toast.info(t('noteList.noteDeleted') || "该笔记已被删除");
-          }
-        }).catch(() => {});
+        import("@/lib/toast")
+          .then(({ toast }) => {
+            if (msg.trashed) {
+              toast.info(
+                t("noteList.noteMovedToTrash") || "该笔记已被移入回收站",
+              );
+            } else {
+              toast.info(t("noteList.noteDeleted") || "该笔记已被删除");
+            }
+          })
+          .catch(() => {});
       }
     });
     return off;
@@ -598,20 +700,27 @@ function AppLayout() {
   useEffect(() => {
     const off = realtime.on("notes:deleted", (msg: any) => {
       const noteIds = Array.isArray(msg?.noteIds)
-        ? msg.noteIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        ? msg.noteIds.filter(
+            (id: unknown): id is string =>
+              typeof id === "string" && id.length > 0,
+          )
         : [];
       if (noteIds.length === 0) return;
       const deletedIds = new Set(noteIds);
       actions.setNotes(state.notes.filter((note) => !deletedIds.has(note.id)));
-      actions.setNoteTabs(state.openNoteTabs.filter((tab) => !deletedIds.has(tab.id)));
+      actions.setNoteTabs(
+        state.openNoteTabs.filter((tab) => !deletedIds.has(tab.id)),
+      );
       void deleteLocalNotes(noteIds).catch(() => {});
       void syncNow().catch(() => {});
 
       if (state.activeNote && deletedIds.has(state.activeNote.id)) {
         actions.setActiveNote(null);
-        import("@/lib/toast").then(({ toast }) => {
-          toast.info(t('noteList.noteDeleted') || "笔记已被删除");
-        }).catch(() => {});
+        import("@/lib/toast")
+          .then(({ toast }) => {
+            toast.info(t("noteList.noteDeleted") || "笔记已被删除");
+          })
+          .catch(() => {});
       }
     });
     return off;
@@ -622,7 +731,6 @@ function AppLayout() {
       actions.setEditorFullscreen(false);
     }
   }, [actions, state.activeNote, state.editorFullscreen]);
-
 
   // P0: Android 返回键处理
   const handleBackToList = useCallback(() => {
@@ -657,16 +765,23 @@ function AppLayout() {
     } else {
       document.title = baseTitle;
     }
-  }, [siteConfig.title, userPrefs.noteTitleAsAppTitle, state.activeNote?.id, state.activeNote?.title]);
-
+  }, [
+    siteConfig.title,
+    userPrefs.noteTitleAsAppTitle,
+    state.activeNote?.id,
+    state.activeNote?.title,
+  ]);
 
   // P5: 键盘弹出布局适配
   useKeyboardLayout();
 
-  const handleOpenTaskNotification = useCallback((_taskId: string) => {
-    actions.setViewMode("tasks");
-    actions.setMobileSidebar(false);
-  }, [actions]);
+  const handleOpenTaskNotification = useCallback(
+    (_taskId: string) => {
+      actions.setViewMode("tasks");
+      actions.setMobileSidebar(false);
+    },
+    [actions],
+  );
   useReminderNotifier(handleOpenTaskNotification);
 
   // P3: 侧边栏边缘滑动手势
@@ -686,18 +801,21 @@ function AppLayout() {
     const { toast } = await import("@/lib/toast");
     // 无笔记本时给出提示
     if (state.notebooks.length === 0) {
-      toast.warning(t('common.needNotebookFirst'));
+      toast.warning(t("common.needNotebookFirst"));
       return;
     }
     // 优先使用当前选中的笔记本，否则取第一个笔记本
     const notebookId = state.selectedNotebookId || state.notebooks[0]?.id;
     if (!notebookId) {
-      toast.warning(t('common.needNotebookFirst'));
+      toast.warning(t("common.needNotebookFirst"));
       return;
     }
     try {
       const { api } = await import("@/lib/api");
-      const note = await api.createNote({ notebookId, title: t('common.untitledNote') });
+      const note = await api.createNote({
+        notebookId,
+        title: t("common.untitledNote"),
+      });
       markNewNoteForImmediateEdit(note.id);
       actions.setActiveNote(note);
       actions.setSelectedNotebook(notebookId);
@@ -706,7 +824,7 @@ function AppLayout() {
       actions.refreshNotebooks();
     } catch (err: any) {
       console.error("Quick create note failed:", err);
-      toast.error(err?.message || t('noteList.createFailed'));
+      toast.error(err?.message || t("noteList.createFailed"));
     }
   }, [state.selectedNotebookId, state.notebooks, actions, t]);
 
@@ -716,8 +834,8 @@ function AppLayout() {
     const surface = detectShortcutSurface();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
-        shortcutMatchesEvent("new-note", event, platform, surface)
-        && isShortcutAllowedInTarget("new-note", event.target)
+        shortcutMatchesEvent("new-note", event, platform, surface) &&
+        isShortcutAllowedInTarget("new-note", event.target)
       ) {
         event.preventDefault();
         void quickCreateNote();
@@ -757,7 +875,12 @@ function AppLayout() {
       actions.setSelectedNotebook(null);
       actions.setSelectedTag(null);
       const issuePath = parseIssueAppPath(resolveCurrentAppPathname());
-      if (issuePath.matched && !(event as CustomEvent<{ preserveIssueRoute?: boolean }>).detail?.preserveIssueRoute) replaceAppPathState("/issues");
+      if (
+        issuePath.matched &&
+        !(event as CustomEvent<{ preserveIssueRoute?: boolean }>).detail
+          ?.preserveIssueRoute
+      )
+        replaceAppPathState("/issues");
       actions.setViewMode(issuePath.matched ? "issues" : "all");
       actions.setMobileView("list");
       actions.setSearchQuery("");
@@ -766,7 +889,8 @@ function AppLayout() {
       actions.refreshNotebooks();
     };
     window.addEventListener("nowen:workspace-changed", onWorkspaceChanged);
-    return () => window.removeEventListener("nowen:workspace-changed", onWorkspaceChanged);
+    return () =>
+      window.removeEventListener("nowen:workspace-changed", onWorkspaceChanged);
   }, [actions]);
 
   // Electron 桌面端：菜单 / 托盘动作 IPC 桥
@@ -784,18 +908,19 @@ function AppLayout() {
       const { toast } = await import("@/lib/toast");
       try {
         // 从文件名提取标题（去掉扩展名）
-        const title = file.name.replace(/\.(md|markdown|txt)$/i, "") || file.name;
+        const title =
+          file.name.replace(/\.(md|markdown|txt)$/i, "") || file.name;
 
         // 无笔记本时给出提示
         if (state.notebooks.length === 0) {
-          toast.warning(t('common.needNotebookFirst'));
+          toast.warning(t("common.needNotebookFirst"));
           return;
         }
 
         // 优先使用当前选中的笔记本，否则取第一个笔记本
         const notebookId = state.selectedNotebookId || state.notebooks[0]?.id;
         if (!notebookId) {
-          toast.warning(t('common.needNotebookFirst'));
+          toast.warning(t("common.needNotebookFirst"));
           return;
         }
 
@@ -815,221 +940,292 @@ function AppLayout() {
         actions.refreshNotes();
         actions.refreshNotebooks();
 
-        toast.success(t('noteList.openFileSuccess', { defaultValue: '已打开文件：{{name}}', name: file.name }));
+        toast.success(
+          t("noteList.openFileSuccess", {
+            defaultValue: "已打开文件：{{name}}",
+            name: file.name,
+          }),
+        );
       } catch (err: any) {
         console.error("Open file failed:", err);
-        toast.error(err?.message || t('noteList.openFileFailed', { defaultValue: '打开文件失败' }));
+        toast.error(
+          err?.message ||
+            t("noteList.openFileFailed", { defaultValue: "打开文件失败" }),
+        );
       }
     },
   });
 
-  const handleOpenComment = (noteId: string, commentId: string) => openNoteComment(noteId, commentId, (note) => {
-    actions.setActiveNote(note);
-    actions.setSelectedNotebook(note.notebookId);
-    actions.setViewMode("notebook");
-    actions.setMobileView("editor");
-    actions.setMobileSidebar(false);
-    if (userPrefs.enableNoteTabs) actions.openNoteTab({ id: note.id, title: note.title, notebookId: note.notebookId, workspaceId: note.workspaceId, contentFormat: note.contentFormat, colorMark: note.colorMark, isLocked: note.isLocked, isTrashed: note.isTrashed, updatedAt: note.updatedAt });
-  });
+  const handleOpenComment = (noteId: string, commentId: string) =>
+    openNoteComment(noteId, commentId, (note) => {
+      actions.setActiveNote(note);
+      actions.setSelectedNotebook(note.notebookId);
+      actions.setViewMode("notebook");
+      actions.setMobileView("editor");
+      actions.setMobileSidebar(false);
+      if (userPrefs.enableNoteTabs)
+        actions.openNoteTab({
+          id: note.id,
+          title: note.title,
+          notebookId: note.notebookId,
+          workspaceId: note.workspaceId,
+          contentFormat: note.contentFormat,
+          colorMark: note.colorMark,
+          isLocked: note.isLocked,
+          isTrashed: note.isTrashed,
+          updatedAt: note.updatedAt,
+        });
+    });
 
   return (
-    <div className="flex h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
-      <NoteDeepLinkBridge />
-      {/* 移动端目录使用全屏抽屉；快捷栏默认显示，也可通过独立偏好隐藏。 */}
-      <AnimatePresence>
-        {state.mobileSidebarOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onPointerDown={handleSidebarBackdropPointerDown}
-              onPointerUp={handleSidebarBackdropPointerUp}
-              onPointerCancel={handleSidebarBackdropPointerCancel}
-              className="fixed inset-0 z-40 bg-zinc-900/60 backdrop-blur-sm md:hidden"
-            />
-            <motion.div
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", bounce: 0, duration: 0.35 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-screen max-w-none overflow-hidden shadow-2xl md:hidden"
-              // 底部避让 home indicator / 手势栏：抽屉容器统一处理，
-              // 内部 NavRail / Sidebar 不再各自加 safe-area-bottom，避免重复 padding。
-              // 顶部状态栏避让仍由 NavRail / Sidebar Header 各自的 paddingTop 处理
-              // （桌面端两者也复用，写在子组件里更通用）。
-              style={{ paddingBottom: 'var(--safe-area-bottom)' }}
-            >
-              {!mobileRailHidden && <NavRail variant="mobile" notificationCount={notificationCount} />}
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <Sidebar variant="mobile" />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+    <div className="flex flex-col h-[100dvh] w-screen bg-app-bg overflow-hidden transition-colors duration-200">
+      <DesktopWindowTitleBar />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <NoteDeepLinkBridge />
+        {/* 移动端目录使用全屏抽屉；快捷栏默认显示，也可通过独立偏好隐藏。 */}
+        <AnimatePresence>
+          {state.mobileSidebarOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onPointerDown={handleSidebarBackdropPointerDown}
+                onPointerUp={handleSidebarBackdropPointerUp}
+                onPointerCancel={handleSidebarBackdropPointerCancel}
+                className="fixed inset-0 z-40 bg-zinc-900/60 backdrop-blur-sm md:hidden"
+              />
+              <motion.div
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+                className="fixed inset-y-0 left-0 z-50 flex w-screen max-w-none overflow-hidden shadow-2xl md:hidden"
+                // 底部避让 home indicator / 手势栏：抽屉容器统一处理，
+                // 内部 NavRail / Sidebar 不再各自加 safe-area-bottom，避免重复 padding。
+                // 顶部状态栏避让仍由 NavRail / Sidebar Header 各自的 paddingTop 处理
+                // （桌面端两者也复用，写在子组件里更通用）。
+                style={{ paddingBottom: "var(--safe-area-bottom)" }}
+              >
+                {!mobileRailHidden && (
+                  <NavRail
+                    variant="mobile"
+                    notificationCount={notificationCount}
+                  />
+                )}
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <Sidebar variant="mobile" />
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
-      {/* ===== 桌面端：永久 Rail + 可折叠主侧栏 + 拖拽条 =====
+        {/* ===== 桌面端：永久 Rail + 可折叠主侧栏 + 拖拽条 =====
           v16 P3：左侧 Rail 永久可见（含模块切换 + 设置/登出 + 折叠按钮）；
           主侧栏（笔记本 + 标签）由 sidebarCollapsed 控制显隐——折叠时主侧栏整块消失，
           但 Rail 仍在，模块切换永远 1 次点击可达。
           v16 P3 后续：Rail 三档模式（icon=48px 纯图标 / label=64px 图标+文字 / hidden=完全隐藏）；
           hidden 模式下若主侧栏也折叠，强制保留 Rail（避免完全无侧栏入口）。 */}
-      {showRail && <PhaseAPerfProfiler id="NavRail"><NavRail notificationCount={notificationCount} /></PhaseAPerfProfiler>}
-      {showSidebar && !mediumNoteWorkspace && (
-        <div
-          className="hidden md:flex shrink-0"
-          style={{ width: `${state.sidebarWidth}px` }}
-        >
-          <PhaseAPerfProfiler id="Sidebar"><Sidebar variant="desktop" /></PhaseAPerfProfiler>
-        </div>
-      )}
-      {showSidebar && !mediumNoteWorkspace && <SidebarResizeHandle />}
+        {showRail && (
+          <PhaseAPerfProfiler id="NavRail">
+            <NavRail notificationCount={notificationCount} />
+          </PhaseAPerfProfiler>
+        )}
+        {showSidebar && !mediumNoteWorkspace && (
+          <div
+            className="hidden md:flex shrink-0"
+            style={{ width: `${state.sidebarWidth}px` }}
+          >
+            <PhaseAPerfProfiler id="Sidebar">
+              <Sidebar variant="desktop" />
+            </PhaseAPerfProfiler>
+          </div>
+        )}
+        {showSidebar && !mediumNoteWorkspace && <SidebarResizeHandle />}
 
-      {/* ===== 主内容区 ===== */}
-      {state.viewMode === "trash" ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <MobileTopBar />
-          <TrashPage />
-        </div>
-      ) : isSheetView ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <MobileTopBar />
-          <SheetEditor
-            noteId={sheetRoute.sheetId!}
-            onRequestClose={() => replaceAppPathState("/")}
-          />
-        </div>
-      ) : isIssuesView ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <MobileTopBar />
-          <WorkspaceIssues key={issueRoute.issueId ?? "issues-list"} issueId={issueRoute.issueId} />
-        </div>
-      ) : isTaskView ? (
-        <div className={TASK_VIEW_SHELL_CLASS}>
-          {/* 移动端顶栏 */}
-          <MobileTopBar />
-          <TaskCenter />
-        </div>
-      ) : isMindMapView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <MindMapCenter
-            documentMode={mindMapRoute.matched && mindMapRoute.mindMapId !== null}
-            routeMindMapId={mindMapRoute.matched ? mindMapRoute.mindMapId : undefined}
-            onRequestClose={() => actions.setViewMode("all")}
-          />
-        </div>
-      ) : isAIChatView ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <MobileTopBar />
-          <AIChatPanel
-            onClose={() => actions.setViewMode("all")}
-            onNavigateToNote={async (noteId) => {
-              try {
-                const { api } = await import("@/lib/api");
-                const note = await api.getNote(noteId);
-                if (note) {
-                  actions.setActiveNote(note);
-                  actions.setViewMode("all");
-                  actions.setMobileView("editor");
-                }
-              } catch (err) {
-                console.error("Navigate to note failed:", err);
+        {/* ===== 主内容区 ===== */}
+        {state.viewMode === "trash" ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <MobileTopBar />
+            <TrashPage />
+          </div>
+        ) : isSheetView ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <MobileTopBar />
+            <SheetEditor
+              noteId={sheetRoute.sheetId!}
+              onRequestClose={() => replaceAppPathState("/")}
+            />
+          </div>
+        ) : isIssuesView ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <MobileTopBar />
+            <WorkspaceIssues
+              key={issueRoute.issueId ?? "issues-list"}
+              issueId={issueRoute.issueId}
+            />
+          </div>
+        ) : isTaskView ? (
+          <div className={TASK_VIEW_SHELL_CLASS}>
+            {/* 移动端顶栏 */}
+            <MobileTopBar />
+            <TaskCenter />
+          </div>
+        ) : isMindMapView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <MindMapCenter
+              documentMode={
+                mindMapRoute.matched && mindMapRoute.mindMapId !== null
               }
-            }}
-          />
-        </div>
-      ) : isDiaryView ? (
-        <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-          <MobileTopBar />
-          <DiaryCenter />
-        </div>
-      ) : isFilesView ? (
-        <div className="flex-1 flex flex-col">
-          <MobileTopBar />
-          <FileManager />
-        </div>
-      ) : isSharesView ? (
-        <div className="flex-1 flex min-w-0 flex-col">
-          <MobileTopBar />
-          <ShareManagementPage />
-        </div>
-      ) : (
-        <div
-          className="flex-1 flex relative overflow-hidden"
-          data-note-workspace-window={adaptiveWindow.windowClass}
-          data-note-workspace-two-pane={mediumNoteWorkspace ? "true" : "false"}
-          data-note-workspace-width={adaptiveWindow.width}
-          data-note-workspace-height={adaptiveWindow.height}
-        >
-          {/*
+              routeMindMapId={
+                mindMapRoute.matched ? mindMapRoute.mindMapId : undefined
+              }
+              onRequestClose={() => actions.setViewMode("all")}
+            />
+          </div>
+        ) : isAIChatView ? (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <MobileTopBar />
+            <AIChatPanel
+              onClose={() => actions.setViewMode("all")}
+              onNavigateToNote={async (noteId) => {
+                try {
+                  const { api } = await import("@/lib/api");
+                  const note = await api.getNote(noteId);
+                  if (note) {
+                    actions.setActiveNote(note);
+                    actions.setViewMode("all");
+                    actions.setMobileView("editor");
+                  }
+                } catch (err) {
+                  console.error("Navigate to note failed:", err);
+                }
+              }}
+            />
+          </div>
+        ) : isDiaryView ? (
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+            <MobileTopBar />
+            <DiaryCenter />
+          </div>
+        ) : isFilesView ? (
+          <div className="flex-1 flex flex-col">
+            <MobileTopBar />
+            <FileManager />
+          </div>
+        ) : isSharesView ? (
+          <div className="flex-1 flex min-w-0 flex-col">
+            <MobileTopBar />
+            <ShareManagementPage />
+          </div>
+        ) : (
+          <div
+            className="flex-1 flex relative overflow-hidden"
+            data-note-workspace-window={adaptiveWindow.windowClass}
+            data-note-workspace-two-pane={
+              mediumNoteWorkspace ? "true" : "false"
+            }
+            data-note-workspace-width={adaptiveWindow.width}
+            data-note-workspace-height={adaptiveWindow.height}
+          >
+            {/*
             移动端与桌面端共用同一个 NoteList 实例。仅靠 CSS 隐藏两个独立实例会让
             隐藏列表也执行数据请求，导致一次 refreshNotes 产生重复的 /api/notes 调用。
           */}
-          {(state.mobileView === "list" || persistentNoteList) && (
-            <div
-              data-testid="note-workspace-list-pane"
-              className={`
+            {(state.mobileView === "list" || persistentNoteList) && (
+              <div
+                data-testid="note-workspace-list-pane"
+                className={`
                 flex-col shrink-0 h-full
                 ${mediumNoteWorkspace ? "flex border-r border-app-border" : "w-full md:w-[var(--note-list-width)]"}
                 ${mediumNoteWorkspace || state.mobileView === "list" ? "flex" : "hidden"}
                 ${mediumNoteWorkspace ? "" : showDesktopNoteList ? "md:flex" : "md:hidden"}
               `}
-              style={mediumNoteWorkspace
-                ? { width: `${noteListWidth}px` }
-                : { "--note-list-width": `${noteListWidth}px` } as React.CSSProperties}
-            >
-              <PhaseAPerfProfiler id="NoteList"><NoteList /></PhaseAPerfProfiler>
-            </div>
-          )}
+                style={
+                  mediumNoteWorkspace
+                    ? { width: `${noteListWidth}px` }
+                    : ({
+                        "--note-list-width": `${noteListWidth}px`,
+                      } as React.CSSProperties)
+                }
+              >
+                <PhaseAPerfProfiler id="NoteList">
+                  <NoteList />
+                </PhaseAPerfProfiler>
+              </div>
+            )}
 
-          {showDesktopNoteList && !mediumNoteWorkspace && <NoteListResizeHandle />}
+            {showDesktopNoteList && !mediumNoteWorkspace && (
+              <NoteListResizeHandle />
+            )}
 
-          {/* 编辑器 — 移动端全屏覆盖 */}
-          <div
-            data-testid="note-workspace-editor-pane"
-            className={`
+            {/* 编辑器 — 移动端全屏覆盖 */}
+            <div
+              data-testid="note-workspace-editor-pane"
+              className={`
               flex flex-col min-w-0
-              ${mediumNoteWorkspace
-                ? "relative z-auto flex-1"
-                : "absolute inset-0 z-20 md:static md:z-auto md:flex-1"}
+              ${
+                mediumNoteWorkspace
+                  ? "relative z-auto flex-1"
+                  : "absolute inset-0 z-20 md:static md:z-auto md:flex-1"
+              }
               ${mediumNoteWorkspace || state.mobileView === "editor" ? "flex" : "hidden md:flex"}
             `}
-          >
-            <PhaseAPerfProfiler id="EditorPane">
-              {state.editorSplit ? <EditorSplitView /> : <EditorPane />}
-            </PhaseAPerfProfiler>
+            >
+              <PhaseAPerfProfiler id="EditorPane">
+                {state.editorSplit ? <EditorSplitView /> : <EditorPane />}
+              </PhaseAPerfProfiler>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <CommentManagementCenter onOpenComment={handleOpenComment} />
-      <NotificationCenter onUnreadChange={setNotificationCount} onOpenComment={handleOpenComment} onOpenIssue={(issueId, workspaceId) => { openWorkspaceIssue(issueId, workspaceId); actions.setViewMode("issues"); actions.setMobileSidebar(false); }} />
+        <CommentManagementCenter onOpenComment={handleOpenComment} />
+        <NotificationCenter
+          onUnreadChange={setNotificationCount}
+          onOpenComment={handleOpenComment}
+          onOpenIssue={(issueId, workspaceId) => {
+            openWorkspaceIssue(issueId, workspaceId);
+            actions.setViewMode("issues");
+            actions.setMobileSidebar(false);
+          }}
+        />
 
-      {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
-      <FloatingLayerHost />
+        {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
+        <FloatingLayerHost />
 
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-      />
+        <CommandPalette
+          open={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+        />
 
-      <AnimatePresence>
-        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-      </AnimatePresence>
+        <AnimatePresence>
+          {settingsOpen && (
+            <SettingsModal onClose={() => setSettingsOpen(false)} />
+          )}
+        </AnimatePresence>
 
-      {/* 无 UI 的网络探活、离线队列重放与同步后数据刷新 */}
-      <OfflineSyncRuntime />
+        {/* 无 UI 的网络探活、离线队列重放与同步后数据刷新 */}
+        <OfflineSyncRuntime />
 
-      {/* 服务端版本升级提示（前端 bundle 与服务端不一致时） */}
-      <UpdateNotifier />
+        {/* 服务端版本升级提示（前端 bundle 与服务端不一致时） */}
+        <UpdateNotifier />
 
-      {/* 桌面宽屏笔记布局：标准 / 三栏 / 专注，移动端保持逐级导航。 */}
-      <NoteWorkspaceLayoutController />
+        {/* 桌面宽屏笔记布局：标准 / 三栏 / 专注，移动端保持逐级导航。 */}
+        <NoteWorkspaceLayoutController />
 
-      {/* 桌面端文件夹自动同步调度器（仅 Electron，无 UI） */}
-      <FolderSyncScheduler />
+        {/* 桌面端文件夹自动同步调度器（仅 Electron，无 UI） */}
+        <FolderSyncScheduler />
+      </div>
+    </div>
+  );
+}
+
+function DesktopWindowTitleBar() {
+  return (
+    <div className="app-window-titlebar items-center justify-center h-7 shrink-0 select-none">
+      <span className="app-window-titlebar__title">nowen note</span>
     </div>
   );
 }
@@ -1038,14 +1234,19 @@ function MobileTopBar() {
   const actions = useAppActions();
   const { siteConfig } = useSiteSettings();
   return (
-    <header className="flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden" style={{ paddingTop: 'calc(var(--safe-area-top) + 4px)' }}>
+    <header
+      className="flex items-center px-4 py-3 border-b border-app-border bg-app-surface/50 md:hidden"
+      style={{ paddingTop: "calc(var(--safe-area-top) + 4px)" }}
+    >
       <button
         onClick={() => actions.setMobileSidebar(true)}
         className="p-2 -ml-2 rounded-lg text-tx-secondary hover:bg-app-hover active:bg-app-active"
       >
         <Menu size={24} />
       </button>
-      <span className="ml-3 text-sm font-semibold text-tx-primary">{siteConfig.title}</span>
+      <span className="ml-3 text-sm font-semibold text-tx-primary">
+        {siteConfig.title}
+      </span>
     </header>
   );
 }
@@ -1058,7 +1259,9 @@ function AuthGate() {
   //   "pending"：刚确认未登录，正交给 QuickLoginGate 决定是否唤起
   //   "skipped" / null：QuickLoginGate 决定不展示（不支持 / 未启用 / 已尝试过）
   //                    或用户取消，UI 应渲染 LoginPage 让用户输密码
-  const [quickLoginState, setQuickLoginState] = useState<"pending" | "skipped">("pending");
+  const [quickLoginState, setQuickLoginState] = useState<"pending" | "skipped">(
+    "pending",
+  );
   const { t } = useTranslation();
 
   // P1: Splash Screen — 应用就绪后隐藏启动屏（必须在条件返回之前调用）
@@ -1106,14 +1309,22 @@ function AuthGate() {
     const timer = setTimeout(() => controller.abort(), 8000);
 
     // /me 经过服务端完整的 session 校验；旧版 /auth/verify 不检查已撤销 jti。
-    fetchWithAuthRefresh(`${baseUrl}/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: controller.signal,
-    }, baseUrl)
+    fetchWithAuthRefresh(
+      `${baseUrl}/me`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      },
+      baseUrl,
+    )
       .then(async (res) => {
         if (res.ok) return res.json();
         let body: any = {};
-        try { body = await res.clone().json(); } catch { /* ignore */ }
+        try {
+          body = await res.clone().json();
+        } catch {
+          /* ignore */
+        }
         // 401 / 会话吊销类 403 才是真正的"登录态失效"，需要清 token。
         // 网络抖动、远端 5xx、超时不应把用户踢回登录页，否则云端离线缓存无法使用。
         const code = body?.code as string | undefined;
@@ -1126,13 +1337,21 @@ function AuthGate() {
           code === "SESSION_REVOKED" ||
           code === "UNAUTHENTICATED";
         if (authInvalid) {
-          const err = new Error(body?.error || "Invalid token") as Error & { authInvalid?: boolean };
+          const err = new Error(body?.error || "Invalid token") as Error & {
+            authInvalid?: boolean;
+          };
           err.authInvalid = true;
           throw err;
         }
-        const err = new Error(body?.error || `Verify failed: ${res.status}`) as Error & { networkLike?: boolean; status?: number };
+        const err = new Error(
+          body?.error || `Verify failed: ${res.status}`,
+        ) as Error & { networkLike?: boolean; status?: number };
         err.status = res.status;
-        err.networkLike = res.status >= 500 || res.status === 408 || res.status === 425 || res.status === 429;
+        err.networkLike =
+          res.status >= 500 ||
+          res.status === 408 ||
+          res.status === 425 ||
+          res.status === 429;
         throw err;
       })
       .then((data) => {
@@ -1154,13 +1373,17 @@ function AuthGate() {
             // 云端降级：保留 token + serverUrl，使用上次用户信息进入主界面。
             // 后续读请求会走 offlineRead，本地缓存可用；写请求失败会进 offlineQueue。
             try {
-              window.dispatchEvent(new CustomEvent("nowen:cloud-degraded", {
-                detail: {
-                  reason: "verify_network_failure",
-                  serverUrl,
-                },
-              }));
-            } catch { /* ignore */ }
+              window.dispatchEvent(
+                new CustomEvent("nowen:cloud-degraded", {
+                  detail: {
+                    reason: "verify_network_failure",
+                    serverUrl,
+                  },
+                }),
+              );
+            } catch {
+              /* ignore */
+            }
             return;
           }
           // 无缓存时无法绑定 localStore 用户 id，只能展示登录页；但仍不清 token，
@@ -1194,40 +1417,70 @@ function AuthGate() {
     //   此时强制跳过零登录，直接进登录页（让用户输入 fnos 服务器地址）。
     //   返回本地模式时 LoginPage 会清除该标记 + reload，零登录恢复。
     const preferCloud = (() => {
-      try { return localStorage.getItem("nowen-prefer-cloud") === "1"; } catch { return false; }
+      try {
+        return localStorage.getItem("nowen-prefer-cloud") === "1";
+      } catch {
+        return false;
+      }
     })();
-    if (!existingToken && !preferCloud && desktopApi?.isDesktop && desktopApi?.getLocalAuth) {
+    if (
+      !existingToken &&
+      !preferCloud &&
+      desktopApi?.isDesktop &&
+      desktopApi?.getLocalAuth
+    ) {
       let cancelled = false;
-      desktopApi.getLocalAuth().then((auth: { token: string; refreshToken?: string; user: User } | null) => {
-        if (cancelled) return;
-        if (auth?.token) {
-          try {
-            storeAuthTokens({ token: auth.token, refreshToken: auth.refreshToken ?? null });
-            // 桌面端首启把 origin 当作 serverUrl 落盘，让后续同源 API 调用顺利通过
-            if (!getServerUrl() && window.location.origin.startsWith("http")) {
-              setServerUrl(window.location.origin);
+      desktopApi
+        .getLocalAuth()
+        .then(
+          (
+            auth: { token: string; refreshToken?: string; user: User } | null,
+          ) => {
+            if (cancelled) return;
+            if (auth?.token) {
+              try {
+                storeAuthTokens({
+                  token: auth.token,
+                  refreshToken: auth.refreshToken ?? null,
+                });
+                // 桌面端首启把 origin 当作 serverUrl 落盘，让后续同源 API 调用顺利通过
+                if (
+                  !getServerUrl() &&
+                  window.location.origin.startsWith("http")
+                ) {
+                  setServerUrl(window.location.origin);
+                }
+              } catch {
+                /* ignore */
+              }
+              saveCachedAuthUser(
+                getAuthCacheScope(getServerUrl()),
+                auth.token,
+                auth.user,
+              );
+              setUser(auth.user);
+              setIsAuthenticated(true);
+              return;
             }
-          } catch { /* ignore */ }
-          saveCachedAuthUser(getAuthCacheScope(getServerUrl()), auth.token, auth.user);
-          setUser(auth.user);
-          setIsAuthenticated(true);
-          return;
-        }
-        // 主进程没给 token（lite 模式 / ensureLocalAccount 失败）→ 退回原有判定
-        if (isClientMode && !getServerUrl() && !isMobileLocalMode()) {
-          setIsAuthenticated(false);
-        } else {
-          checkAuth();
-        }
-      }).catch(() => {
-        if (cancelled) return;
-        if (isClientMode && !getServerUrl() && !isMobileLocalMode()) {
-          setIsAuthenticated(false);
-        } else {
-          checkAuth();
-        }
-      });
-      return () => { cancelled = true; };
+            // 主进程没给 token（lite 模式 / ensureLocalAccount 失败）→ 退回原有判定
+            if (isClientMode && !getServerUrl() && !isMobileLocalMode()) {
+              setIsAuthenticated(false);
+            } else {
+              checkAuth();
+            }
+          },
+        )
+        .catch(() => {
+          if (cancelled) return;
+          if (isClientMode && !getServerUrl() && !isMobileLocalMode()) {
+            setIsAuthenticated(false);
+          } else {
+            checkAuth();
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
     // 非桌面端 / 已有 token：走原有逻辑
@@ -1249,7 +1502,9 @@ function AuthGate() {
       if (timer) window.clearTimeout(timer);
       const token = getAccessToken();
       const expiresAt = token ? getTokenExpiresAt(token) : null;
-      const delay = expiresAt ? Math.max(0, expiresAt - Date.now() - 60_000) : 0;
+      const delay = expiresAt
+        ? Math.max(0, expiresAt - Date.now() - 60_000)
+        : 0;
       timer = window.setTimeout(renew, Math.min(delay, 2_147_000_000));
     };
 
@@ -1363,15 +1618,21 @@ function AuthGate() {
 
   // 桌面端 / 移动端把每次已确认的登录态写入安全历史。仅保存 token，绝不保存密码。
   useEffect(() => {
-    if (!user?.id || isMobileLocalMode() || !isAccountLoginHistorySupported()) return;
+    if (!user?.id || isMobileLocalMode() || !isAccountLoginHistorySupported())
+      return;
     const token = getAccessToken() || "";
     const refreshToken = getRefreshToken() || undefined;
-    const serverUrl = getServerUrl()
-      || (window.location.origin.startsWith("http") ? window.location.origin : "");
+    const serverUrl =
+      getServerUrl() ||
+      (window.location.origin.startsWith("http") ? window.location.origin : "");
     if (!token || !serverUrl) return;
     void saveAccountLoginHistory({ serverUrl, token, refreshToken, user })
       .then((result) => {
-        if (!result.ok) console.warn("[App] save account login history failed:", result.error);
+        if (!result.ok)
+          console.warn(
+            "[App] save account login history failed:",
+            result.error,
+          );
       })
       .catch((error) => {
         console.warn("[App] save account login history failed:", error);
@@ -1390,7 +1651,9 @@ function AuthGate() {
     broadcastLogout("disconnect_server");
     // Phase 7: 切换服务器时 token 已经无意义，把 secure storage 镜像也清掉，
     // 避免下次开 app 又用旧 token 自动登录（会落到 verify 失败再回退，但没必要走一遭）
-    void import("@/lib/quickLogin").then((m) => m.disableQuickLogin()).catch(() => {});
+    void import("@/lib/quickLogin")
+      .then((m) => m.disableQuickLogin())
+      .catch(() => {});
     // Phase B: 解绑本地缓存当前用户；缓存数据保留以便下次重登秒开
     syncTeardown();
     setIsAuthenticated(false);
@@ -1404,7 +1667,9 @@ function AuthGate() {
     setActiveToken(token);
     setIsAuthenticated(true);
     // 通知同 tab 内的组件（如 SecuritySettings）token 已变化，需要重新拉取用户信息
-    try { window.dispatchEvent(new CustomEvent("nowen:token-changed")); } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent("nowen:token-changed"));
+    } catch {}
 
     // 登录引导回跳：支持来自分享页（edit_auth 权限）的 `/login?redirect=/share/<token>`。
     //
@@ -1449,7 +1714,9 @@ function AuthGate() {
       <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 transition-colors">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('auth.verifying')}</p>
+          <p className="text-sm text-zinc-400 dark:text-zinc-500">
+            {t("auth.verifying")}
+          </p>
         </div>
       </div>
     );
@@ -1482,7 +1749,9 @@ function AuthGate() {
         onAccountLogin={handleLogin}
         isClientMode={isClientMode}
         onDisconnect={isClientMode ? handleDisconnect : undefined}
-        onContinueLocal={isAndroidNativeRuntime() ? handleContinueLocal : undefined}
+        onContinueLocal={
+          isAndroidNativeRuntime() ? handleContinueLocal : undefined
+        }
       />
     );
   }
@@ -1491,9 +1760,15 @@ function AuthGate() {
   return (
     <AppProvider>
       <SidebarSearchExperienceBridge />
-      {user && <WechatClipboardBridge key={`${getServerUrl() || "local"}:${user.id}`} />}
+      {user && (
+        <WechatClipboardBridge
+          key={`${getServerUrl() || "local"}:${user.id}`}
+        />
+      )}
       <TooltipProvider>
-        <PhaseAPerfProfiler id="AppLayout"><AppLayout /></PhaseAPerfProfiler>
+        <PhaseAPerfProfiler id="AppLayout">
+          <AppLayout />
+        </PhaseAPerfProfiler>
         {/* Phase 7: 客户端模式下，密码登录成功后引导启用快速登录。
             QuickLoginEnrollDialog 内部会判断"是否已问过 / 设备是否支持"，
             不需要展示时会立即调 onClose 自我隐身。 */}
@@ -1519,7 +1794,9 @@ function AuthGate() {
 
 function App() {
   const [webUiAllowed, setWebUiAllowed] = useState(true);
-  const [webUiChecked, setWebUiChecked] = useState(() => isNativeClientRuntime());
+  const [webUiChecked, setWebUiChecked] = useState(() =>
+    isNativeClientRuntime(),
+  );
 
   useEffect(() => {
     if (isNativeClientRuntime()) {
@@ -1528,12 +1805,16 @@ function App() {
       return;
     }
     let cancelled = false;
-    fetchWebUiEnabled().then((enabled) => {
-      if (!cancelled) setWebUiAllowed(enabled);
-    }).finally(() => {
-      if (!cancelled) setWebUiChecked(true);
-    });
-    return () => { cancelled = true; };
+    fetchWebUiEnabled()
+      .then((enabled) => {
+        if (!cancelled) setWebUiAllowed(enabled);
+      })
+      .finally(() => {
+        if (!cancelled) setWebUiChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (webUiChecked && !webUiAllowed) {
