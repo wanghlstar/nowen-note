@@ -1,5 +1,5 @@
 diff --git a/electron/main.js b/electron/main.js
-index 4c69012..9eb6b27 100644
+index 4c69012e..9eb6b271 100644
 --- a/electron/main.js
 +++ b/electron/main.js
 @@ -1034,12 +1034,12 @@ function createWindow() {
@@ -18,7 +18,7 @@ index 4c69012..9eb6b27 100644
          visualEffectState: "active",
          transparent: false, // 开启 vibrancy 时 backgroundColor 可设半透明或不设
 diff --git a/frontend/src/components/Sidebar.tsx b/frontend/src/components/Sidebar.tsx
-index 7b70081..f3658db 100644
+index 7b70081f..f3658db5 100644
 --- a/frontend/src/components/Sidebar.tsx
 +++ b/frontend/src/components/Sidebar.tsx
 @@ -15,7 +15,6 @@ import { useRailMode } from "@/hooks/useRailMode";
@@ -102,11 +102,52 @@ index 7b70081..f3658db 100644
          </div>
        )}
 diff --git a/frontend/src/index.css b/frontend/src/index.css
-index 1a8b313..194d918 100644
+index 1a8b313d..e170f2a8 100644
 --- a/frontend/src/index.css
 +++ b/frontend/src/index.css
-@@ -2652,7 +2652,29 @@ html[data-electron="darwin"]
+@@ -2650,9 +2650,70 @@ html[data-electron="darwin"]
+   -webkit-app-region: no-drag;
+ }
  
++/* 桌面端移除 header（去标题 + 去直通顶端分隔线）后，原本由 header 承担的
++ * drag region 一并消失 —— 窗口抓不住、双击也无法 zoom（最大化）。
++ * 这里用绝对定位伪元素把顶部补回 drag 区：不占布局流，不推动任何元素。
++ *   - 侧栏顶部 0~52px：红绿灯下沿；WorkspaceSwitcher 从 60px 起，不会挡住交互
++ *   - rail  顶部 0~28px：rail 图标从 28px 起（padding-top），不会挡住按钮
++ */
++html[data-electron="darwin"]
++  [data-unified-sidebar][data-sidebar-variant="desktop"] {
++  position: relative;
++}
++
++html[data-electron="darwin"]
++  [data-unified-sidebar][data-sidebar-variant="desktop"]::before {
++  content: "";
++  position: absolute;
++  top: 0;
++  left: 0;
++  right: 0;
++  height: 52px;
++  -webkit-app-region: drag;
++  z-index: 2;
++}
++
++html[data-electron="darwin"] .nav-rail::before {
++  content: "";
++  position: absolute;
++  top: 0;
++  left: 0;
++  right: 0;
++  height: 28px;
++  -webkit-app-region: drag;
++  z-index: 2;
++}
++
++/* 全屏时灯区消失、rail 内容上移到 4px，拖拽区让位，否则会盖住前几个图标 */
++html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::before {
++  height: 0;
++}
++
  /* Keep rail actions below the native window controls. */
  html[data-electron="darwin"] .nav-rail {
 -  padding-top: 56px !important;

@@ -6,7 +6,7 @@
 #       重新应用 patches/macos-sidebar-trafficlight-fix.patch。
 #       脚本是幂等的：改动已在则直接跳过，可反复运行。
 #
-# 补丁内容共 6 处改动（本次修复的全部）：
+# 补丁内容共 9 处改动（本次修复的全部）：
 #   1. electron/main.js
 #      trafficLightPosition: { x: 12, y: 22 } -> { x: 11, y: 14 }
 #      （红绿灯回到 macOS 标准高度，整体左移 1px）
@@ -30,6 +30,17 @@
 #   6. frontend/src/index.css
 #      html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::after { top: 0 }
 #      （全屏时系统隐藏红绿灯，竖线恢复通高）
+#   7. frontend/src/index.css
+#      桌面端侧栏顶部补 drag region（伪元素，不占布局）：
+#      [data-unified-sidebar][data-sidebar-variant="desktop"]::before
+#      { position:absolute; top/left/right:0; height:52px; -webkit-app-region:drag }
+#      （header 被移除后，原本由 header 承担的拖拽/双击最大化能力在此补回）
+#   8. frontend/src/index.css
+#      html[data-electron="darwin"] .nav-rail::before 同样补 drag region，height: 28px
+#      （rail 顶部空白区也可拖动/双击；图标从 28px 起，不会被盖住）
+#   9. frontend/src/index.css
+#      html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::before { height: 0 }
+#      （全屏时灯区消失、rail 内容上移到 4px，拖拽区让位，否则盖住前几个图标）
 #
 # 用法：
 #   ./scripts/apply-macos-fix.sh            # 只应用补丁
@@ -57,12 +68,15 @@ grep -qF 'variant !== "desktop" || railMode === "hidden"' frontend/src/component
 grep -qF 'safe-area-top) + 60px' frontend/src/components/Sidebar.tsx && applied=$((applied+1))
 grep -qF 'border-right-width: 0;' frontend/src/index.css && applied=$((applied+1))
 grep -qF '.nav-rail::after' frontend/src/index.css && applied=$((applied+1))
+grep -qF '[data-unified-sidebar][data-sidebar-variant="desktop"]::before' frontend/src/index.css && applied=$((applied+1))
+grep -qF '.nav-rail::before' frontend/src/index.css && applied=$((applied+1))
+grep -qF '[data-fullscreen="1"] .nav-rail::before' frontend/src/index.css && applied=$((applied+1))
 
-if [ "$applied" -eq 6 ]; then
-  echo "OK 修复补丁已在当前代码中（6/6），无需重复应用。"
+if [ "$applied" -eq 9 ]; then
+  echo "OK 修复补丁已在当前代码中（9/9），无需重复应用。"
   exit 0
 fi
-echo "==> 检测到 $applied/6 处改动已存在，开始重放补丁..."
+echo "==> 检测到 $applied/9 处改动已存在，开始重放补丁..."
 
 # ---------- 2. 应用补丁（干净应用优先，3way 兜底） ----------
 ERR=$(mktemp)
@@ -79,7 +93,7 @@ else
     echo "!! 上面列出的文件里残留了冲突标记（<<<<<<< / ======= / >>>>>>>），请手动解决后删掉标记。"
   fi
   echo ""
-  echo "请手动完成以下 6 处修改（补丁的全部内容就是这些）："
+  echo "请手动完成以下 9 处修改（补丁的全部内容就是这些）："
   cat <<'EOF'
   1) electron/main.js 的 macWindowOpts 内：
        trafficLightPosition: { x: 11, y: 14 },
@@ -103,6 +117,21 @@ else
        }
   6) frontend/src/index.css 追加（全屏时系统隐藏红绿灯，竖线恢复通高）：
        html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::after { top: 0; }
+  7) frontend/src/index.css 追加（补回被移除的 header 所承担的拖拽/双击最大化）：
+       html[data-electron="darwin"]
+         [data-unified-sidebar][data-sidebar-variant="desktop"] { position: relative; }
+       html[data-electron="darwin"]
+         [data-unified-sidebar][data-sidebar-variant="desktop"]::before {
+           content: ""; position: absolute; top: 0; left: 0; right: 0;
+           height: 52px; -webkit-app-region: drag; z-index: 2;
+         }
+  8) 同文件追加（rail 顶部空白也可拖动/双击，图标从 28px 起不会被盖住）：
+       html[data-electron="darwin"] .nav-rail::before {
+         content: ""; position: absolute; top: 0; left: 0; right: 0;
+         height: 28px; -webkit-app-region: drag; z-index: 2;
+       }
+  9) 同文件追加（全屏时灯区消失、rail 上移到 4px，拖拽区让位）：
+       html[data-electron="darwin"][data-fullscreen="1"] .nav-rail::before { height: 0; }
 EOF
   rm -f "$ERR"
   exit 1
@@ -126,6 +155,9 @@ check frontend/src/components/Sidebar.tsx 'variant !== "desktop" || railMode ===
 check frontend/src/components/Sidebar.tsx 'safe-area-top) + 60px' "工作区选择器下移 60px"
 check frontend/src/index.css 'border-right-width: 0;' "rail 去掉通高 border-r"
 check frontend/src/index.css '.nav-rail::after' "竖线改伪元素起画（top:60px）"
+check frontend/src/index.css '[data-unified-sidebar][data-sidebar-variant="desktop"]::before' "侧栏顶部补 drag region（可拖动/双击最大化）"
+check frontend/src/index.css '.nav-rail::before' "rail 顶部补 drag region"
+check frontend/src/index.css '[data-fullscreen="1"] .nav-rail::before' "全屏时 rail 拖拽区让位"
 if [ "$fail" -ne 0 ]; then
   echo "x 有改动未生效，请检查 git diff 中的冲突标记后重跑本脚本。"
   exit 1
