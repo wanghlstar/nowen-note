@@ -3050,16 +3050,16 @@ html[data-electron="darwin"] .app-window-titlebar {
   height: 28px;
   flex-shrink: 0;
   user-select: none;
-  background-color: transparent;
+  background-color: var(--color-sidebar, #f3f4f6);
 }
 html[data-electron="darwin"][data-fullscreen="1"] .app-window-titlebar {
   display: none;
 }
 .app-window-titlebar__title {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--tx-secondary, #6b7280);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary, #111827);
   pointer-events: none; /* 文字不挡拖拽/双击 */
 }
 
