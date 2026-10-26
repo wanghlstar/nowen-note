@@ -68,19 +68,34 @@ clear_git_locks() {
   return 1
 }
 
-# fetch 加重试：大对象传输期间锁可能随时插入，单次失败清锁后续传
+# fetch 前清理残留 worktree 注册：路径已消失的注册（如 /tmp 被系统清理）会让
+# fetch 直接 fatal；prune 会跳过 locked 的残留，先 unlock 再 prune。
+prune_worktrees() {
+  local wt
+  git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2}' | while read -r wt; do
+    [ -e "$wt" ] || git worktree unlock "$wt" >/dev/null 2>&1
+  done
+  git worktree prune
+}
+
+# fetch 加重试：大对象传输期间锁/残留注册可能随时插入，单次失败清理后续传。
+# 退出码必须显式捕获——管道末尾的 tail/grep 会吞掉 fetch 的失败状态。
 fetch_tags() {
-  local n
+  local n out
+  prune_worktrees
   for n in 1 2 3; do
-    if git fetch --tags origin 2>&1 | grep -q "fatal\|error:"; then
-      echo "   fetch 第 $n 次遇到锁/错误，清理后重试..."
-      clear_git_locks || true
-      sleep 2
-    else
+    if out=$(git fetch --tags origin 2>&1); then
       return 0
     fi
+    echo "   fetch 第 $n 次失败，清理 git 锁/残留 worktree 注册后重试..."
+    printf '%s\n' "$out" | tail -3 | sed 's/^/     /'
+    clear_git_locks || true
+    prune_worktrees
+    sleep 2
   done
-  git fetch --tags origin 2>&1 | tail -3
+  echo "x git fetch --tags origin 连续 3 次失败，最后输出："
+  printf '%s\n' "$out" | sed 's/^/     /'
+  return 1
 }
 
 # ---------- 1. 前置检查 ----------
@@ -119,11 +134,32 @@ if [ -n "$AHEAD" ]; then
   echo ""
   echo "!! 本地有 $(echo "$AHEAD" | wc -l | tr -d ' ') 个提交不在 $TAG 中（切分支后不会带过去）："
   echo "$AHEAD" | sed 's/^/     /'
-  echo "   （macOS 修复 commit 无需理会——新分支会由补丁脚本重放；"
-  echo "    其他本地提交如需保留，升级后执行：git cherry-pick <commit>）"
+  echo "   （全部本地改动由补丁全量携带，无需 cherry-pick；"
+  echo "    仅补丁重放失败时，才需对照上面列表人工拣选）"
   printf "   继续？[y/N] "
   read -r go || go="n"
   [ "$go" = "y" ] || [ "$go" = "Y" ] || die "已取消"
+fi
+
+# ---------- 2.5 补丁基线漂移预警 ----------
+# 补丁是 origin/main..HEAD 的全量 diff，基线为本地分支与 origin/main 的分叉点；
+# 分叉点到目标 tag 之间的上游提交越多，3way 重放冲突面积越大。
+PATCH_BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
+if [ -n "$PATCH_BASE" ]; then
+  DRIFT=$(git rev-list --count "$PATCH_BASE..$TAG" 2>/dev/null || echo 0)
+  if [ "${DRIFT:-0}" -gt 200 ]; then
+    echo ""
+    echo "!! 补丁基线漂移：基线 ${PATCH_BASE:0:8} 到 $TAG 之间上游有 $DRIFT 个提交（阈值 200），补丁重放冲突面积可能很大。"
+    PATCH_FILES=$(grep -h '^diff --git' patches/*.patch 2>/dev/null | awk '{print $3}' | sed 's|^a/||' | sort -u)
+    if [ -n "$PATCH_FILES" ]; then
+      echo "   补丁涉及文件的上游改动（人工审查重点）："
+      git log --oneline "$PATCH_BASE..$TAG" -- $PATCH_FILES 2>/dev/null | head -20 | sed 's/^/     /'
+    fi
+    echo "   建议先人工核对上述文件；冲突过多时重放会失败，需手动拣选改动。"
+    printf "   仍要继续？[y/N] "
+    read -r go || go="n"
+    [ "$go" = "y" ] || [ "$go" = "Y" ] || die "已取消"
+  fi
 fi
 
 # ---------- 3. 切换分支（带补丁的本地分支，避免 detached HEAD 丢改动） ----------
