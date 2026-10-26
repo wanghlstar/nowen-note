@@ -1,6 +1,25 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronRight, PanelLeft, PanelTopClose, PanelTopOpen, Settings, Tags, Trash2, X, CircleDot, Bell, Search } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  PanelLeft,
+  PanelTopClose,
+  PanelTopOpen,
+  Settings,
+  Tags,
+  Trash2,
+  X,
+  CircleDot,
+  Bell,
+  Search,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import KnowledgeTreePanel, {
@@ -15,10 +34,12 @@ import { useRailMode } from "@/hooks/useRailMode";
 import { useMobileRailHidden } from "@/hooks/useMobileRailHidden";
 import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarControlsCollapsed";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
-import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { api, getCurrentWorkspace } from "@/lib/api";
-import { openWorkspaceIssue, OPEN_NOTIFICATIONS_EVENT } from "@/lib/workspaceIssueNavigation";
+import {
+  openWorkspaceIssue,
+  OPEN_NOTIFICATIONS_EVENT,
+} from "@/lib/workspaceIssueNavigation";
 import { isMobileLocalMode } from "@/lib/mobileLocalMode";
 import { filterTagsByQuery } from "@/lib/tagSearch";
 import { isNavigationModuleVisible } from "@/lib/navigationVisibility";
@@ -87,23 +108,38 @@ export const KNOWLEDGE_TREE_SCROLLBAR_CSS = `
  *
  * 桌面端默认保留递归目录树，并可按本地偏好切换为快捷浏览；移动端默认使用快捷浏览。
  */
-export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | "mobile" } = {}) {
+export default function Sidebar({
+  variant = "mobile",
+}: { variant?: "desktop" | "mobile" } = {}) {
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
-  const { siteConfig } = useSiteSettings();
   const { prefs: userPrefs } = useUserPreferences();
   const [railMode, setRailMode] = useRailMode();
-  const [mobileControlsCollapsed, setMobileControlsCollapsed] = useMobileSidebarControlsCollapsed();
+  const [mobileControlsCollapsed, setMobileControlsCollapsed] =
+    useMobileSidebarControlsCollapsed();
   const [sidebarTextStyle] = useSidebarTextStyle();
   const classicText = sidebarTextStyle === "classic";
   const [mobileRailHidden, setMobileRailHidden] = useMobileRailHidden();
-  const showNotifications = variant === "mobile" && mobileRailHidden
-    && isNavigationModuleVisible("notifications", userPrefs.hiddenNavigationModules);
+  const showNotifications =
+    variant === "mobile" &&
+    mobileRailHidden &&
+    isNavigationModuleVisible(
+      "notifications",
+      userPrefs.hiddenNavigationModules,
+    );
   const rootRef = useRef<HTMLDivElement>(null);
   const tagLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagLongPressFired = useRef(false);
-  const noteWorkspaceActive = !["tasks", "mindmaps", "ai-chat", "diary", "files", "shares", "issues"].includes(state.viewMode);
+  const noteWorkspaceActive = ![
+    "tasks",
+    "mindmaps",
+    "ai-chat",
+    "diary",
+    "files",
+    "shares",
+    "issues",
+  ].includes(state.viewMode);
 
   const [tagsExpanded, setTagsExpanded] = useState(() => {
     try {
@@ -118,28 +154,43 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     () => filterTagsByQuery(state.tags, tagSearchQuery),
     [state.tags, tagSearchQuery],
   );
-  const [deleteTagTarget, setDeleteTagTarget] = useState<DeleteTagTarget | null>(null);
-  const [tagColorPopover, setTagColorPopover] = useState<TagColorTarget | null>(null);
-  const [desktopKnowledgeTreeMode, setDesktopKnowledgeTreeMode] = useState<DesktopKnowledgeTreeViewMode>(
-    () => loadDesktopKnowledgeTreeViewMode(),
+  const [deleteTagTarget, setDeleteTagTarget] =
+    useState<DeleteTagTarget | null>(null);
+  const [tagColorPopover, setTagColorPopover] = useState<TagColorTarget | null>(
+    null,
   );
+  const [desktopKnowledgeTreeMode, setDesktopKnowledgeTreeMode] =
+    useState<DesktopKnowledgeTreeViewMode>(() =>
+      loadDesktopKnowledgeTreeViewMode(),
+    );
 
   useEffect(() => {
-    const syncMode = () => setDesktopKnowledgeTreeMode(loadDesktopKnowledgeTreeViewMode());
+    const syncMode = () =>
+      setDesktopKnowledgeTreeMode(loadDesktopKnowledgeTreeViewMode());
     const syncStorage = (event: StorageEvent) => {
-      if (event.key === DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_STORAGE_KEY) syncMode();
+      if (event.key === DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_STORAGE_KEY)
+        syncMode();
     };
-    window.addEventListener(DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_CHANGED_EVENT, syncMode);
+    window.addEventListener(
+      DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_CHANGED_EVENT,
+      syncMode,
+    );
     window.addEventListener("storage", syncStorage);
     return () => {
-      window.removeEventListener(DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_CHANGED_EVENT, syncMode);
+      window.removeEventListener(
+        DESKTOP_KNOWLEDGE_TREE_VIEW_MODE_CHANGED_EVENT,
+        syncMode,
+      );
       window.removeEventListener("storage", syncStorage);
     };
   }, []);
 
   const refreshSidebarData = useCallback(async () => {
     try {
-      const [notebooks, tags] = await Promise.all([api.getNotebooks(), api.getTags()]);
+      const [notebooks, tags] = await Promise.all([
+        api.getNotebooks(),
+        api.getTags(),
+      ]);
       actions.setNotebooks(notebooks);
       actions.setTags(tags);
     } catch (error) {
@@ -168,11 +219,17 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const focusKnowledgeTree = () => {
       const root = rootRef.current;
       if (!root || root.getClientRects().length === 0) return;
-      requestAnimationFrame(() => window.dispatchEvent(new Event(FOCUS_KNOWLEDGE_TREE_EVENT)));
+      requestAnimationFrame(() =>
+        window.dispatchEvent(new Event(FOCUS_KNOWLEDGE_TREE_EVENT)),
+      );
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return;
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === "k") {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         focusKnowledgeTree();
       }
@@ -185,14 +242,19 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     };
   }, []);
 
-  useEffect(() => () => {
-    if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
+    },
+    [],
+  );
 
   const toggleTagsExpanded = () => {
     setTagsExpanded((current) => {
       const next = !current;
-      try { localStorage.setItem("nowen-tags-expanded", String(next)); } catch {}
+      try {
+        localStorage.setItem("nowen-tags-expanded", String(next));
+      } catch {}
       return next;
     });
   };
@@ -210,7 +272,9 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
     const isCurrentlyActive = state.selectedTagIds.includes(tagId);
     actions.toggleSelectedTag(tagId);
     actions.setSelectedNotebook(null);
-    const willHaveTags = isCurrentlyActive ? state.selectedTagIds.length > 1 : true;
+    const willHaveTags = isCurrentlyActive
+      ? state.selectedTagIds.length > 1
+      : true;
     actions.setViewMode(willHaveTags ? "tag" : "all");
     if (variant === "mobile") actions.setMobileSidebar(false);
   };
@@ -243,92 +307,133 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
       data-sidebar-variant={variant}
     >
       {variant === "desktop" && (
-        <style data-knowledge-tree-scrollbar="">{KNOWLEDGE_TREE_SCROLLBAR_CSS}</style>
+        <style data-knowledge-tree-scrollbar="">
+          {KNOWLEDGE_TREE_SCROLLBAR_CSS}
+        </style>
       )}
 
-      <header
-        className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3"
-        style={{ paddingTop: "calc(var(--safe-area-top) + 12px)" }}
-      >
-        <div className="flex min-w-0 items-center gap-1">
-          {variant === "mobile" && (
-            <button
-              type="button"
-              onClick={() => setMobileControlsCollapsed(!mobileControlsCollapsed)}
-              title={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
-              aria-label={t(mobileControlsCollapsed ? "sidebar.expandMobileControls" : "sidebar.collapseMobileControls")}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
-            >
-              {mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />}
-            </button>
-          )}
-          <span className="min-w-0 truncate text-sm font-semibold">{siteConfig.title || "nowen-note"}</span>
-        </div>
-        {variant === "desktop" && railMode === "hidden" ? (
-          noteWorkspaceActive ? (
-            <div data-note-workspace-layout-anchor="" className="h-8 w-8 shrink-0" />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setRailMode("icon")}
-              title={t("sidebar.railMode.switchTo.icon")}
-              aria-label={t("sidebar.railMode.switchTo.icon")}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
-            >
-              <PanelLeft size={16} />
-            </button>
-          )
-        ) : variant === "mobile" ? (
-          <div className="flex shrink-0 items-center gap-1">
-            {mobileRailHidden && (
+      {(variant !== "desktop" || railMode === "hidden") && (
+        <header className="flex shrink-0 items-center justify-between border-b border-app-border px-4 py-3">
+          <div className="flex min-w-0 items-center gap-1">
+            {variant === "mobile" && (
               <button
                 type="button"
-                data-mobile-rail-show=""
-                onClick={() => setMobileRailHidden(false)}
-                title={t("sidebar.showMobileRail")}
-                aria-label={t("sidebar.showMobileRail")}
+                onClick={() =>
+                  setMobileControlsCollapsed(!mobileControlsCollapsed)
+                }
+                title={t(
+                  mobileControlsCollapsed
+                    ? "sidebar.expandMobileControls"
+                    : "sidebar.collapseMobileControls",
+                )}
+                aria-label={t(
+                  mobileControlsCollapsed
+                    ? "sidebar.expandMobileControls"
+                    : "sidebar.collapseMobileControls",
+                )}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
+              >
+                {mobileControlsCollapsed ? (
+                  <PanelTopOpen size={16} />
+                ) : (
+                  <PanelTopClose size={16} />
+                )}
+              </button>
+            )}
+          </div>
+          {variant === "desktop" && railMode === "hidden" ? (
+            noteWorkspaceActive ? (
+              <div
+                data-note-workspace-layout-anchor=""
+                className="h-8 w-8 shrink-0"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setRailMode("icon")}
+                title={t("sidebar.railMode.switchTo.icon")}
+                aria-label={t("sidebar.railMode.switchTo.icon")}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
               >
                 <PanelLeft size={16} />
               </button>
-            )}
-            {mobileRailHidden && (
+            )
+          ) : variant === "mobile" ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {mobileRailHidden && (
+                <button
+                  type="button"
+                  data-mobile-rail-show=""
+                  onClick={() => setMobileRailHidden(false)}
+                  title={t("sidebar.showMobileRail")}
+                  aria-label={t("sidebar.showMobileRail")}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
+                >
+                  <PanelLeft size={16} />
+                </button>
+              )}
+              {mobileRailHidden && (
+                <button
+                  type="button"
+                  data-mobile-sidebar-settings=""
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent("nowen:open-settings"),
+                    );
+                    actions.setMobileSidebar(false);
+                  }}
+                  title={t("sidebar.settings")}
+                  aria-label={t("sidebar.settings")}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
+                >
+                  <Settings size={16} />
+                </button>
+              )}
               <button
                 type="button"
-                data-mobile-sidebar-settings=""
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent("nowen:open-settings"));
-                  actions.setMobileSidebar(false);
-                }}
-                title={t("sidebar.settings")}
-                aria-label={t("sidebar.settings")}
+                onClick={() => actions.setMobileSidebar(false)}
+                title={t("common.close")}
+                aria-label={t("common.close")}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
               >
-                <Settings size={16} />
+                <X size={16} />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => actions.setMobileSidebar(false)}
-              title={t("common.close")}
-              aria-label={t("common.close")}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-tx-tertiary transition-colors hover:bg-app-hover hover:text-tx-primary"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ) : null}
-      </header>
+            </div>
+          ) : null}
+        </header>
+      )}
 
       {(variant !== "mobile" || !mobileControlsCollapsed) && (
-        <div className="shrink-0 px-3 py-2">
+        <div
+          className="shrink-0 px-3 py-2"
+          style={
+            variant === "desktop" && railMode !== "hidden"
+              ? {
+                  // 全局标题条已把侧栏顶部下移 28px，不再为红绿灯留 60px。
+                  // 保留安全区 + 8px 微间距，与下方内容视觉节奏一致。
+                  paddingTop: "calc(var(--safe-area-top) + 0px)",
+                  // 与下方"筛选…"输入框左对齐：知识树工具栏容器是 px-2（8px），
+                  // 本容器默认 px-3（12px）会让"我的笔记"框比它偏右 4px。
+                  paddingLeft: "8px",
+                  paddingRight: "8px",
+                }
+              : undefined
+          }
+        >
           <WorkspaceSwitcher />
         </div>
       )}
 
       <section className="flex min-h-0 flex-1 flex-col border-t border-app-border/60">
         {variant === "desktop" && (
-          <div className={cn("shrink-0 px-4 pb-1 pt-2 font-medium", classicText ? "text-[11px] text-tx-tertiary" : "text-xs text-tx-secondary")}>
+          <div
+            className={cn(
+              "shrink-0 px-4 pb-1 pt-2 font-medium",
+              classicText
+                ? "text-[11px] text-tx-tertiary"
+                : "text-xs text-tx-secondary",
+            )}
+          >
             内容
           </div>
         )}
@@ -343,19 +448,54 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
         </div>
       </section>
 
-      {!isMobileLocalMode() && (getCurrentWorkspace() !== "personal" || showNotifications) && <div className="shrink-0 border-t border-app-border px-2 py-2">
-        {getCurrentWorkspace() !== "personal" && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover" onClick={() => { openWorkspaceIssue(null); actions.setViewMode("issues"); actions.setMobileSidebar(false); }}><CircleDot size={15} />{t("sidebar.issues")}</button>}
-        {showNotifications && <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover" onClick={() => { actions.setMobileSidebar(false); window.dispatchEvent(new Event(OPEN_NOTIFICATIONS_EVENT)); }}><Bell size={15} />{t("sidebar.notifications")}</button>}
-      </div>}
+      {!isMobileLocalMode() &&
+        (getCurrentWorkspace() !== "personal" || showNotifications) && (
+          <div className="shrink-0 border-t border-app-border px-2 py-2">
+            {getCurrentWorkspace() !== "personal" && (
+              <button
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover"
+                onClick={() => {
+                  openWorkspaceIssue(null);
+                  actions.setViewMode("issues");
+                  actions.setMobileSidebar(false);
+                }}
+              >
+                <CircleDot size={15} />
+                {t("sidebar.issues")}
+              </button>
+            )}
+            {showNotifications && (
+              <button
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover"
+                onClick={() => {
+                  actions.setMobileSidebar(false);
+                  window.dispatchEvent(new Event(OPEN_NOTIFICATIONS_EVENT));
+                }}
+              >
+                <Bell size={15} />
+                {t("sidebar.notifications")}
+              </button>
+            )}
+          </div>
+        )}
 
       <section className="shrink-0 border-t border-app-border">
         <button
           type="button"
           onClick={toggleTagsExpanded}
-          className={cn("flex w-full items-center gap-2 px-4 py-2 font-medium transition-colors hover:bg-app-hover hover:text-tx-primary", classicText ? "text-xs text-tx-tertiary" : "text-[13px] text-tx-secondary")}
+          className={cn(
+            "flex w-full items-center gap-2 px-4 py-2 font-medium transition-colors hover:bg-app-hover hover:text-tx-primary",
+            classicText
+              ? "text-xs text-tx-tertiary"
+              : "text-[13px] text-tx-secondary",
+          )}
           aria-expanded={tagsExpanded}
         >
-          {tagsExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          {tagsExpanded ? (
+            <ChevronDown size={13} />
+          ) : (
+            <ChevronRight size={13} />
+          )}
           <Tags size={13} />
           <span>{t("sidebar.tags")}</span>
           <span className="ml-auto tabular-nums">{state.tags.length}</span>
@@ -372,14 +512,24 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
             >
               {state.tags.length > 0 && (
                 <div className="px-2 pb-2">
-                  <div role="search" aria-label={t("sidebar.searchTags")} className="flex items-center gap-1.5 rounded-md border border-app-border bg-app-hover/40 px-2 focus-within:border-accent-primary">
-                    <Search size={13} className="shrink-0 text-tx-tertiary" aria-hidden="true" />
+                  <div
+                    role="search"
+                    aria-label={t("sidebar.searchTags")}
+                    className="flex items-center gap-1.5 rounded-md border border-app-border bg-app-hover/40 px-2 focus-within:border-accent-primary"
+                  >
+                    <Search
+                      size={13}
+                      className="shrink-0 text-tx-tertiary"
+                      aria-hidden="true"
+                    />
                     <input
                       type="text"
                       inputMode="search"
                       autoComplete="off"
                       value={tagSearchQuery}
-                      onChange={(event) => setTagSearchQuery(event.target.value)}
+                      onChange={(event) =>
+                        setTagSearchQuery(event.target.value)
+                      }
                       onKeyDown={(event) => {
                         if (event.key === "Escape" && tagSearchQuery) {
                           event.preventDefault();
@@ -406,81 +556,103 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
               )}
               <div className="max-h-[min(35vh,260px)] space-y-0.5 overflow-y-auto px-2 pb-2">
                 {state.tags.length === 0 ? (
-                  <p className="px-2 py-1 text-[10px] text-tx-tertiary">{t("sidebar.noTags")}</p>
+                  <p className="px-2 py-1 text-[10px] text-tx-tertiary">
+                    {t("sidebar.noTags")}
+                  </p>
                 ) : filteredTags.length === 0 ? (
-                  <p role="status" className="px-2 py-1 text-xs text-tx-tertiary">{t("sidebar.noTagMatches")}</p>
-                ) : filteredTags.map((tag) => {
-                  const active = state.selectedTagIds.includes(tag.id);
-                  return (
-                    <div
-                      key={tag.id}
-                      onClick={() => handleTagClick(tag.id)}
-                      onContextMenu={(event) => {
-                        event.preventDefault();
-                        openTagColor({
-                          tagId: tag.id,
-                          tagName: tag.name,
-                          color: tag.color,
-                          x: event.clientX,
-                          y: event.clientY,
-                        });
-                      }}
-                      onTouchStart={(event) => {
-                        const touch = event.touches[0];
-                        if (!touch) return;
-                        tagLongPressFired.current = false;
-                        if (tagLongPressTimer.current) clearTimeout(tagLongPressTimer.current);
-                        tagLongPressTimer.current = setTimeout(() => {
-                          tagLongPressFired.current = true;
+                  <p
+                    role="status"
+                    className="px-2 py-1 text-xs text-tx-tertiary"
+                  >
+                    {t("sidebar.noTagMatches")}
+                  </p>
+                ) : (
+                  filteredTags.map((tag) => {
+                    const active = state.selectedTagIds.includes(tag.id);
+                    return (
+                      <div
+                        key={tag.id}
+                        onClick={() => handleTagClick(tag.id)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
                           openTagColor({
                             tagId: tag.id,
                             tagName: tag.name,
                             color: tag.color,
-                            x: touch.clientX,
-                            y: touch.clientY,
+                            x: event.clientX,
+                            y: event.clientY,
                           });
-                        }, 500);
-                      }}
-                      onTouchMove={() => {
-                        if (!tagLongPressTimer.current) return;
-                        clearTimeout(tagLongPressTimer.current);
-                        tagLongPressTimer.current = null;
-                      }}
-                      onTouchEnd={() => {
-                        if (!tagLongPressTimer.current) return;
-                        clearTimeout(tagLongPressTimer.current);
-                        tagLongPressTimer.current = null;
-                      }}
-                      className={cn(
-                        "group/tag flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
-                        active
-                          ? "bg-app-active text-tx-primary"
-                          : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary",
-                      )}
-                    >
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: tag.color }} />
-                      <span className="min-w-0 flex-1 truncate" title={tag.name}>{tag.name}</span>
-                      <span className="relative flex h-4 w-5 shrink-0 items-center justify-center">
-                        {tag.noteCount !== undefined && tag.noteCount > 0 && (
-                          <span className="absolute inset-0 flex items-center justify-center text-[10px] tabular-nums text-tx-tertiary transition-opacity [@media(hover:hover)]:group-hover/tag:opacity-0">
-                            {tag.noteCount}
-                          </span>
+                        }}
+                        onTouchStart={(event) => {
+                          const touch = event.touches[0];
+                          if (!touch) return;
+                          tagLongPressFired.current = false;
+                          if (tagLongPressTimer.current)
+                            clearTimeout(tagLongPressTimer.current);
+                          tagLongPressTimer.current = setTimeout(() => {
+                            tagLongPressFired.current = true;
+                            openTagColor({
+                              tagId: tag.id,
+                              tagName: tag.name,
+                              color: tag.color,
+                              x: touch.clientX,
+                              y: touch.clientY,
+                            });
+                          }, 500);
+                        }}
+                        onTouchMove={() => {
+                          if (!tagLongPressTimer.current) return;
+                          clearTimeout(tagLongPressTimer.current);
+                          tagLongPressTimer.current = null;
+                        }}
+                        onTouchEnd={() => {
+                          if (!tagLongPressTimer.current) return;
+                          clearTimeout(tagLongPressTimer.current);
+                          tagLongPressTimer.current = null;
+                        }}
+                        className={cn(
+                          "group/tag flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+                          active
+                            ? "bg-app-active text-tx-primary"
+                            : "text-tx-secondary hover:bg-app-hover hover:text-tx-primary",
                         )}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setDeleteTagTarget({ id: tag.id, name: tag.name, color: tag.color });
-                          }}
-                          title={t("common.delete")}
-                          className="absolute inset-0 hidden items-center justify-center text-tx-tertiary transition-colors hover:text-accent-danger [@media(hover:hover)]:group-hover/tag:flex"
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        <span
+                          className="min-w-0 flex-1 truncate"
+                          title={tag.name}
                         >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    </div>
-                  );
-                })}
+                          {tag.name}
+                        </span>
+                        <span className="relative flex h-4 w-5 shrink-0 items-center justify-center">
+                          {tag.noteCount !== undefined && tag.noteCount > 0 && (
+                            <span className="absolute inset-0 flex items-center justify-center text-[10px] tabular-nums text-tx-tertiary transition-opacity [@media(hover:hover)]:group-hover/tag:opacity-0">
+                              {tag.noteCount}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDeleteTagTarget({
+                                id: tag.id,
+                                name: tag.name,
+                                color: tag.color,
+                              });
+                            }}
+                            title={t("common.delete")}
+                            className="absolute inset-0 hidden items-center justify-center text-tx-tertiary transition-colors hover:text-accent-danger [@media(hover:hover)]:group-hover/tag:flex"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </motion.div>
           )}
@@ -509,11 +681,20 @@ export default function Sidebar({ variant = "mobile" }: { variant?: "desktop" | 
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-danger/10 text-accent-danger">
                   <Trash2 size={18} />
                 </span>
-                <h4 className="text-base font-bold">{t("sidebar.deleteTagTitle")}</h4>
+                <h4 className="text-base font-bold">
+                  {t("sidebar.deleteTagTitle")}
+                </h4>
               </div>
               <p className="mb-5 flex items-center gap-2 pl-[52px] text-sm text-tx-secondary">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: deleteTagTarget.color }} />
-                <span>{t("sidebar.confirmDeleteTag", { name: deleteTagTarget.name })}</span>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: deleteTagTarget.color }}
+                />
+                <span>
+                  {t("sidebar.confirmDeleteTag", {
+                    name: deleteTagTarget.name,
+                  })}
+                </span>
               </p>
               <div className="flex justify-end gap-2">
                 <button
