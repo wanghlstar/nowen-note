@@ -105,8 +105,24 @@ import {
   createStaticAssetHeaders,
   isStaticAssetNotModified,
 } from "./lib/static-asset-response";
+import { featureDisabledBody, isFeatureEnabled, SERVER_PROFILE } from "./profile";
 
 const app = new Hono();
+
+/**
+ * W2：按部署 profile 挂载路由（docs/lite-mode-design.md §3，分级见
+ * frontend/src/lib/featureRegistry.ts）。
+ * 完整模式与 app.route 完全一致；lite 下被禁模块不执行业务路由，统一返回
+ * 403 feature_disabled（明确禁用错误，非 500、非误导 404），代码保留不删。
+ */
+function mountFeature(path: string, router: Parameters<typeof app.route>[1], feature: string) {
+  if (isFeatureEnabled(feature)) {
+    app.route(path, router);
+    return;
+  }
+  app.all(path, (c) => c.json(featureDisabledBody(feature), 403));
+  app.all(`${path}/*`, (c) => c.json(featureDisabledBody(feature), 403));
+}
 
 // Preserve legacy route-level error payloads; normalize only uncaught exceptions.
 app.onError(handleUnhandledRequestError);
@@ -195,14 +211,16 @@ app.use("*", compress());
 // 初始化数据库
 getDb();
 seedDatabase();
-try {
-  const recovery = recoverPluginUpdates();
-  if (recovery.recovered > 0 || recovery.disabled > 0) {
-    console.log(`[plugins] 更新恢复完成：recovered=${recovery.recovered}, disabled=${recovery.disabled}`);
+if (isFeatureEnabled("plugins")) {
+  try {
+    const recovery = recoverPluginUpdates();
+    if (recovery.recovered > 0 || recovery.disabled > 0) {
+      console.log(`[plugins] 更新恢复完成：recovered=${recovery.recovered}, disabled=${recovery.disabled}`);
+    }
+  } catch (error) {
+    console.error("[plugins] 更新恢复失败，插件执行服务不会提前启动:", error);
+    throw error;
   }
-} catch (error) {
-  console.error("[plugins] 更新恢复失败，插件执行服务不会提前启动:", error);
-  throw error;
 }
 
 // 提前创建 webhooks / audit_logs 表。
@@ -225,6 +243,8 @@ import { buildIcsForToken } from "./routes/task-calendar";
 
 const icsRateLimitMap = new Map<string, { count: number; resetAt: number }>();
 app.get("/api/calendar/ics/:token", (c) => {
+  // Lite 关闭 tasks：ICS 订阅端点返回明确禁用错误。
+  if (!isFeatureEnabled("tasks")) return c.json(featureDisabledBody("tasks"), 403);
   // 基础限流：每 IP 每分钟 30 次
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const now = Date.now();
@@ -336,7 +356,7 @@ app.use("/api/shared/*/verify", async (c, next) => {
   await next();
 });
 
-app.route("/api/shared", sharedRouter);
+mountFeature("/api/shared", sharedRouter, "sharing");
 
 // 健康检查（无需 JWT）
 // version 字段动态读取根 package.json / ENV，避免常年停在 1.0.0 误导运维。
@@ -375,6 +395,8 @@ app.get("/api/settings", (c) => {
     editor_font_family: "",
     debug_files_query: "false",
     web_ui_enabled: "true",
+    // 部署 profile 下发：前端据此关闭 P1 模块入口（W1，登录前即可用）。
+    profile: SERVER_PROFILE,
   };
   for (const row of rows) {
     result[row.key] = row.value;
@@ -435,12 +457,14 @@ app.get("/api/task-attachments/:id", handleDownloadTaskAttachment);
 // 说说图片下载（同样不走 JWT，授权模型同上）。
 //   注意路径具体：/api/diary/attachments/:id，必须比 diaryRouter（在 JWT 之后挂的
 //   /api/diary/*）注册得**更早**，否则会被 JWT 中间件拦截。
-app.get("/api/diary/attachments/:id", handleDownloadDiaryImage);
+if (isFeatureEnabled("diary")) {
+  app.get("/api/diary/attachments/:id", handleDownloadDiaryImage);
+}
 
 // 高熵 capability token + 可选 HMAC，自身完成鉴权；外部系统不会携带 Nowen JWT。
-app.route("/api/automation/webhooks", automationWebhookRouter);
-app.route("/api/plugin-inbound", pluginInboundRouter);
-app.route("/api/wechat-assistant", createWechatAssistantCallbackRouter());
+mountFeature("/api/automation/webhooks", automationWebhookRouter, "automation");
+mountFeature("/api/plugin-inbound", pluginInboundRouter, "plugins");
+mountFeature("/api/wechat-assistant", createWechatAssistantCallbackRouter(), "plugins");
 
 // JWT 鉴权中间件：保护所有 /api/* 路由（auth 和 health 已在上方注册，不受影响）
 //
@@ -589,7 +613,10 @@ app.use("/api/*", async (c, next) => {
 // API Token scopes + notebook resource scope enforcement.
 // JWT login requests pass through unchanged.
 app.use("/api/*", enforceApiTokenAccess);
-app.use("/api/*", automationEventCaptureMiddleware);
+// Lite 关闭 automation：不安装事件捕获中间件。
+if (isFeatureEnabled("automation")) {
+  app.use("/api/*", automationEventCaptureMiddleware);
+}
 
 // API 路由（受 JWT 保护）
 app.route("/api/knowledge-tree/", knowledgeTreeRouter);
@@ -605,52 +632,54 @@ app.route("/api/sync/v2/blob", syncV2BlobRouter);
 app.route("/api/sync/v2", syncV2Router);
 // 本地同步管理（同步设置 / 冲突中心 / 诊断），仅供 Desktop renderer 通过 localhost 调用。
 app.route("/api/sync/local", syncLocalRouter);
-// Clipper 本地通道：浏览器扩展经 127.0.0.1 保存到本机，无需服务器。
-app.route("/api/local/clipper", clipperLocalRouter);
-app.route("/api/blocks", blocksRouter);
-app.route("/api/tags", tagsRouter);
-app.route("/api/search", searchRouter);
-app.route("/api/tasks", tasksRouter);
-app.route("/api/habits", habitsRouter);
-app.route("/api/export", exportRouter);
-app.route("/api/data-file", dataFileRouter);
-app.route("/api/micloud", micloudRouter);
-app.route("/api/oppocloud", oppoCloudRouter);
-app.route("/api/icloud", icloudRouter);
-app.route("/api/mindmaps", mindmapsRouter);
-app.route("/api/mindmap-folders", mindmapFoldersRouter);
-app.route("/api/sheets", sheetsRouter);
-app.route("/api/diary", diaryRouter);
-app.route("/api/journals", journalsRouter);
-app.route("/api/url-import", urlImportRouter);
-app.route("/api/ai", aiRouter);
-app.route("/api/voice", voiceRouter);
-app.route("/api/plugins/studio", pluginStudioRouter);
-app.route("/api/plugins", pluginsRouter);
-app.route("/api/wechat-assistant", wechatAssistantRouter);
-app.route("/api/wechat-capture", wechatCaptureRouter);
-app.route("/api/plugin-executions", pluginExecutionsRouter);
-app.route("/api/automations", automationsRouter);
-app.route("/api/webhooks", webhooksRouter);
-app.route("/api/task-digest", taskDigestRouter);
-app.route("/api/audit", auditRouter);
-app.route("/api/backups", backupsRouter);
-app.route("/api/email", emailRouter);
-app.route("/api/shares", sharesRouter);
-app.route("/api/workspaces", workspacesRouter);
-app.route("/api/workspace-issues", workspaceIssuesRouter);
-app.route("/api/notifications", notificationsRouter);
-app.route("/api/users", usersRouter);
-app.route("/api/tokens", tokensRouter);
-app.route("/api/user-preferences", userPreferencesRouter);
+  // Clipper 本地通道：浏览器扩展经 127.0.0.1 保存到本机，无需服务器。
+  mountFeature("/api/local/clipper", clipperLocalRouter, "plugins");
+  app.route("/api/blocks", blocksRouter);
+  app.route("/api/tags", tagsRouter);
+  app.route("/api/search", searchRouter);
+  mountFeature("/api/tasks", tasksRouter, "tasks");
+  mountFeature("/api/habits", habitsRouter, "tasks");
+  app.route("/api/export", exportRouter);
+  app.route("/api/data-file", dataFileRouter);
+  mountFeature("/api/micloud", micloudRouter, "importCenter");
+  mountFeature("/api/oppocloud", oppoCloudRouter, "importCenter");
+  mountFeature("/api/icloud", icloudRouter, "importCenter");
+  mountFeature("/api/mindmaps", mindmapsRouter, "mindmap");
+  mountFeature("/api/mindmap-folders", mindmapFoldersRouter, "mindmap");
+  mountFeature("/api/sheets", sheetsRouter, "sheet");
+  mountFeature("/api/diary", diaryRouter, "diary");
+  mountFeature("/api/journals", journalsRouter, "diary");
+  mountFeature("/api/url-import", urlImportRouter, "importCenter");
+  mountFeature("/api/ai", aiRouter, "ai");
+  mountFeature("/api/voice", voiceRouter, "voiceMemo");
+  mountFeature("/api/plugins/studio", pluginStudioRouter, "plugins");
+  mountFeature("/api/plugins", pluginsRouter, "plugins");
+  mountFeature("/api/wechat-assistant", wechatAssistantRouter, "plugins");
+  mountFeature("/api/wechat-capture", wechatCaptureRouter, "plugins");
+  mountFeature("/api/plugin-executions", pluginExecutionsRouter, "plugins");
+  mountFeature("/api/automations", automationsRouter, "automation");
+  mountFeature("/api/webhooks", webhooksRouter, "openApi");
+  mountFeature("/api/task-digest", taskDigestRouter, "tasks");
+  app.route("/api/audit", auditRouter);
+  app.route("/api/backups", backupsRouter);
+  app.route("/api/email", emailRouter);
+  mountFeature("/api/shares", sharesRouter, "sharing");
+  app.route("/api/workspaces", workspacesRouter);
+  app.route("/api/workspace-issues", workspaceIssuesRouter);
+  mountFeature("/api/notifications", notificationsRouter, "sharing");
+  app.route("/api/users", usersRouter);
+  mountFeature("/api/tokens", tokensRouter, "openApi");
+  app.route("/api/user-preferences", userPreferencesRouter);
 
-app.route("/api/settings", settingsRouter);
-app.route("/api/fonts", fontsRouter);
-app.route("/api/attachments", attachmentsRouter);
-app.route("/api/task-attachments", taskAttachmentsRouter);
-// 必须先于 /api/task-reminders 的 /:taskId 路由注册，否则 recent 会被当成任务 ID。
-app.get("/api/task-reminders/recent", (c) => {
-  const userId = c.req.header("X-User-Id");
+  app.route("/api/settings", settingsRouter);
+  app.route("/api/fonts", fontsRouter);
+  app.route("/api/attachments", attachmentsRouter);
+  mountFeature("/api/task-attachments", taskAttachmentsRouter, "tasks");
+  // 必须先于 /api/task-reminders 的 /:taskId 路由注册，否则 recent 会被当成任务 ID。
+  app.get("/api/task-reminders/recent", (c) => {
+    // Lite 关闭 tasks：返回明确禁用错误。
+    if (!isFeatureEnabled("tasks")) return c.json(featureDisabledBody("tasks"), 403);
+    const userId = c.req.header("X-User-Id");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const since = c.req.query("since");
   const sinceMs = since ? Number(since) : 0;
@@ -660,29 +689,31 @@ app.get("/api/task-reminders/recent", (c) => {
   return c.json({ reminders: mine });
 });
 app.post("/api/task-reminders/recent/ack", async (c) => {
+  // Lite 关闭 tasks：返回明确禁用错误。
+  if (!isFeatureEnabled("tasks")) return c.json(featureDisabledBody("tasks"), 403);
   const userId = c.req.header("X-User-Id");
   if (!userId) return c.json({ error: "Unauthorized" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const ids = new Set(
-    (Array.isArray(body?.reminderIds) ? body.reminderIds : [])
+    (Array.isArray(body?.reminderIds) ? body?.reminderIds : [])
       .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
       .slice(0, 200),
   );
   let acked = 0;
-  for (let i = recentReminders.length - 1; i >= 0; i -= 1) {
+  for (let i = recentReminders.length - 1; i >= 0; i--) {
     const item = recentReminders[i];
     if (item.userId !== userId || !ids.has(item.reminderId)) continue;
     if (item.type === "task_reminder") markReminderNotified(item.reminderId);
     recentReminders.splice(i, 1);
-    acked += 1;
+    acked++;
   }
   return c.json({ success: true, acked });
 });
-app.route("/api/task-reminders", taskRemindersRouter);
-app.route("/api/task-projects", taskProjectsRouter);
-app.route("/api/task-templates", taskTemplatesRouter);
-app.route("/api/task-dependencies", taskDependenciesRouter);
-app.route("/api/task-calendar", taskCalendarRouter);
+mountFeature("/api/task-reminders", taskRemindersRouter, "tasks");
+mountFeature("/api/task-projects", taskProjectsRouter, "tasks");
+mountFeature("/api/task-templates", taskTemplatesRouter, "tasks");
+mountFeature("/api/task-dependencies", taskDependenciesRouter, "tasks");
+mountFeature("/api/task-calendar", taskCalendarRouter, "tasks");
 app.route("/api/folder-sync", folderSyncRouter);
 app.route("/api/attachment-folders", attachmentFoldersRouter);
 app.route("/api/files", filesRouter);
@@ -699,6 +730,8 @@ const RECENT_TTL = 5 * 60 * 1000;
 
 let lastReminderScan = 0;
 setInterval(() => {
+  // Lite 关闭 tasks 且 automation：提醒/通知扫描整体不执行。
+  if (!isFeatureEnabled("tasks") && !isFeatureEnabled("automation")) return;
   const now = Date.now();
   if (now - lastReminderScan < 30000) return;
   lastReminderScan = now;
@@ -763,14 +796,16 @@ app.get("/api/me", (c) => {
 });
 
 // Phase 2: 实时协作调试端点（仅开发期使用，不暴露敏感信息）
-app.get("/api/realtime/stats", (c) => {
-  return c.json(getRealtimeStats());
-});
+if (isFeatureEnabled("collab")) {
+  app.get("/api/realtime/stats", (c) => {
+    return c.json(getRealtimeStats());
+  });
 
-// Phase 3: Y.js CRDT 调试端点
-app.get("/api/yjs/stats", (c) => {
-  return c.json(getYjsStats());
-});
+  // Phase 3: Y.js CRDT 调试端点
+  app.get("/api/yjs/stats", (c) => {
+    return c.json(getYjsStats());
+  });
+}
 
 const port = Number(process.env.PORT) || 3001;
 
@@ -924,42 +959,47 @@ try {
 //   - 加载成功后若 note_embeddings 已有数据但 vec 表是空（升级场景）→ 自动 reindex
 //   - startEmbeddingWorker：完全异步、不阻塞主流程
 //   - 进程退出时由 gracefulShutdown 调 stopEmbeddingWorker 清理 timer
-try {
-  const vecInit = initVecStore();
-  if (vecInit.loaded && isVecAvailable()) {
-    // 检查是否需要冷启动重建（vec 表为空但 note_embeddings 非空）
-    try {
-      const db = getDb();
-      const vecCount = (db.prepare("SELECT COUNT(*) as c FROM vec_note_chunks").get() as { c: number }).c;
-      const embCount = (db.prepare("SELECT COUNT(*) as c FROM note_embeddings").get() as { c: number }).c;
-      if (vecCount === 0 && embCount > 0) {
-        console.log(`[init] vec_note_chunks empty but ${embCount} embeddings present, reindexing...`);
-        const r = reindexAllVectors();
-        console.log(`[init] reindex done: ${r.written}/${r.total} rows, dim=${r.dim}`);
+// Lite 关闭 ai：向量索引与 embedding worker 不启动。
+if (isFeatureEnabled("ai")) {
+  try {
+    const vecInit = initVecStore();
+    if (vecInit.loaded && isVecAvailable()) {
+      // 检查是否需要冷启动重建（vec 表为空但 note_embeddings 非空）
+      try {
+        const db = getDb();
+        const vecCount = (db.prepare("SELECT COUNT(*) as c FROM vec_note_chunks").get() as { c: number }).c;
+        const embCount = (db.prepare("SELECT COUNT(*) as c FROM note_embeddings").get() as { c: number }).c;
+        if (vecCount === 0 && embCount > 0) {
+          console.log(`[init] vec_note_chunks empty but ${embCount} embeddings present, reindexing...`);
+          const r = reindexAllVectors();
+          console.log(`[init] reindex done: ${r.written}/${r.total} rows, dim=${r.dim}`);
+        }
+      } catch (e) {
+        console.warn("[init] vec cold-start reindex check failed:", e);
       }
-    } catch (e) {
-      console.warn("[init] vec cold-start reindex check failed:", e);
     }
+  } catch (e) {
+    console.warn("[init] initVecStore failed:", e);
   }
-} catch (e) {
-  console.warn("[init] initVecStore failed:", e);
+
+  try {
+    startEmbeddingWorker();
+  } catch (e) {
+    console.warn("[init] startEmbeddingWorker failed:", e);
+  }
 }
 
-try {
-  startEmbeddingWorker();
-} catch (e) {
-  console.warn("[init] startEmbeddingWorker failed:", e);
-}
-
-try {
-  automationRuntime.start();
-} catch (e) {
-  console.warn("[init] automation runtime failed:", e);
+if (isFeatureEnabled("automation")) {
+  try {
+    automationRuntime.start();
+  } catch (e) {
+    console.warn("[init] automation runtime failed:", e);
+  }
 }
 
 // 每分钟检查早晚任务简报。数据库 UNIQUE 约束避免多次投递。
 // 持续推送需要常驻后端，桌面进程关闭时不会运行。
-const taskDigestTimer = process.env.NODE_ENV === "test" ? null : setInterval(() => {
+const taskDigestTimer = (!isFeatureEnabled("tasks") || process.env.NODE_ENV === "test") ? null : setInterval(() => {
   try { dispatchScheduledTaskDigests(); }
   catch (error) { console.error("[task-digest] scan failed:", error); }
 }, 60_000);
@@ -968,10 +1008,12 @@ taskDigestTimer?.unref();
 //   - CALENDAR_EXPORT_TIMER_DISABLED=1 可关闭
 //   - NODE_ENV=test 时不启动
 //   - 延迟 15 秒后执行第一轮，不阻塞启动流程
-try {
-  startCalendarExportScheduler();
-} catch (e) {
-  console.warn("[init] startCalendarExportScheduler failed:", e);
+if (isFeatureEnabled("tasks")) {
+  try {
+    startCalendarExportScheduler();
+  } catch (e) {
+    console.warn("[init] startCalendarExportScheduler failed:", e);
+  }
 }
 
 console.log(`🚀 nowen-note API running on http://localhost:${port}`);
@@ -979,8 +1021,12 @@ console.log(`📖 OpenAPI 文档: http://localhost:${port}/api/openapi.json`);
 
 // @hono/node-server 的 serve 返回底层 http.Server；拿到后挂 WebSocket
 const server = serve({ fetch: app.fetch, port });
-// serve() 签名在不同版本返回不同对象；实际运行时是 http.Server
-attachRealtimeServer(server as unknown as import("http").Server);
+// Lite 关闭 collab：不挂 WS 端点（noServer:true，不调用即不注册 upgrade 监听，
+// /ws 自然不可达）；Sync V2 的 HTTP 轮询兜底不受影响。
+if (isFeatureEnabled("collab")) {
+  // serve() 签名在不同版本返回不同对象；实际运行时是 http.Server
+  attachRealtimeServer(server as unknown as import("http").Server);
+}
 
 // ---- Sync V2 运行时接线（Phase 6 + Phase 9）----
 //
@@ -988,9 +1034,12 @@ attachRealtimeServer(server as unknown as import("http").Server);
 if (isLocalFirstSyncV2Enabled()) {
   // Phase 6：把实时通知能力注入 sync 模块。用注入而非直接 import，
   // 是为了让 sync 在没有 WebSocket 的环境（CLI / 测试 / 迁移脚本）里也能工作。
-  setSyncBroadcaster((userId, message) => {
-    broadcastToUser(userId, message as never);
-  });
+  // Lite 关闭 collab：不注入 broadcaster，sync/notify.ts 静默降级为轮询兜底。
+  if (isFeatureEnabled("collab")) {
+    setSyncBroadcaster((userId, message) => {
+      broadcastToUser(userId, message as never);
+    });
+  }
 
   // 崩溃恢复：上次进程若在抑制窗口或上传中途被强杀，
   // 开关会卡在 1、附件会卡在 uploading，之后永远不再同步。
@@ -1011,7 +1060,9 @@ if (isLocalFirstSyncV2Enabled()) {
     console.warn("[sync-v2] startup recovery skipped:", (error as Error)?.message || error);
   }
 }
-console.log(`🛰  WebSocket endpoint: ws://localhost:${port}/ws`);
+if (isFeatureEnabled("collab")) {
+  console.log(`🛰  WebSocket endpoint: ws://localhost:${port}/ws`);
+}
 
 // mDNS 广播：让同局域网内的桌面/移动客户端免输入发现本实例。
 //   - 仅在"对外暴露的端口"上广播才有意义（127.0.0.1 绑定的 Electron 内嵌后端

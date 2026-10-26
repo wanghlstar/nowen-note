@@ -10,6 +10,56 @@ const rootPkg = JSON.parse(
 ) as { version?: string }
 const APP_VERSION = rootPkg.version || "0.0.0"
 
+// W3 构建开关（docs/lite-mode-design.md §1）：VITE_LITE=1 时把 P1 组件/依赖入口
+// alias 到禁用壳，P1 组件树与专属依赖（lunar-javascript、mammoth/docx worker 等）
+// 不进入产物。运行期 featureRegistry 门此时同样默认 lite（双保险）；
+// 完整模式（默认）不注册这些 alias，行为零变化。
+// 清单来源：frontend/src/lib/featureRegistry.ts 的 chunks/nav/dependencies 字段。
+const COMPONENT_STUB = path.resolve(__dirname, "./src/components/LiteDisabledFeature.tsx")
+const MODULE_STUB = path.resolve(__dirname, "./src/lib/liteFeatureStubs.ts")
+const MODULE_STUB_SPECIFIERS = new Set(["y-codemirror.next", "@/lib/wordNoteService"])
+const exactAlias = (find: string, replacement: string) => ({
+  find: new RegExp(`^${find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+  replacement,
+})
+const LITE_FEATURE_ALIASES = process.env.VITE_LITE === "1" || process.env.VITE_LITE === "true"
+  ? [
+      // P1 主模块组件入口（App.tsx / main.tsx / SettingsModal.tsx 的 @ 规格引用）
+      "@/components/AIChatPanel",
+      "@/components/AISettingsPanel",
+      "@/components/TaskCenter",
+      "@/components/MindMapEditor",
+      "@/components/DiaryCenter",
+      "@/components/ShareManagementPage",
+      "@/components/SharedNoteView",
+      "@/components/NotebookShareJoinView",
+      "@/components/PublicNotebookView",
+      "@/components/SheetEditor",
+      "@/components/SheetGrid",
+      "@/components/VoiceRecorderSheet",
+      "@/components/FloatingLayerHost",
+      // importCenter：DataManager 内的多源导入组件（@ 规格引用）
+      "@/components/MiCloudImport",
+      "@/components/OppoCloudImport",
+      "@/components/iCloudImport",
+      "@/components/YoudaoImport",
+      "@/components/ObsidianImport",
+      "@/components/YuqueFileImport",
+      "@/components/WeChatFavoritesImport",
+      "@/components/UrlImport",
+      // importCenter：Word 导入服务（动态 import 规格引用，内含 mammoth + docx worker）
+      "@/lib/wordNoteService",
+      // collab：y-codemirror.next 静态 import 于 P0 文件 MarkdownEditorImpl，
+      // 只能整包替换（lite 下 collabEnabled 恒 false，替身不会被调用）。
+      "y-codemirror.next",
+    ].map((specifier) =>
+      exactAlias(
+        specifier,
+        MODULE_STUB_SPECIFIERS.has(specifier) ? MODULE_STUB : COMPONENT_STUB,
+      ),
+    )
+  : []
+
 export default defineConfig({
   // Electron 远端/API-only 模式会直接加载打包后的 frontend/dist/index.html。
   // 使用相对 base，确保 file:// 下 /assets 不会解析到磁盘根目录。
@@ -21,7 +71,10 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   resolve: {
+    // LITE_FEATURE_ALIASES 必须前置于基础 alias：Vite 按数组顺序首个命中生效，
+    // lite 构建下 P1 入口先命中禁用壳（完整模式数组为空，行为零变化）。
     alias: [
+      ...LITE_FEATURE_ALIASES,
       // Issue #512：内容树快捷“+”统一选择富文本、Markdown 或文件夹。
       // Runtime 壳通过相对路径加载原面板，避免精确别名递归。
       {

@@ -14,8 +14,13 @@ import {
   type LocalizationScopeInput,
 } from "../services/remote-image-localization";
 import wechatFavoritesImportRouter from "./wechat-favorites-import";
+import { featureGuard } from "../profile";
 
 const router = new Hono();
+
+// MIXED（W2）：远程图片本地化与微信收藏包导入均属 importCenter，
+// lite 下整个子路由返回 403 feature_disabled（P0 附件主链路不受影响）。
+router.use("*", featureGuard("importCenter"));
 
 async function readJsonBody(c: Context): Promise<Record<string, unknown> | null> {
   try {

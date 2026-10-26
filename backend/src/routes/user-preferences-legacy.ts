@@ -10,6 +10,7 @@ import {
   setGuardedUserAISettings,
   setUserAISettings,
 } from "../services/user-ai-settings";
+import { featureGuard } from "../profile";
 
 type MarkdownViewMode = "source" | "preview" | "split";
 type RemoteImagePasteMode = "localize" | "ask" | "keep-remote";
@@ -305,6 +306,12 @@ const requireAIProfileUser = async (c: any, next: () => Promise<void>) => {
   if (!c.req.header("X-User-Id")) return c.json({ error: "Unauthorized" }, 401);
   await next();
 };
+
+// MIXED（W2）：/ai-profiles* 全部端点属 ai，lite 下返回 403 feature_disabled；
+// 本文件其余偏好端点（P0）不受影响。
+const aiProfileGuard = featureGuard("ai");
+app.use("/ai-profiles", aiProfileGuard);
+app.use("/ai-profiles/*", aiProfileGuard);
 
 app.use("/ai-profiles", requireAIProfileUser);
 app.use("/ai-profiles/*", requireAIProfileUser);

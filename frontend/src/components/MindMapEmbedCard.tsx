@@ -19,6 +19,7 @@ import {
   type MindMapSnapshot,
 } from "@/lib/mindMapSnapshot";
 import { pushMindMapAppPath } from "@/lib/mindMapDeepLink";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import {
   DOCUMENT_MINDMAP_CHANGED_EVENT,
   invalidateDocumentMindMapCache,
@@ -26,7 +27,7 @@ import {
   type DocumentMindMapChangedDetail,
 } from "@/lib/documentMindMapRuntime";
 
-const EmbeddedMindMapEditor = lazy(() => import("./MindMapEditor"));
+const EmbeddedMindMapEditor = lazy(() => import("@/components/MindMapEditor"));
 
 /** A document holds only an ID; the original mind map remains the single source of truth. */
 const MINDMAP_HREF = /^mindmap:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -204,6 +205,8 @@ export default function MindMapEmbedCard({ href }: { href: string }) {
 
   const openEditor = () => {
     if (!map) return;
+    // Lite 关闭 mindmap：嵌入卡片不再提供打开编辑器入口（快照渲染保留）。
+    if (!isFeatureEnabled("mindmap")) return;
     // Route is the source of truth; AppLayout will switch the module and MindMapEditor
     // will select the UUID from /mindmaps/:id. Keep the old event out of this path.
     pushMindMapAppPath(map.id);
@@ -212,6 +215,7 @@ export default function MindMapEmbedCard({ href }: { href: string }) {
 
   const openEmbeddedEditor = () => {
     if (!map || map.canEdit !== true) return;
+    if (!isFeatureEnabled("mindmap")) return;
     setFullscreen(false);
     setEditing(true);
   };

@@ -1282,6 +1282,8 @@ export const api = {
     site_file_public_origin?: string;
     site_file_public_origin_source?: string;
     editor_font_family: string;
+    // 部署 profile：完整模式为 "full"；NOWEN_PROFILE=lite 时为 "lite"（前端关闭 P1 入口）
+    profile?: string;
     // 功能开关（字符串 "true"/"false"，未写过时 DEFAULTS 保证为 "true"）
     feature_personal_export_enabled?: string;
     feature_personal_import_enabled?: string;
@@ -1298,6 +1300,7 @@ export const api = {
         site_file_public_origin: "",
         site_file_public_origin_source: "inherit",
         editor_font_family: "",
+        profile: "full",
         feature_personal_export_enabled: "true",
         feature_personal_import_enabled: "true",
       };

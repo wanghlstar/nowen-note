@@ -67,7 +67,11 @@ describe("startup chunking contract", () => {
 
     expect(main).toContain("<DeferredGlobalFeatureCentersMount />");
     expect(main).toContain('React.lazy(() => import("./App"))');
-    expect(main).toContain('React.lazy(() => import("./components/PublicNotebookView"))');
+    // W3 后 PublicNotebookView 用 @ 规格（lite alias 才能命中相对导入之外的入口），
+    // 契约不变：仍必须经 React.lazy 延迟加载。
+    expect(main).toMatch(
+      /React\.lazy\(\(\) => import\("(?:@\/components\/|\.\/components\/)PublicNotebookView"\)\)/,
+    );
     for (const staticImport of [
       'import AIProfileSwitcherBridge from "./components/AIProfileSwitcherBridge"',
       'import EmbeddingIndexTaskCopyBridge from "./components/EmbeddingIndexTaskCopyBridge"',

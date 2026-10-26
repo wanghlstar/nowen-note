@@ -49,6 +49,7 @@ import { openTaskDataTransfer } from "@/lib/taskDataTransferBridge";
 import BackupCenter from "./dataManagement/BackupCenter";
 import DataTransferCenter from "./dataManagement/DataTransferCenter";
 import { isMobileLocalMode } from "@/lib/mobileLocalMode";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 // Scope is selected only inside import/export workflows.
 type Scope = "personal" | "workspace";
@@ -972,11 +973,15 @@ export default function DataManager() {
     },
   } as const;
 
-  const importMethodGroups = IMPORT_METHOD_GROUPS.map((group) => ({
-    ...group,
-    ...importGroupCopy[group.id],
-    methods: group.methods.map((id) => ({ id, ...importMethodConfigs[id] })),
-  }));
+  const importMethodGroups = IMPORT_METHOD_GROUPS
+    .map((group) => ({
+      ...group,
+      ...importGroupCopy[group.id],
+      methods: group.methods
+        .filter((id) => isFeatureEnabled("importCenter") || (id !== "url" && group.id !== "migration"))
+        .map((id) => ({ id, ...importMethodConfigs[id] })),
+    }))
+    .filter((group) => group.methods.length > 0);
 
   const getImportMethodClass = (active: boolean): string =>
     active
@@ -1149,7 +1154,7 @@ export default function DataManager() {
               {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>}
           </label>}
-                  <section className="mb-4 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/30 sm:flex-row sm:items-center">
+                  {isFeatureEnabled("tasks") && <section className="mb-4 flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/30 sm:flex-row sm:items-center">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
               <ListTodo size={19} />
@@ -1169,7 +1174,7 @@ export default function DataManager() {
             {t("dataManager.overview.taskAction")}
             <ChevronRight size={14} />
           </button>
-        </section>
+        </section>}
 
         </div>
       )}
@@ -1394,7 +1399,7 @@ export default function DataManager() {
             </div>
 
             <div key={activeImportMethod} className="mt-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-3 sm:p-4">
-              {activeImportMethod === "yuque" && <YuqueFileImport
+              {isFeatureEnabled("importCenter") && activeImportMethod === "yuque" && <YuqueFileImport
                 key={`yuque-${effectiveWorkspaceId}`}
                 workspaceId={effectiveWorkspaceId}
                 workspaceName={scope === "personal" ? t("dataManager.scope.personal") : selectedWorkspaceName}
@@ -2003,9 +2008,9 @@ export default function DataManager() {
                 </div>
               )}
 
-              {!personalImportLocked && activeImportMethod === "url" && <UrlImport />}
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "url" && <UrlImport />}
 
-              {!personalImportLocked && activeImportMethod === "mobile-memo" && (
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "mobile-memo" && (
                 <div>
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {([
@@ -2032,9 +2037,9 @@ export default function DataManager() {
                 </div>
               )}
 
-              {!personalImportLocked && activeImportMethod === "obsidian" && <ObsidianImport />}
-              {!personalImportLocked && activeImportMethod === "wechat-favorites" && <WeChatFavoritesImport />}
-              {!personalImportLocked && activeImportMethod === "youdao" && <YoudaoImport />}
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "obsidian" && <ObsidianImport />}
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "wechat-favorites" && <WeChatFavoritesImport />}
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "youdao" && <YoudaoImport />}
             </div>
           </div>
         </section>

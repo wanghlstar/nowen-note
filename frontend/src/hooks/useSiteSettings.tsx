@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import i18n from "i18next";
 import { api, SERVER_URL_CHANGED_EVENT } from "@/lib/api";
 import { setRuntimePublicWebOrigin } from "@/lib/publicWebOrigin";
+import { setServerFeatureProfile } from "@/lib/featureRegistry";
 import { isMobileLocalMode } from "@/lib/mobileLocalMode";
 
 export interface SiteConfig {
@@ -182,6 +183,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
 
   const loadSiteSettings = useCallback(() => {
     if (isMobileLocalMode()) {
+      // 设备本地模式无服务端，profile 保持完整模式。
+      setServerFeatureProfile("full");
       const config = readMobileLocalConfig();
       applyRuntimePublicOrigin(config);
       setSiteConfig(config);
@@ -193,6 +196,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
     }
 
     api.getSiteSettingsPublic().then(async (data) => {
+      // 部署 profile 下发（NOWEN_PROFILE=lite → 关闭 P1 入口）；完整模式为零变化默认。
+      setServerFeatureProfile(data.profile);
       const config = toSiteConfig(data);
       applyRuntimePublicOrigin(config);
       setSiteConfig(config);
@@ -212,6 +217,8 @@ export function SiteSettingsProvider({ children }: { children: React.ReactNode }
 
       setIsLoaded(true);
     }).catch(() => {
+      // 取不到公开 settings（离线/服务未就绪）时保持完整模式默认，不误伤入口。
+      setServerFeatureProfile("full");
       applyRuntimePublicOrigin(DEFAULT_CONFIG);
       applyToDOM(DEFAULT_CONFIG.title, DEFAULT_CONFIG.favicon);
       applyEditorFont("");

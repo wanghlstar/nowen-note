@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { isFeatureEnabled } from "../profile";
 import { getDb } from "../db/schema";
 import { getUserWorkspaceRole } from "../middleware/acl";
 import { tagsRepository } from "../repositories";
@@ -270,9 +271,13 @@ app.get("/", (c) => {
   const notes = listNotes(userId, workspaceId, c.req.header("X-Folder-Unlock-Tokens"));
   const notebooks = listNotebooks(userId, workspaceId);
   const tags = tagsRepository.listByUser(userId, workspaceId, false);
-  const sharedNoteIds = (db.prepare(
-    "SELECT DISTINCT noteId FROM shares WHERE ownerId = ? AND isActive = 1 ORDER BY noteId ASC",
-  ).all(userId) as Array<{ noteId: string }>).map((row) => row.noteId);
+  // MIXED（W2）：sharedNoteIds/sharedNotebooks 属 sharing，lite 不下发该字段。
+  const sharingEnabled = isFeatureEnabled("sharing");
+  const sharedNoteIds = sharingEnabled
+    ? (db.prepare(
+        "SELECT DISTINCT noteId FROM shares WHERE ownerId = ? AND isActive = 1 ORDER BY noteId ASC",
+      ).all(userId) as Array<{ noteId: string }>).map((row) => row.noteId)
+    : [];
 
   c.header("Cache-Control", "private, no-store");
   c.header("X-Nowen-Mobile-Bootstrap", "1");
@@ -283,8 +288,9 @@ app.get("/", (c) => {
     notes,
     notebooks,
     tags,
-    sharedNoteIds,
-    sharedNotebooks: listSharedNotebooks(userId),
+    ...(sharingEnabled
+      ? { sharedNoteIds, sharedNotebooks: listSharedNotebooks(userId) }
+      : {}),
     preferences: readPreferences(userId),
   });
 });

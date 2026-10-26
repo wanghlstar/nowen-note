@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { App as CapApp } from "@capacitor/app";
 import i18n from "i18next";
 import { api } from "@/lib/api";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { TASK_REMINDER_SYNC_EVENT } from "@/lib/taskNotificationSchedule";
 import {
   cancelAllNativeTaskNotifications,
@@ -67,8 +68,11 @@ export function useReminderNotifier(onOpenTask?: (taskId: string) => void) {
   const nativeSchedulesReadyRef = useRef(false);
   const onOpenTaskRef = useRef(onOpenTask);
   onOpenTaskRef.current = onOpenTask;
+  // Lite 关闭 tasks：提醒运行时整体不注册（后端 /api/task-reminders 亦禁用）。
+  const tasksEnabled = isFeatureEnabled("tasks");
 
   useEffect(() => {
+    if (!tasksEnabled) return;
     let disposed = false;
     let removeActionListener: (() => void) | null = null;
     let appStateHandle: { remove: () => Promise<void> } | null = null;
@@ -246,5 +250,5 @@ export function useReminderNotifier(onOpenTask?: (taskId: string) => void) {
       window.removeEventListener("nowen:workspace-changed", onScheduleChanged);
       window.removeEventListener("nowen:token-changed", resetNativeSchedules);
     };
-  }, []);
+  }, [tasksEnabled]);
 }

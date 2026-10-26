@@ -5,6 +5,7 @@ import type { KnowledgeTreeInlineCreateKind } from "@/lib/knowledgeTreeInlineCre
 import { duplicateKnowledgeTreeNoteAsChild, resolveDuplicableKnowledgeTreeNote } from "@/lib/knowledgeTreeDuplicateAsChild";
 import { revealCreatedKnowledgeTreeNote } from "@/lib/knowledgeTreeCreateVisibility";
 import { toast } from "@/lib/toast";
+import { isFeatureEnabled, type FeatureKey } from "@/lib/featureRegistry";
 
 const KNOWLEDGE_TREE_CHANGED_EVENT = "nowen:knowledge-tree-changed";
 
@@ -13,16 +14,16 @@ const CREATE_MENU_WIDTH = 232;
 const CREATE_ITEMS = [
   { kind: "note", label: "富文本文档", icon: FileText },
   { kind: "markdown", label: "Markdown 文档", icon: FileCode },
-  { kind: "mindmap", label: "思维导图", icon: BrainCircuit },
-  { kind: "sheet", label: "轻量表格", icon: Table2 },
+  { kind: "mindmap", label: "思维导图", icon: BrainCircuit, feature: "mindmap" as FeatureKey },
+  { kind: "sheet", label: "轻量表格", icon: Table2, feature: "sheet" as FeatureKey },
 ] as const;
 const FOLDER_CREATE_ITEM = { kind: "folder", label: "文件夹" } as const;
 
 const IMPORT_ITEMS = [
   { kind: "markdown", label: "导入 Markdown 文件", icon: FileCode },
   { kind: "markdown-zip", label: "导入 Markdown + 附件（ZIP）", icon: FileArchive },
-  { kind: "word", label: "导入 Word 文档", icon: FileType2 },
-  { kind: "wechat", label: "导入公众号文章", icon: Link2 },
+  { kind: "word", label: "导入 Word 文档", icon: FileType2, feature: "importCenter" as FeatureKey },
+  { kind: "wechat", label: "导入公众号文章", icon: Link2, feature: "importCenter" as FeatureKey },
 ] as const;
 
 export interface KnowledgeTreeCreateMenuState {
@@ -147,7 +148,7 @@ export function KnowledgeTreeCreateDropdown({
       style={position || { left: 8, top: 8, width: CREATE_MENU_WIDTH, visibility: "hidden" }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {CREATE_ITEMS.map((item) => {
+      {CREATE_ITEMS.filter((item) => !("feature" in item) || isFeatureEnabled(item.feature)).map((item) => {
         const Icon = item.icon;
         return (
           <button
@@ -199,7 +200,7 @@ export function KnowledgeTreeCreateDropdown({
         </button>
       )}
       <div className="my-1 border-t border-app-border" />
-      {IMPORT_ITEMS.map((item) => {
+      {IMPORT_ITEMS.filter((item) => !("feature" in item) || isFeatureEnabled(item.feature)).map((item) => {
         const Icon = item.icon;
         return (
           <button

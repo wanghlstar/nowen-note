@@ -22,6 +22,7 @@ import VoiceInsertMenu from "@/components/VoiceInsertMenu";
 import VoiceMemoBlock from "@/components/VoiceMemoBlock";
 import { VoiceMemo } from "@/components/VoiceMemoExtension";
 import { requestVoiceMemo } from "@/lib/voiceMemo";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { posToDOMRect, type Content } from "@tiptap/core";
 import { AnimatePresence, motion } from "framer-motion";import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -4744,6 +4745,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
 
   const openVoiceRecorder = useCallback(() => {
     if (!editor || !editor.isEditable || isGuest || noteRef.current.isTrashed) return;
+    if (!isFeatureEnabled("voiceMemo")) return;
     const noteId = noteRef.current.id;
     const anchor = captureEditorInsertAnchor();
     requestVoiceMemo({
@@ -5733,7 +5735,9 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
         <ToolbarButton className="max-md:hidden" onClick={handleVideoUpload} title={t('tiptap.uploadLocalVideo')}>
           <Upload size={iconSize} />
         </ToolbarButton>
+        {isFeatureEnabled("voiceMemo") && (
         <VoiceInsertMenu onUpload={handleAttachmentUpload} onRecord={openVoiceRecorder} recordDisabled={!editable || isGuest || !!note.isTrashed} iconSize={iconSize} />
+        )}
         <ToolbarButton
           onClick={openAttachmentLibrary}
           title={t("tiptap.insertExistingAttachment", { defaultValue: "从文件管理插入" })}
@@ -6944,7 +6948,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
 
       {/* AI Writing Assistant */}
       <AnimatePresence>
-        {showAI && (
+        {showAI && isFeatureEnabled("ai") && (
           <AIWritingAssistant
             selectedText={aiSelectedText}
             // fullText 作为上下文传给 AI（截前 2000 字），同样用 Markdown

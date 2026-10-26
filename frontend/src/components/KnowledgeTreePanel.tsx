@@ -50,6 +50,7 @@ import { useContextMenu } from "@/hooks/useContextMenu";
 import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarControlsCollapsed";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
 import { api } from "@/lib/api";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { getCurrentMindMapAppId, pushMindMapAppPath, subscribeMindMapAppPath } from "@/lib/mindMapDeepLink";
 import { pushSheetAppPath } from "@/lib/sheetDeepLink";
 import { markNewNoteForImmediateEdit } from "@/lib/newNoteImmediateEdit";
@@ -718,7 +719,7 @@ export function KnowledgeTreePanel({
       else await toggle(node);
       return;
     }
-    if (node.resourceType === "mindmap") {
+    if (isFeatureEnabled("mindmap") && node.resourceType === "mindmap") {
       rememberOpened(node.id);
       pushMindMapAppPath(node.resourceId);
       return;
@@ -731,7 +732,7 @@ export function KnowledgeTreePanel({
     }
     if (node.resourceType !== "note") return;
     rememberOpened(node.id);
-    if (node.noteType === "sheet") {
+    if (isFeatureEnabled("sheet") && node.noteType === "sheet") {
       pushSheetAppPath(node.resourceId);
       if (variant === "mobile") actions.setMobileSidebar(false);
       return;
@@ -870,6 +871,7 @@ export function KnowledgeTreePanel({
 
   useEffect(() => {
     if (!importRequest || handledImportRequestRef.current === importRequest.requestId) return;
+    if ((importRequest.kind === "word" || importRequest.kind === "wechat") && !isFeatureEnabled("importCenter")) return;
     const parent = importRequest.parentId
       ? nodes.find((node) => node.id === importRequest.parentId) || null
       : null;
@@ -1016,11 +1018,11 @@ export function KnowledgeTreePanel({
     }
 
     if (snapshot.kind === "mindmap") {
-      pushMindMapAppPath(created.resourceId);
+      if (isFeatureEnabled("mindmap")) pushMindMapAppPath(created.resourceId);
       return;
     }
     if (snapshot.kind === "sheet") {
-      pushSheetAppPath(created.resourceId);
+      if (isFeatureEnabled("sheet")) pushSheetAppPath(created.resourceId);
       return;
     }
 

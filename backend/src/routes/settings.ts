@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { SERVER_PROFILE, featureGuard } from "../profile";
 import { isSystemAdmin } from "../middleware/acl";
 import { invalidateFilesQueryDebugCache } from "./files";
 import { systemSettingsRepository } from "../repositories";
@@ -84,7 +85,8 @@ function readSettings(): Record<string, string> {
   return result;
 }
 
-settings.get("/", (c) => c.json(readSettings()));
+// 公开 settings：附带部署 profile，前端据此关闭 P1 模块入口（登录前即可用）。
+settings.get("/", (c) => c.json({ ...readSettings(), profile: SERVER_PROFILE }));
 
 settings.put("/", async (c) => {
   const body = await c.req.json() as Partial<SiteSettings>;
@@ -159,6 +161,12 @@ settings.put("/", async (c) => {
 // 管理员专用 Docker 在线升级控制面。挂在 settings 路由下可复用现有 JWT 中间件，
 // 子路由自身再叠加 requireAdmin、sudo、同源交互头和速率限制。
 settings.route("/system-update", systemUpdateRouter);
+// MIXED（W2）：round-trip 导入批次/权限迁移属 importCenter，lite 下返回 403。
+const importCenterGuard = featureGuard("importCenter");
+settings.use("/import-batches", importCenterGuard);
+settings.use("/import-batches/*", importCenterGuard);
+settings.use("/roundtrip-permissions", importCenterGuard);
+settings.use("/roundtrip-permissions/*", importCenterGuard);
 // Round-trip 导入批次报告属于当前登录用户的数据，不要求管理员权限。
 settings.route("/import-batches", importBatchesRouter);
 // 可选工作区成员权限迁移：默认包不包含权限，只有 owner/系统管理员能显式导出和应用映射。

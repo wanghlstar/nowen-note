@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import ContextMenu, { ContextMenuItem } from "@/components/ContextMenu";
 import KnowledgeTreePermissionsDialog from "@/components/KnowledgeTreePermissionsDialog";
 import ShareModal from "@/components/ShareModal";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { buildNoteContextMenuLayout } from "@/components/noteContextMenuLayout";
 import { useContextMenu } from "@/hooks/useContextMenu";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
@@ -3798,6 +3799,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
                 {/* ── P4：批量 AI 操作 ──
                     两颗按钮复用当前 selectedIds；运行中按钮 disabled 并替换为进度文本，
                     避免用户误触发二次请求把额度烧掉。 */}
+                {isFeatureEnabled("ai") && (
                 <button
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
                   onClick={bulkAiGenerateTags}
@@ -3815,6 +3817,8 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
                       : (t('noteList.bulkAiTags') || "AI 标签")}
                   </span>
                 </button>
+                )}
+                {isFeatureEnabled("ai") && (
                 <button
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
                   onClick={bulkAiClassify}
@@ -3834,6 +3838,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
                       : (t('noteList.bulkAiClassify') || "AI 归类")}
                   </span>
                 </button>
+                )}
                 <button
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
                   onClick={() => {
@@ -4146,7 +4151,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
         header={state.notes.find((n) => n.id === menu.targetId)?.title || t('noteList.note')}
       />
 
-      {contextShareNote && (
+      {contextShareNote && isFeatureEnabled("sharing") && (
         <ShareModal
           noteId={contextShareNote.id}
           noteTitle={contextShareNote.title}

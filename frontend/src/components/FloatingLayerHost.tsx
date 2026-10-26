@@ -36,6 +36,7 @@ import {
   type FloatingLayerPosition,
   type UiExtensionLayout,
 } from "@/lib/uiExtensionLayout";
+import { isFeatureEnabled, type FeatureKey } from "@/lib/featureRegistry";
 
 const ICONS: Record<PluginUiIcon, LucideIcon> = {
   home: Home,
@@ -60,6 +61,15 @@ const VIEW_TARGETS: Partial<Record<PluginNavigationTarget, ViewMode>> = {
   shares: "shares",
 };
 
+/** P1 视图目标 → feature 键（lite 下对应浮层入口不可用）。 */
+const VIEW_TARGET_FEATURE: Partial<Record<PluginNavigationTarget, FeatureKey>> = {
+  diary: "diary",
+  tasks: "tasks",
+  mindmaps: "mindmap",
+  "ai-chat": "ai",
+  shares: "sharing",
+};
+
 const POSITION_CLASSES: Record<FloatingLayerPosition, string> = {
   "bottom-left": "bottom-[calc(var(--safe-area-bottom)+1rem)] left-4 flex-row",
   "bottom-center": "bottom-[calc(var(--safe-area-bottom)+1rem)] left-1/2 -translate-x-1/2 flex-row",
@@ -72,6 +82,8 @@ const POSITION_CYCLE: FloatingLayerPosition[] = ["bottom-center", "bottom-right"
 
 export function resolveUiNavigation(target: PluginNavigationTarget): { kind: "settings" } | { kind: "view"; view: ViewMode } | null {
   if (target === "settings") return { kind: "settings" };
+  const feature = VIEW_TARGET_FEATURE[target];
+  if (feature && !isFeatureEnabled(feature)) return null;
   const view = VIEW_TARGETS[target];
   return view ? { kind: "view", view } : null;
 }
@@ -84,6 +96,12 @@ export default function FloatingLayerHost() {
   const [layout, setLayout] = useState<UiExtensionLayout>(() => loadUiExtensionLayout());
 
   const load = useCallback(async () => {
+    if (!isFeatureEnabled("plugins")) {
+      clearPluginUiComponents();
+      setEnabled(false);
+      setComponents([]);
+      return;
+    }
     try {
       const features = await pluginApi.features();
       if (!features.uiExtensions) {

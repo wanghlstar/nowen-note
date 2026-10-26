@@ -1,5 +1,6 @@
 import React from "react";
 
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import AIProfileSwitcherBridge from "./AIProfileSwitcherBridge";
 import EmbeddingIndexTaskCopyBridge from "./EmbeddingIndexTaskCopyBridge";
 import MarkdownExperienceBridge from "./MarkdownExperienceBridge";
@@ -23,25 +24,31 @@ import SiyuanImportProgressBridge from "./SiyuanImportProgressBridge";
  * DOM after it mounts. Keeping them in one asynchronous boundary prevents AI profile management,
  * CodeMirror integration, JSZip, image export, migration, mind-map and backup UI dependencies from
  * joining the login chunk.
+ *
+ * P1 centers are gated by the feature registry (Lite profile): disabled modules mount nothing.
+ * Mapping: AIProfileSwitcher/EmbeddingIndexTaskCopy → ai; MindMapAppearance → mindmap;
+ * TaskDataTransferV2 → tasks; DocxImport/Siyuan/RoundTrip 系列/NoteTransfer/SystemFullData
+ * → importCenter; PublicSpaceLauncher → sharing. MarkdownExperience/BackupWebDav/NoteImageExport
+ * are P0.
  */
 export default function DeferredGlobalFeatureCenters() {
   return (
     <>
-      <AIProfileSwitcherBridge />
-      <EmbeddingIndexTaskCopyBridge />
+      {isFeatureEnabled("ai") && <AIProfileSwitcherBridge />}
+      {isFeatureEnabled("ai") && <EmbeddingIndexTaskCopyBridge />}
       <MarkdownExperienceBridge />
-      <MindMapAppearanceBridge />
-      <TaskDataTransferBridgeV2 />
-      <SystemFullDataTransferBridge />
+      {isFeatureEnabled("mindmap") && <MindMapAppearanceBridge />}
+      {isFeatureEnabled("tasks") && <TaskDataTransferBridgeV2 />}
+      {isFeatureEnabled("importCenter") && <SystemFullDataTransferBridge />}
       <BackupWebDavBridge />
       <NoteImageExportCenter />
-      <DocxImportCenter />
-      <PublicSpaceLauncher />
-      <NoteTransferCenter />
-      <RoundTripImportBatchCenter />
-      <RoundTripPermissionMappingCenter />
-      <RoundTripPermissionExportCenter />
-      <SiyuanImportProgressBridge />
+      {isFeatureEnabled("importCenter") && <DocxImportCenter />}
+      {isFeatureEnabled("sharing") && <PublicSpaceLauncher />}
+      {isFeatureEnabled("importCenter") && <NoteTransferCenter />}
+      {isFeatureEnabled("importCenter") && <RoundTripImportBatchCenter />}
+      {isFeatureEnabled("importCenter") && <RoundTripPermissionMappingCenter />}
+      {isFeatureEnabled("importCenter") && <RoundTripPermissionExportCenter />}
+      {isFeatureEnabled("importCenter") && <SiyuanImportProgressBridge />}
     </>
   );
 }

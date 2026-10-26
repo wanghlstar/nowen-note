@@ -22,6 +22,7 @@ import {
 import { SERVER_ENDPOINT_CHANGED_EVENT } from "@/lib/serverEndpointState";
 import { isAndroidNativeRuntime, isMobileLocalMode } from "@/lib/mobileLocalMode";
 import { isMobileSyncEnabled, MOBILE_SYNC_SETTINGS_CHANGED_EVENT } from "@/lib/mobileSyncStatus";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 type Listener = (payload: any) => void;
 
@@ -83,6 +84,9 @@ class RealtimeClient {
   }
 
   connect() {
+    // Lite 关闭 collab：后端不挂 WS 端点，这里直接拒绝连接（含全部调用方），
+    // 避免向不存在的 /ws 反复重连；Sync V2 的 HTTP 轮询兜底不受影响。
+    if (!isFeatureEnabled("collab")) return;
     if (this.connecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) return;
     const url = this.resolveWsUrl();
     if (!url) return;
