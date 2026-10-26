@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, Sparkles } from "lucide-react";
+import { openAICollaboration } from "@/lib/aiCollaboration";
+import AICollaborationCenter from "@/components/AICollaborationCenter";
 import { useTranslation } from "react-i18next";
 import Sidebar from "@/components/Sidebar";
 import WorkspaceIssues from "@/components/issues/WorkspaceIssues";
@@ -101,6 +103,7 @@ import {
 import SidebarSearchExperienceBridge from "@/components/SidebarSearchExperienceBridge";
 import FloatingLayerHost from "@/components/FloatingLayerHost";
 import { isNativeClientRuntime, stripServerBasePath } from "@/lib/serverUrl";
+import { reportBootStage } from "@/lib/bootSplash";
 import {
   APP_PATH_CHANGED_EVENT,
   replaceAppPathState,
@@ -1059,7 +1062,7 @@ function AppLayout() {
             <NavRail notificationCount={notificationCount} />
           </PhaseAPerfProfiler>
         )}
-        {showSidebar && !mediumNoteWorkspace && (
+        {showSidebar && !mediumNoteWorkspace && !isFilesView && (
           <div
             className="hidden md:flex shrink-0"
             style={{ width: `${state.sidebarWidth}px` }}
@@ -1069,7 +1072,9 @@ function AppLayout() {
             </PhaseAPerfProfiler>
           </div>
         )}
-        {showSidebar && !mediumNoteWorkspace && <SidebarResizeHandle />}
+        {showSidebar && !mediumNoteWorkspace && !isFilesView && (
+          <SidebarResizeHandle />
+        )}
 
         {/* ===== 主内容区 ===== */}
         {state.viewMode === "trash" ? (
@@ -1138,7 +1143,7 @@ function AppLayout() {
             <DiaryCenter />
           </div>
         ) : isFilesView ? (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
             <MobileTopBar />
             <FileManager />
           </div>
@@ -1211,15 +1216,18 @@ function AppLayout() {
         {isFeatureEnabled("sharing") && (
           <CommentManagementCenter onOpenComment={handleOpenComment} />
         )}
-        <NotificationCenter
-          onUnreadChange={setNotificationCount}
-          onOpenComment={handleOpenComment}
-          onOpenIssue={(issueId, workspaceId) => {
-            openWorkspaceIssue(issueId, workspaceId);
-            actions.setViewMode("issues");
-            actions.setMobileSidebar(false);
-          }}
-        />
+        {/* 站内通知：事件源（评论/分享/工作区议题）均属 sharing，lite 下无事件可展示。 */}
+        {isFeatureEnabled("sharing") && (
+          <NotificationCenter
+            onUnreadChange={setNotificationCount}
+            onOpenComment={handleOpenComment}
+            onOpenIssue={(issueId, workspaceId) => {
+              openWorkspaceIssue(issueId, workspaceId);
+              actions.setViewMode("issues");
+              actions.setMobileSidebar(false);
+            }}
+          />
+        )}
 
         {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
         {isFeatureEnabled("plugins") && <FloatingLayerHost />}
@@ -1260,6 +1268,7 @@ function DesktopWindowTitleBar() {
 }
 
 function MobileTopBar() {
+  const { t } = useTranslation();
   const actions = useAppActions();
   const { siteConfig } = useSiteSettings();
   return (
@@ -1273,9 +1282,19 @@ function MobileTopBar() {
       >
         <Menu size={24} />
       </button>
-      <span className="ml-3 text-sm font-semibold text-tx-primary">
+      <span className="ml-3 min-w-0 flex-1 truncate text-sm font-semibold text-tx-primary">
         {siteConfig.title}
       </span>
+      {isFeatureEnabled("ai") && (
+        <button
+          onClick={openAICollaboration}
+          aria-label={t("aiCollaboration.entry")}
+          title={t("aiCollaboration.entry")}
+          className="shrink-0 rounded-lg p-2 text-accent-primary hover:bg-app-hover"
+        >
+          <Sparkles size={18} />
+        </button>
+      )}
     </header>
   );
 }
@@ -1303,6 +1322,7 @@ function AuthGate() {
   const isClientMode = isNativeClientRuntime();
 
   const checkAuth = useCallback(() => {
+    reportBootStage("authentication");
     const token = getAccessToken();
     if (isMobileLocalMode()) {
       setUser(getMobileLocalUser());
@@ -1788,6 +1808,7 @@ function AuthGate() {
   // 已登录
   return (
     <AppProvider>
+      {isFeatureEnabled("ai") && <AICollaborationCenter />}
       {isFeatureEnabled("tasks") && <SidebarSearchExperienceBridge />}
       {user && isFeatureEnabled("plugins") && (
         <WechatClipboardBridge

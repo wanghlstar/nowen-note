@@ -7,7 +7,17 @@ import React, {
 } from "react";
 import EncryptedConversionEditorGuard from "./EncryptedConversionEditorGuard";
 import EncryptedNotePane from "./EncryptedNotePane";
-import { isEncryptedNoteFormat } from "@/lib/encryptedNotes/noteDocument";
+import EncryptedNoteConversionDialog from "./EncryptedNoteConversionDialog";
+import {
+  firstPendingConversion,
+  CONVERSION_PENDING_EVENT,
+} from "@/lib/encryptedNotes/conversionPending";
+import { getOfflineQueueStorageKey } from "@/lib/offlineScope";
+import { Capacitor } from "@capacitor/core";
+import {
+  isEncryptedNoteFormat,
+  sameConversionContent,
+} from "@/lib/encryptedNotes/noteDocument";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   Star,
@@ -49,11 +59,13 @@ import { Button } from "@/components/ui/button";
 import { confirm } from "@/components/ui/confirm";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import TiptapEditor from "@/components/TiptapEditor";
+import NoteReadingPositionBridge from "@/components/NoteReadingPositionBridge";
 import { PhaseAPerfProfiler } from "@/components/PhaseAPerfProfiler";
 import type {
   NoteEditorHeading,
   NoteEditorUpdatePayload,
 } from "@/components/editors/types";
+import PlainTextEditor from "@/components/PlainTextEditor";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import HtmlPreviewPane, {
   isFullHtmlDocument,
@@ -69,6 +81,11 @@ import {
 import { cn } from "@/lib/utils";
 import SyncStatusBadge from "@/components/SyncStatusBadge";
 import { isAndroidNativeRuntime } from "@/lib/mobileLocalMode";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
+import {
+  MOBILE_SYNC_APPLIED_EVENT,
+  type MobileSyncAppliedDetail,
+} from "@/lib/mobileSyncStatus";
 import {
   applyEditorUpdateToNote,
   PREPARE_EDITOR_SPLIT_CLOSE_EVENT,
@@ -82,7 +99,6 @@ import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import { exportNoteAsImage, printNote } from "@/lib/exportService";
 import { subscribeOpenInternalNoteLink } from "@/lib/blockNavigation";
-import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 import { extractFinalAnswer, parseAiTags } from "@/lib/aiOutput";
 
@@ -166,6 +182,8 @@ import {
   type NoteFormatConversionRequest,
 } from "@/lib/noteFormatConversion";
 import NoteThemeMenuSelect from "@/components/NoteThemeMenuSelect";
+import CjkTypographyMenuActions from "@/components/CjkTypographyMenuActions";
+import type { CjkTypographyAction } from "@/lib/cjkTypography";
 import NoteColorMarkPicker from "@/components/NoteColorMarkPicker";
 import type { NoteColorMark } from "@/types";
 import MindMapEmbedInsertDialog from "@/components/MindMapEmbedInsertDialog";
@@ -194,13 +212,74 @@ interface EditorPaneProps {
 }
 
 export default function EditorPane(props: EditorPaneProps) {
+  return (
+    <ConversionAwareEditorPane key={getOfflineQueueStorageKey()} {...props} />
+  );
+}
+
+function ConversionAwareEditorPane(props: EditorPaneProps) {
   const { state } = useApp();
+  const { t } = useTranslation();
+  const [conversion, setConversion] = useState<{
+    id: string;
+    note?: Note;
+    storageFailed?: boolean;
+  } | null>(() => {
+    try {
+      const pending = firstPendingConversion();
+      return pending ? { id: pending.noteId } : null;
+    } catch {
+      return { id: "", storageFailed: true };
+    }
+  });
+  useEffect(() => {
+    const resume = () => {
+      try {
+        const pending = firstPendingConversion();
+        if (pending)
+          setConversion((current) =>
+            current?.id === pending.noteId
+              ? { id: pending.noteId }
+              : (current ?? { id: pending.noteId }),
+          );
+      } catch {
+        setConversion({ id: "", storageFailed: true });
+      }
+    };
+    window.addEventListener(CONVERSION_PENDING_EVENT, resume);
+    return () => window.removeEventListener(CONVERSION_PENDING_EVENT, resume);
+  }, []);
+  if (conversion?.storageFailed)
+    return (
+      <p role="alert" className="p-6 text-sm text-red-500">
+        {t("encryptedConversion.errors.storage_failed")}
+      </p>
+    );
+  if (conversion)
+    return (
+      <EncryptedNoteConversionDialog
+        key={conversion.id}
+        noteId={conversion.id}
+        note={conversion.note}
+        onClose={() => setConversion(null)}
+      />
+    );
   return state.activeNote &&
     isEncryptedNoteFormat(state.activeNote.contentFormat) ? (
     <EncryptedNotePane key={state.activeNote.id} note={state.activeNote} />
   ) : (
-    <EncryptedConversionEditorGuard noteId={state.activeNote?.id ?? null}>
-      <OrdinaryEditorPane {...props} />
+    <EncryptedConversionEditorGuard
+      key={
+        state.activeNote
+          ? `${state.activeNote.id}:${state.activeNote.contentFormat}`
+          : "empty"
+      }
+      noteId={state.activeNote?.id ?? null}
+    >
+      <OrdinaryEditorPane
+        {...props}
+        onEncryptNote={(note) => setConversion({ id: note.id, note })}
+      />
     </EncryptedConversionEditorGuard>
   );
 }
@@ -208,7 +287,8 @@ export default function EditorPane(props: EditorPaneProps) {
 function OrdinaryEditorPane({
   canSplitDocument = false,
   onSplitDocument,
-}: EditorPaneProps) {
+  onEncryptNote,
+}: EditorPaneProps & { onEncryptNote: (note: Note) => void }) {
   const { state } = useApp();
   const actions = useAppActions();
   useEffect(() => {
@@ -395,14 +475,20 @@ function OrdinaryEditorPane({
   // Waiting for a useEffect causes one Tiptap mount (and unauthorized <img> requests)
   // before the preview takes over.
   const [htmlPreviewMode, setHtmlPreviewMode] = useState(
-    () => !!activeNote && detectFormat(activeNote.content) === "html",
+    () =>
+      !!activeNote &&
+      activeNote.contentFormat !== "plaintext" &&
+      detectFormat(activeNote.content) === "html",
   );
   const previewInitializedNoteIdRef = useRef(activeNote?.id);
   const isPendingHtmlNoteSwitch =
     previewInitializedNoteIdRef.current !== activeNote?.id &&
     !!activeNote &&
+    activeNote.contentFormat !== "plaintext" &&
     detectFormat(activeNote.content) === "html";
-  const shouldRenderHtmlPreview = htmlPreviewMode || isPendingHtmlNoteSwitch;
+  const shouldRenderHtmlPreview =
+    activeNote?.contentFormat !== "plaintext" &&
+    (htmlPreviewMode || isPendingHtmlNoteSwitch);
   const [showHtmlEditWarning, setShowHtmlEditWarning] = useState(false);
   // 记住当前笔记的原始格式是否为 HTML。
   // 切换到编辑模式后，内容会被 normalize 为 Markdown，此时 detectFormat 返回 "md"。
@@ -831,6 +917,9 @@ function OrdinaryEditorPane({
         saveDraft({
           noteId: note.id,
           editorMode: editorModeRef.current,
+          ...(note.contentFormat === "plaintext"
+            ? { contentFormat: "plaintext" as const }
+            : {}),
           content: snap.content,
           contentText: snap.contentText || "",
           title: note.title,
@@ -893,6 +982,7 @@ function OrdinaryEditorPane({
       if (
         !initialNote ||
         initialNote.id !== noteId ||
+        initialNote.contentFormat === "plaintext" ||
         modeSwitchInflightRef.current
       )
         return;
@@ -1363,6 +1453,9 @@ function OrdinaryEditorPane({
       saveDraft({
         noteId: current.id,
         editorMode: editorModeRef.current,
+        ...(current.contentFormat === "plaintext"
+          ? { contentFormat: "plaintext" as const }
+          : {}),
         content: snapshot.content,
         contentText: snapshot.contentText,
         title,
@@ -1538,6 +1631,22 @@ function OrdinaryEditorPane({
     }
   }
 
+  useEffect(() => {
+    const applied = (event: Event) => {
+      const cur = activeNoteRef.current;
+      const detail = (event as CustomEvent<MobileSyncAppliedDetail>).detail;
+      if (!cur || !detail) return;
+      if (detail.deletedNoteIds.includes(cur.id))
+        setRemoteDelete({ trashed: false });
+      else if (detail.noteIds.includes(cur.id))
+        void checkActiveNoteRemoteVersion("native-sync");
+    };
+    window.addEventListener(MOBILE_SYNC_APPLIED_EVENT, applied);
+    return () => window.removeEventListener(MOBILE_SYNC_APPLIED_EVENT, applied);
+    // The handler reads current note/editor state through existing refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const {
     presenceUsers,
     isConnected,
@@ -1648,6 +1757,7 @@ function OrdinaryEditorPane({
     !activeNote.isLocked &&
     selfUser &&
     editorMode === "md" &&
+    activeNote.contentFormat !== "plaintext" &&
     !isAndroidNativeRuntime() &&
     !/nowen-encrypted/i.test(activeNote.content || "") &&
     isFeatureEnabled("collab")
@@ -1712,7 +1822,7 @@ function OrdinaryEditorPane({
     if (!activeNote) return;
     previewInitializedNoteIdRef.current = activeNote.id;
     const fmt = detectFormat(activeNote.content);
-    const isHtml = fmt === "html";
+    const isHtml = activeNote.contentFormat !== "plaintext" && fmt === "html";
     const isFullDoc = isHtml && isFullHtmlDocument(activeNote.content);
     setHtmlPreviewMode(isHtml);
     setNoteIsHtml(isHtml);
@@ -1921,6 +2031,24 @@ function OrdinaryEditorPane({
     };
   }, [showDesktopMoreMenu]);
 
+  const applyCjkTypography = (action: CjkTypographyAction) => {
+    setShowMobileMenu(false);
+    setShowDesktopMoreMenu(false);
+    // The underlying editor checks read-only again, guarding stale menu state.
+    if (
+      !activeNote ||
+      !canEditActiveNote ||
+      effectiveLocked ||
+      isTrashed ||
+      modeSwitching ||
+      noteIsFullHtmlDoc
+    )
+      return;
+    const applied =
+      editorHandleRef.current?.applyCjkTypography?.(action) === true;
+    if (!applied) toast.info(t("cjkTypography.noChanges"));
+  };
+
   const handleUpdate = useCallback(
     async (data: NoteEditorUpdatePayload) => {
       const currentNote = activeNoteRef.current;
@@ -1983,6 +2111,9 @@ function OrdinaryEditorPane({
           saveDraft({
             noteId: currentNote.id,
             editorMode: editorModeRef.current,
+            ...(currentNote.contentFormat === "plaintext"
+              ? { contentFormat: "plaintext" as const }
+              : {}),
             content: data.content,
             contentText: data.contentText || "",
             title: data.title,
@@ -2103,6 +2234,9 @@ function OrdinaryEditorPane({
                   saveDraft({
                     noteId: currentNote.id,
                     editorMode: editorModeRef.current,
+                    ...(currentNote.contentFormat === "plaintext"
+                      ? { contentFormat: "plaintext" as const }
+                      : {}),
                     content: snap.content,
                     contentText: snap.contentText,
                     title: data.title,
@@ -2384,6 +2518,46 @@ function OrdinaryEditorPane({
       isFavorite: updated.isFavorite,
     });
   }, [activeNote, actions]);
+
+  const beginEncryption = () => {
+    const currentNote = activeNoteRef.current;
+    if (
+      !currentNote ||
+      effectiveLocked ||
+      !canEditActiveNote ||
+      Capacitor.isNativePlatform() ||
+      saveInflightRef.current
+    )
+      return;
+    const snapshot = editorHandleRef.current?.getSnapshot?.();
+    const source = {
+      ...currentNote,
+      content: snapshot?.content ?? currentNote.content,
+      contentText: snapshot?.contentText ?? currentNote.contentText,
+      title: snapshot?.title ?? currentNote.title,
+    };
+    if (
+      !sameConversionContent(
+        source.content,
+        currentNote.content,
+        currentNote.contentFormat,
+      ) ||
+      source.title !== currentNote.title
+    ) {
+      saveDraft({
+        noteId: source.id,
+        editorMode: editorModeRef.current,
+        content: source.content,
+        contentText: source.contentText,
+        title: source.title,
+        baseVersion: source.version,
+        savedAt: Date.now(),
+      });
+    }
+    setShowMobileMenu(false);
+    setShowDesktopMoreMenu(false);
+    onEncryptNote(source);
+  };
 
   const togglePin = useCallback(async () => {
     if (!activeNote || activeNote.isTrashed) return;
@@ -3237,7 +3411,8 @@ function OrdinaryEditorPane({
           {compactMobileEditing ? (
             <div className="flex items-center gap-1">
               <SyncStatusBadge
-                saving={syncStatus === "saving" || syncStatus === "error"}
+                noteId={activeNote.id}
+                saving={syncStatus === "saving"}
               />
               <Button
                 data-mobile-note-menu-trigger
@@ -3389,7 +3564,8 @@ function OrdinaryEditorPane({
               Android 保留轻量文字，未开启同步时不渲染。 */}
               {!compactMobileEditing && (
                 <SyncStatusBadge
-                  saving={syncStatus === "saving" || syncStatus === "error"}
+                  noteId={activeNote.id}
+                  saving={syncStatus === "saving"}
                 />
               )}
               <span
@@ -3470,6 +3646,21 @@ function OrdinaryEditorPane({
                   }}
                 >
                   {/* �ö� / ȡ���ö� */}
+                  {!Capacitor.isNativePlatform() &&
+                    activeNote.contentFormat !== "plaintext" && (
+                      <button
+                        onClick={beginEncryption}
+                        disabled={
+                          effectiveLocked ||
+                          !canEditActiveNote ||
+                          syncStatus === "saving"
+                        }
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary active:bg-app-hover transition-colors disabled:opacity-40"
+                      >
+                        <Lock size={15} className="text-tx-tertiary" />
+                        <span>{t("encryptedConversion.title")}</span>
+                      </button>
+                    )}
                   <button
                     onClick={() => {
                       window.dispatchEvent(
@@ -3601,6 +3792,17 @@ function OrdinaryEditorPane({
                   <NoteThemeMenuSelect
                     noteId={activeNote.id}
                     disabled={!canWriteNote(activeNote)}
+                  />
+                  <CjkTypographyMenuActions
+                    mobile
+                    disabled={
+                      !canEditActiveNote ||
+                      effectiveLocked ||
+                      isTrashed ||
+                      modeSwitching ||
+                      noteIsFullHtmlDoc
+                    }
+                    onAction={applyCjkTypography}
                   />
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* AI ���ɱ��� */}
@@ -4061,64 +4263,68 @@ function OrdinaryEditorPane({
                 }
                 onChange={setNoteColorMark}
               />
-              <button
-                type="button"
-                data-note-format-switch=""
-                disabled={
-                  modeSwitching ||
-                  effectiveLocked ||
-                  noteIsHtml ||
-                  !canWriteNote(activeNote)
-                }
-                onClick={async () => {
-                  const targetFormat =
+              {activeNote.contentFormat === "plaintext" ? (
+                <span className="text-xs text-tx-secondary">TXT</span>
+              ) : (
+                <button
+                  type="button"
+                  data-note-format-switch=""
+                  disabled={
+                    modeSwitching ||
+                    effectiveLocked ||
+                    noteIsHtml ||
+                    !canWriteNote(activeNote)
+                  }
+                  onClick={async () => {
+                    const targetFormat =
+                      activeNote.contentFormat === "markdown"
+                        ? "tiptap-json"
+                        : "markdown";
+                    const targetLabel =
+                      targetFormat === "markdown"
+                        ? t("note.format.markdown")
+                        : t("note.format.richText");
+                    const ok = await confirm({
+                      title: t("note.format.convertTitle", {
+                        target: targetLabel,
+                      }),
+                      description: t("note.format.convertDesc"),
+                      confirmText: t("note.format.convertConfirm"),
+                      cancelText: t("common.cancel", { defaultValue: "取消" }),
+                    });
+                    if (!ok) return;
+                    await convertActiveNoteFormat({
+                      noteId: activeNote.id,
+                      targetFormat,
+                    });
+                  }}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                     activeNote.contentFormat === "markdown"
-                      ? "tiptap-json"
-                      : "markdown";
-                  const targetLabel =
-                    targetFormat === "markdown"
-                      ? t("note.format.markdown")
-                      : t("note.format.richText");
-                  const ok = await confirm({
-                    title: t("note.format.convertTitle", {
-                      target: targetLabel,
-                    }),
-                    description: t("note.format.convertDesc"),
-                    confirmText: t("note.format.convertConfirm"),
-                    cancelText: t("common.cancel", { defaultValue: "取消" }),
-                  });
-                  if (!ok) return;
-                  await convertActiveNoteFormat({
-                    noteId: activeNote.id,
-                    targetFormat,
-                  });
-                }}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-mono font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                  activeNote.contentFormat === "markdown"
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/15"
-                    : "border-app-border bg-app-hover text-tx-tertiary hover:bg-app-active hover:text-tx-secondary",
-                )}
-                title={
-                  activeNote.contentFormat === "markdown"
-                    ? t("note.format.convertToRichText")
-                    : t("note.format.convertToMarkdown")
-                }
-                aria-label={
-                  activeNote.contentFormat === "markdown"
-                    ? t("note.format.convertToRichText")
-                    : t("note.format.convertToMarkdown")
-                }
-              >
-                {activeNote.contentFormat === "markdown" ? (
-                  <FileCode size={11} />
-                ) : (
-                  <FileText size={11} />
-                )}
-                {activeNote.contentFormat === "markdown"
-                  ? t("note.format.markdownShort")
-                  : t("note.format.richTextShort")}
-              </button>
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/15"
+                      : "border-app-border bg-app-hover text-tx-tertiary hover:bg-app-active hover:text-tx-secondary",
+                  )}
+                  title={
+                    activeNote.contentFormat === "markdown"
+                      ? t("note.format.convertToRichText")
+                      : t("note.format.convertToMarkdown")
+                  }
+                  aria-label={
+                    activeNote.contentFormat === "markdown"
+                      ? t("note.format.convertToRichText")
+                      : t("note.format.convertToMarkdown")
+                  }
+                >
+                  {activeNote.contentFormat === "markdown" ? (
+                    <FileCode size={11} />
+                  ) : (
+                    <FileText size={11} />
+                  )}
+                  {activeNote.contentFormat === "markdown"
+                    ? t("note.format.markdownShort")
+                    : t("note.format.richTextShort")}
+                </button>
+              )}
             </div>
 
             {/* Sync Indicator + Grouped Actions */}
@@ -4199,15 +4405,15 @@ function OrdinaryEditorPane({
 
               {/* ���� */}
               {isFeatureEnabled("sharing") && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={() => setShowShareModal(true)}
-                title={t("editor.shareNote")}
-              >
-                <Share2 size={14} className="text-emerald-500" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={() => setShowShareModal(true)}
+                  title={t("editor.shareNote")}
+                >
+                  <Share2 size={14} className="text-emerald-500" />
+                </Button>
               )}
 
               <Button
@@ -4253,46 +4459,46 @@ function OrdinaryEditorPane({
               )}
 
               {isFeatureEnabled("ai") && (
-              <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-violet-500/5 px-1 py-0.5 dark:bg-violet-500/10">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-md"
-                  onClick={handleAITitle}
-                  disabled={
-                    aiTitleLoading || !activeNote.contentText || effectiveLocked
-                  }
-                  title={t("editor.aiGenerateTitle")}
-                >
-                  {aiTitleLoading ? (
-                    <Loader2
-                      size={14}
-                      className="animate-spin text-violet-500"
-                    />
-                  ) : (
-                    <Type size={14} className="text-violet-500" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 rounded-md"
-                  onClick={handleAITags}
-                  disabled={
-                    aiTagsLoading || !activeNote.contentText || effectiveLocked
-                  }
-                  title={t("editor.aiSuggestTags")}
-                >
-                  {aiTagsLoading ? (
-                    <Loader2
-                      size={14}
-                      className="animate-spin text-violet-500"
-                    />
-                  ) : (
-                    <TagIcon size={14} className="text-violet-500" />
-                  )}
-                </Button>
-              </div>
+                <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-violet-500/5 px-1 py-0.5 dark:bg-violet-500/10">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-md"
+                    onClick={handleAITitle}
+                    disabled={
+                      aiTitleLoading || !activeNote.contentText || effectiveLocked
+                    }
+                    title={t("editor.aiGenerateTitle")}
+                  >
+                    {aiTitleLoading ? (
+                      <Loader2
+                        size={14}
+                        className="animate-spin text-violet-500"
+                      />
+                    ) : (
+                      <Type size={14} className="text-violet-500" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-md"
+                    onClick={handleAITags}
+                    disabled={
+                      aiTagsLoading || !activeNote.contentText || effectiveLocked
+                    }
+                    title={t("editor.aiSuggestTags")}
+                  >
+                    {aiTagsLoading ? (
+                      <Loader2
+                        size={14}
+                        className="animate-spin text-violet-500"
+                      />
+                    ) : (
+                      <TagIcon size={14} className="text-violet-500" />
+                    )}
+                  </Button>
+                </div>
               )}
 
               {state.editorFullscreen && (
@@ -4328,29 +4534,30 @@ function OrdinaryEditorPane({
               ��ť���ֿɵ������ CRDT ��δ sync ֻ�� toast ��ִ���л���sync ��ɺ�
               �ٵ㼴��˳���л�����Զ��������"��ť����"����״̬��
           */}
-              {SHOW_EDITOR_MODE_TOGGLE && (
-                <button
-                  onClick={toggleEditorMode}
-                  disabled={modeSwitching}
-                  title={
-                    modeSwitching
-                      ? t("editor.modeSwitch.switching")
-                      : editorMode === "md"
-                        ? t("editor.modeSwitch.toTiptap")
-                        : t("editor.modeSwitch.toMd")
-                  }
-                  className={cn(
-                    "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-mono font-medium transition-colors border",
-                    editorMode === "md"
-                      ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 hover:bg-accent-primary/15"
-                      : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active",
-                    modeSwitching && "opacity-50 cursor-not-allowed",
-                  )}
-                >
-                  <FileCode size={12} />
-                  <span>{editorMode === "md" ? "MD" : "RTE"}</span>
-                </button>
-              )}
+              {SHOW_EDITOR_MODE_TOGGLE &&
+                activeNote.contentFormat !== "plaintext" && (
+                  <button
+                    onClick={toggleEditorMode}
+                    disabled={modeSwitching}
+                    title={
+                      modeSwitching
+                        ? t("editor.modeSwitch.switching")
+                        : editorMode === "md"
+                          ? t("editor.modeSwitch.toTiptap")
+                          : t("editor.modeSwitch.toMd")
+                    }
+                    className={cn(
+                      "flex items-center gap-1 h-7 px-1.5 rounded-md text-[10px] font-mono font-medium transition-colors border",
+                      editorMode === "md"
+                        ? "bg-accent-primary/10 text-accent-primary border-accent-primary/30 hover:bg-accent-primary/15"
+                        : "bg-app-hover text-tx-tertiary border-app-border hover:text-tx-secondary hover:bg-app-active",
+                      modeSwitching && "opacity-50 cursor-not-allowed",
+                    )}
+                  >
+                    <FileCode size={12} />
+                    <span>{editorMode === "md" ? "MD" : "RTE"}</span>
+                  </button>
+                )}
 
               {!state.editorFullscreen && (
                 <Button
@@ -4414,9 +4621,11 @@ function OrdinaryEditorPane({
                       <div className="px-3 py-2 border-b border-app-border">
                         <div className="flex items-center justify-between gap-2 text-[11px] text-tx-tertiary">
                           <span>
-                            {activeNote.contentFormat === "markdown"
-                              ? t("note.format.markdown")
-                              : t("note.format.richText")}
+                            {activeNote.contentFormat === "plaintext"
+                              ? t("note.format.plainText")
+                              : activeNote.contentFormat === "markdown"
+                                ? t("note.format.markdown")
+                                : t("note.format.richText")}
                           </span>
                           {noteIsHtml && (
                             <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-blue-500">
@@ -4426,10 +4635,10 @@ function OrdinaryEditorPane({
                         </div>
                         <div className="mt-1">
                           {isFeatureEnabled("collab") && (
-                          <PresenceBar
-                            users={presenceUsers}
-                            isConnected={isConnected}
-                          />
+                            <PresenceBar
+                              users={presenceUsers}
+                              isConnected={isConnected}
+                            />
                           )}
                         </div>
                       </div>
@@ -4445,6 +4654,21 @@ function OrdinaryEditorPane({
                         <FolderInput size={15} className="text-tx-tertiary" />
                         <span>{t("editor.moveToNotebook")}</span>
                       </button>
+                      {!Capacitor.isNativePlatform() &&
+                        activeNote.contentFormat !== "plaintext" && (
+                          <button
+                            onClick={beginEncryption}
+                            disabled={
+                              effectiveLocked ||
+                              !canEditActiveNote ||
+                              syncStatus === "saving"
+                            }
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover transition-colors disabled:opacity-40"
+                          >
+                            <Lock size={15} className="text-tx-tertiary" />
+                            <span>{t("encryptedConversion.title")}</span>
+                          </button>
+                        )}
                       <button
                         onClick={() => {
                           setShowAttachmentsPanel(true);
@@ -4458,6 +4682,16 @@ function OrdinaryEditorPane({
                       <NoteThemeMenuSelect
                         noteId={activeNote.id}
                         disabled={!canWriteNote(activeNote)}
+                      />
+                      <CjkTypographyMenuActions
+                        disabled={
+                          !canEditActiveNote ||
+                          effectiveLocked ||
+                          isTrashed ||
+                          modeSwitching ||
+                          noteIsFullHtmlDoc
+                        }
+                        onAction={applyCjkTypography}
                       />
                       {canSplitDocument && onSplitDocument && (
                         <button
@@ -4669,7 +4903,19 @@ function OrdinaryEditorPane({
               �ײ㻹�ܴ� console �� [EditorErrorBoundary] ��־�� window.__lastDirtyDoc */}
               <EditorErrorBoundary resetKey={activeNote.id}>
                 {/* 文件夹同步的 PDF / DOCX 笔记默认直接显示原文件，并隐藏内部同步元数据。 */}
-                {isFolderSyncAttachmentNote(activeNote.content) ? (
+                {activeNote.contentFormat === "plaintext" ? (
+                  <PlainTextEditor
+                    key={`txt-${activeNote.id}`}
+                    ref={editorHandleRef}
+                    note={activeNote}
+                    onUpdate={handleUpdate}
+                    onLocalUpdate={handleLocalMirrorUpdate}
+                    onHeadingsChange={setHeadings}
+                    editable={
+                      canEditActiveNote && !effectiveLocked && !modeSwitching
+                    }
+                  />
+                ) : isFolderSyncAttachmentNote(activeNote.content) ? (
                   <FolderSyncAttachmentPreviewPane
                     key={`folder-sync-attachment-${activeNote.id}-${activeNote.version}`}
                     noteId={activeNote.id}
@@ -4754,6 +5000,19 @@ function OrdinaryEditorPane({
                   </PhaseAPerfProfiler>
                 )}
               </EditorErrorBoundary>
+              <NoteReadingPositionBridge
+                noteId={activeNote.id}
+                userId={selfUser?.userId || "local"}
+                mode={
+                  activeNote.contentFormat === "markdown" ||
+                  (!shouldRenderHtmlPreview && editorMode === "md")
+                    ? "markdown"
+                    : shouldRenderHtmlPreview
+                      ? "html"
+                      : "richtext"
+                }
+                paused={noteLoading || modeSwitching}
+              />
               {/*
             UX1/UX2���༭���л��� overlay��
             - ���ڵ�ǰ�༭���Ϸ����赲���� / �Ӿ���ʾ"�л���"��
@@ -5009,7 +5268,6 @@ function OrdinaryEditorPane({
             </AnimatePresence>
 
             {/* AI Mermaid Ԥ������ */}
-            {isFeatureEnabled("mindmap") && (
             <MindMapEmbedInsertDialog
               open={
                 showMindMapInsertDialog &&
@@ -5045,7 +5303,6 @@ function OrdinaryEditorPane({
                 return inserted;
               }}
             />
-            )}
             <AnimatePresence>
               {showMermaidDialog && (
                 <motion.div

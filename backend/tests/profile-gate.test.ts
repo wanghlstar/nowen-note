@@ -68,7 +68,7 @@ test("NOWEN_PROFILE=lite 子进程：P1 关闭、守卫 403、响应体为明确
   runLiteSubprocess(`
     import assert from "node:assert/strict";
     import { Hono } from "hono";
-    import { SERVER_PROFILE, isFeatureEnabled, featureGuard, featureDisabledBody } from "${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}";
+    const { SERVER_PROFILE, isFeatureEnabled, featureGuard, featureDisabledBody } = await import("${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}");
     assert.equal(SERVER_PROFILE, "lite");
     assert.equal(isFeatureEnabled("tasks"), false);
     assert.equal(isFeatureEnabled("notes"), true);
@@ -85,7 +85,7 @@ test("NOWEN_PROFILE=lite 子进程：P1 关闭、守卫 403、响应体为明确
 test("lite 子进程：被禁模块禁用错误体包含 feature 键与错误码", () => {
   runLiteSubprocess(`
     import assert from "node:assert/strict";
-    import { featureDisabledBody } from "${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}";
+    const { featureDisabledBody } = await import("${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}");
     const body = featureDisabledBody("ai");
     assert.equal(body.error, "feature_disabled");
     assert.equal(body.feature, "ai");

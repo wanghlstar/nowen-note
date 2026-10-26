@@ -214,8 +214,8 @@ export function isNativeClientRuntime(): boolean {
     Capacitor?: { isNativePlatform?: () => boolean; platform?: string };
     __TAURI__?: unknown;
   };
-  return window.location.protocol === "file:"
-    || window.location.protocol === "capacitor:"
+  return window.location?.protocol === "file:"
+    || window.location?.protocol === "capacitor:"
     || !!runtime.nowenDesktop?.isDesktop
     || !!runtime.__TAURI__
     || !!runtime.Capacitor?.isNativePlatform?.()
