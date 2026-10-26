@@ -166,11 +166,15 @@ fi
 BRANCH="macos-fix-${TAG}"
 step "切换到 $TAG（本地分支 $BRANCH）"
 clear_git_locks || true
+OLD_HEAD=$(git rev-parse HEAD)
 if git rev-parse -q --verify "refs/heads/$BRANCH" >/dev/null; then
   git checkout "$BRANCH" || die "切换分支失败"
 else
   git checkout -b "$BRANCH" "$TAG" || die "创建分支失败"
 fi
+# tag 上只有上游代码；补丁与升级脚本工具只存在于旧基线，先恢复再重放
+git checkout "$OLD_HEAD" -- patches scripts/apply-macos-fix.sh scripts/upgrade-official.sh \
+  || die "从 $OLD_HEAD 恢复补丁工具失败（确认旧基线含 patches/ 与 scripts/ 下的补丁和升级脚本）"
 
 # ---------- 4. 重放 macOS 修复补丁 ----------
 step "重放 macOS 修复补丁"
