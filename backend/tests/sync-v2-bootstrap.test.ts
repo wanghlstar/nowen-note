@@ -236,6 +236,31 @@ test("reconcile: version 与 updatedAt 差异不算冲突", () => {
 });
 
 // ===========================================================================
+// W0.5 伪冲突回归：远端 snapshot 载荷字段集比本地读取宽
+//
+// routes/sync-v2.ts snapshotPage 返回的是服务端整行（含 userId / workspaceId /
+// updatedAt），而 readLocalState 只取参与同步的列。同 ID 同内容的实体
+// 不得因为这些单边字段被判冲突——否则重新对账时每篇笔记都进冲突中心。
+// ===========================================================================
+
+test("reconcile: 远端载荷多出 userId/workspaceId 不判冲突", () => {
+  const local = { id: "n1", notebookId: "nb1", title: "同", content: "{}" };
+  const plan = reconcile(
+    [{ entityType: "note", entityId: "n1", operation: "upsert", payload: { ...local } }],
+    [{ entityType: "note", entityId: "n1", operation: "upsert", payload: { ...local, userId: "u1", workspaceId: null, updatedAt: "t" } }],
+  );
+  assert.equal(plan.conflicts.length, 0, "传输字段差异不是用户可感知的冲突");
+});
+
+test("reconcile: 字段集差异不掩盖真实内容冲突", () => {
+  const plan = reconcile(
+    [{ entityType: "note", entityId: "n1", operation: "upsert", payload: { title: "本机版本", content: "{}" } }],
+    [{ entityType: "note", entityId: "n1", operation: "upsert", payload: { title: "服务器版本", content: "{}", userId: "u1", workspaceId: null } }],
+  );
+  assert.equal(plan.conflicts.length, 1, "双方都携带的字段出现真实差异仍须判冲突");
+});
+
+// ===========================================================================
 // 本地状态读取
 // ===========================================================================
 
@@ -453,6 +478,45 @@ test("场景: 两边都有数据 → 各自独有的双向同步，同 ID 冲突
   // 本地独有的已上传
   const pushedIds = remote.pushCalls.flat().map((m) => m.entityId);
   assert.ok(pushedIds.includes(nbLocal));
+});
+
+test("场景: 重新对账时同 ID 同内容不得整库判冲突", async () => {
+  resetAll();
+  const ids = seedProfile();
+  const nb = makeNotebook("我的本");
+  makeNote(nb, "同步笔记");
+  const taskId = randomUUID();
+  db().prepare(`
+    INSERT INTO tasks (id, userId, title, workspaceId, createdAt, updatedAt)
+    VALUES (?, ?, '任务', NULL, datetime('now'), datetime('now'))
+  `).run(taskId, USER_ID);
+
+  // 远端载荷形状与 snapshotPage 一致：在本地字段之外多出 userId / workspaceId / updatedAt。
+  const items = (["notebook", "note", "task"] as const).flatMap((entityType) =>
+    readLocalState(db(), USER_ID, entityType).map((item) => ({
+      entityType,
+      entityId: item.entityId,
+      payload: {
+        ...item.payload,
+        userId: USER_ID,
+        workspaceId: null,
+        updatedAt: "2026-10-26 12:00:00",
+      },
+    })),
+  );
+
+  const remote = new FakeRemote();
+  remote.planSequence = 10;
+  remote.snapshotPages.push({
+    snapshotSequence: 10, hasMore: false, nextCursor: null, items,
+  });
+
+  const progress = await run(remote, ids);
+
+  assert.equal(progress.status, "ready");
+  assert.equal(progress.conflicts, 0, "同 ID 同内容不得因载荷字段集差异判冲突");
+  assert.equal(progress.pushed, 0, "两端已一致，无需重新上传");
+  assert.equal(progress.pulled, 0, "两端已一致，无需重新下载");
 });
 
 // ===========================================================================

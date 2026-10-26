@@ -378,8 +378,11 @@ export function isLocalEmpty(db: Database.Database, userId: string): boolean {
 /**
  * 判断两个 payload 是否语义等价。
  *
- * 只比较参与同步的字段，忽略 updatedAt 这类必然不同的时间戳。
- * 相等则说明两端已一致，无需上传也无需判冲突。
+ * 只比较参与同步的字段：updatedAt / version 必然不同，直接忽略；
+ * 只存在于一侧的字段（远端 snapshot 载荷带有的 userId / workspaceId 等
+ * 传输字段，本地读取并不产生）同样不参与——把它们算进比较会让
+ * 同 ID 同内容的实体全部误判冲突（W0.5 伪冲突根因）。
+ * 双方都携带的字段出现真实差异时仍然判冲突，不放过内容分歧。
  */
 function payloadEquals(
   a: Record<string, unknown> | undefined,
@@ -387,9 +390,8 @@ function payloadEquals(
   ignore: string[] = ["updatedAt", "version"],
 ): boolean {
   if (!a || !b) return false;
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const key of keys) {
-    if (ignore.includes(key)) continue;
+  for (const key of Object.keys(a)) {
+    if (ignore.includes(key) || !(key in b)) continue;
     const va = a[key];
     const vb = b[key];
     // null 与 undefined 视为等价：不同来源对"空"的表示可能不同。

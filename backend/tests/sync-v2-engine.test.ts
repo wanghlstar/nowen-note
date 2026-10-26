@@ -465,6 +465,78 @@ test("真实思源导入产生的跨批次变更经服务端应用后最终收�
   }
 });
 
+test("CJK 边界：汉字后紧跟空格/逗号/单引号，编辑→推送→回声后逐字节一致", async (t) => {
+  resetSyncTables();
+  const db = getDb();
+  const { engine, remote, profileId } = createEngine();
+  sync.ensureDevice(db, { profileId, platform: "win32" });
+  // 先播种再置 ready：seed 的插入不应产生 Outbox 噪声，编辑才进入上行链路。
+  const notebookId = seedNotebook();
+  const noteId = seedNote(notebookId, "初始标题", 1);
+  sync.markBootstrapReady(db, profileId, 0);
+  (await import("../src/sync/knowledgeTreeReadiness")).markKnowledgeTreeSyncReady(db, profileId);
+
+  // 服务端副本：push 真实走 applyMutation，与线上同一写入路径。
+  const serverPath = path.join(tmpDir, "cjk-server.db");
+  await db.backup(serverPath);
+  const Sqlite = (await import("better-sqlite3")).default;
+  const serverDb = new Sqlite(serverPath);
+  t.after(() => serverDb.close());
+  serverDb.pragma("foreign_keys = ON");
+  (await import("../src/lib/searchIndex")).ensureNormalizedSearchFts(serverDb);
+  const { applyMutation } = await import("../src/sync/apply");
+
+  const cjkTitle = "边界 用例，测试'引号'";
+  const cjkText = "汉字后 空格，紧跟逗号'单引号'再汉字";
+  const cjkContent = JSON.stringify({
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text: cjkText }] }],
+  });
+  db.prepare("UPDATE notes SET title=?, content=?, contentText=? WHERE id=?").run(cjkTitle, cjkContent, cjkText, noteId);
+
+  // 触发器写入的 Outbox 载荷必须原样保留 CJK 字符（JSON 经 SQLite 往返无损）。
+  const queued = sync.listPendingMutations(db, 100).find((row) => row.entityType === "note" && row.entityId === noteId);
+  assert.ok(queued, "本地编辑必须进入 Outbox");
+  assert.equal(JSON.parse(queued.payload as string).content, cjkContent, "Outbox 载荷不得丢字符");
+
+  const serverRows = new Map<string, Record<string, any>>();
+  remote.pushResponder = (mutations) => {
+    const results = mutations.map((m) => serverDb.transaction(() =>
+      applyMutation(serverDb, { ...m, userId: USER_ID, deviceId: DEVICE_ID }))());
+    for (const m of mutations) {
+      const table = { note: "notes", notebook: "notebooks", knowledge_tree_node: "knowledge_tree_nodes" }[m.entityType as string];
+      if (!table) continue;
+      serverRows.set(`${m.entityType}:${m.entityId}`, serverDb.prepare(`SELECT * FROM ${table} WHERE id=?`).get(m.entityId) as Record<string, any>);
+    }
+    remote.serverSequence += 1;
+    remote.changesQueue.push({
+      serverSequence: remote.serverSequence, nextSequence: remote.serverSequence, hasMore: false,
+      resetRequired: false,
+      items: mutations.map((m) => ({ sequence: remote.serverSequence, entityType: m.entityType, entityId: m.entityId, operation: "upsert" })),
+    });
+    remote.snapshotPages.push({
+      snapshotSequence: remote.serverSequence, hasMore: false, nextCursor: null,
+      items: mutations.map((m) => ({ entityType: m.entityType, entityId: m.entityId, payload: serverRows.get(`${m.entityType}:${m.entityId}`) })),
+    });
+    return { serverSequence: remote.serverSequence, results };
+  };
+
+  for (let cycle = 0; cycle < 10 && sync.countPendingMutations(db, profileId); cycle++) {
+    await engine.syncOnce();
+    assert.equal(engine.getStatus().lastError, null);
+  }
+
+  assert.equal(sync.countPendingMutations(db, profileId), 0);
+  assert.equal(sync.countUnresolvedConflicts(db, profileId), 0, "单机编辑与自身推送回声不得产生冲突");
+  assert.ok(remote.ackCalls.length >= 1, "回声必须完成拉取与 ACK 往返");
+  assert.equal(remote.snapshotPages.length, 0, "回声载荷必须被拉取应用");
+  const local = db.prepare("SELECT title, content, contentText FROM notes WHERE id=?").get(noteId) as any;
+  assert.equal(local.title, cjkTitle);
+  assert.equal(local.content, cjkContent);
+  assert.equal(local.contentText, cjkText);
+  assert.equal(serverRows.get(`note:${noteId}`).content, cjkContent, "推送载荷不得丢字符");
+});
+
 test("推送成功后 Outbox 出队，被合并条目一并清除", async () => {
   resetSyncTables();
   const db = getDb();
