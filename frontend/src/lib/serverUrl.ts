@@ -209,10 +209,15 @@ export function normalizeServerBaseUrl(input: string | null | undefined): string
 /** 客户端身份由运行环境决定，不受服务器配置或当前页面路径影响。 */
 export function isNativeClientRuntime(): boolean {
   if (typeof window === "undefined") return false;
-  const runtime = window as Window & { nowenDesktop?: { isDesktop?: boolean }; Capacitor?: { isNativePlatform?: () => boolean; platform?: string } };
+  const runtime = window as Window & {
+    nowenDesktop?: { isDesktop?: boolean };
+    Capacitor?: { isNativePlatform?: () => boolean; platform?: string };
+    __TAURI__?: unknown;
+  };
   return window.location.protocol === "file:"
     || window.location.protocol === "capacitor:"
     || !!runtime.nowenDesktop?.isDesktop
+    || !!runtime.__TAURI__
     || !!runtime.Capacitor?.isNativePlatform?.()
     || (!!runtime.Capacitor?.platform && runtime.Capacitor.platform !== "web");
 }
