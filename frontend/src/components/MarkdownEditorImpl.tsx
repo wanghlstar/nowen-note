@@ -160,6 +160,7 @@ import type { FormatMenuPayload } from "@/lib/desktopBridge";
 import { NoteLinkMenu, type NoteSearchResult, type NoteLinkBlockItem, type NoteLinkSelectionOptions } from "@/components/NoteLinkExtension";
 import { buildWikiNoteLink, detectActiveWikiNoteQuery } from "@/lib/noteLinkSyntax";
 import { getMarkdownDailyRecordSlashCommands } from "@/components/daily-records/markdownDailyRecordSlashCommands";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { consumeBlockNavigation, subscribeBlockNavigation } from "@/lib/blockNavigation";
 import {
   toggleWrap,
@@ -975,6 +976,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   const openVoiceRecorder = useCallback(() => {
     const view = viewRef.current;
     if (!view || !editable || isGuest || noteRef.current.isTrashed) return;
+    if (!isFeatureEnabled("voiceMemo")) return;
     const noteId = noteRef.current.id;
     const scope = pasteNoteScopeRef.current;
     const anchor = { from: view.state.selection.main.from, to: view.state.selection.main.to };
@@ -1009,7 +1011,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         onVoiceRecord: editable && !isGuest && !note.isTrashed ? openVoiceRecorder : undefined,
         onAIAssistant: isGuest ? undefined : openAIAssistant,
       }),
-      ...getMarkdownDailyRecordSlashCommands(),
+      ...(isFeatureEnabled("diary") ? getMarkdownDailyRecordSlashCommands() : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tr, isGuest, editable, note.isTrashed, openAIAssistant, openAttachmentLibrary, openVoiceRecorder],
@@ -2453,7 +2455,9 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           <ToolbarButton className="max-md:hidden" onClick={triggerVideoPicker} title={tr("tiptap.uploadLocalVideo") || "插入本地视频"}>
             <Film size={iconSize} />
           </ToolbarButton>
+          {isFeatureEnabled("voiceMemo") && (
           <VoiceInsertMenu onUpload={triggerAttachmentPicker} onRecord={openVoiceRecorder} recordDisabled={!editable || isGuest || !!note.isTrashed} iconSize={iconSize} />
+          )}
           <ToolbarButton
             onClick={openAttachmentLibrary}
             title={tr("tiptap.insertExistingAttachment", { defaultValue: "从文件管理插入" })}
@@ -2745,7 +2749,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
 
       {/* AI д���������ڸ��㣨���Ƿÿ� & δ���� onAIAssistant ����ʱ���ã� */}
-      {!isGuest && aiOpen && (
+      {!isGuest && aiOpen && isFeatureEnabled("ai") && (
         <AIWritingAssistant
           selectedText={aiSelectedText}
           fullText={aiFullText}

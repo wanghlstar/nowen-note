@@ -28,6 +28,7 @@ import type { SearchResult } from "@/types";
 import SearchCenter from "@/components/SearchCenter";
 import MobileDrawerUxBridge from "@/components/MobileDrawerUxBridge";
 import { pluginApi } from "@/lib/pluginApi";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -113,14 +114,14 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       });
     }
 
-    const declared = pluginContributions.flatMap((contribution) => {
+    const declared = isFeatureEnabled("plugins") ? pluginContributions.flatMap((contribution) => {
       const paletteIds = new Set((contribution.menus || []).filter((menu) => menu.location === "commandPalette").map((menu) => menu.command));
       return (contribution.commands || []).filter((command) => paletteIds.has(command.id)).map((command): WorkspaceCommand => ({
         id: command.id, label: command.title, description: command.category ? `插件 · ${command.category}` : `插件 · ${contribution.pluginId}`,
         keywords: ["插件", contribution.pluginId, command.category || ""], icon: <Puzzle size={16} />,
         run: () => { void pluginApi.execute(contribution.pluginId, command.action, state.activeNote ? { noteId: state.activeNote.id } : {}).catch((error) => window.alert(error instanceof Error ? error.message : String(error))); },
       }));
-    });
+    }) : [];
     return [...commands, ...declared].map((command) => {
       const shortcut = formatShortcutForCommand(command.id, shortcutPlatform, shortcutSurface);
       return shortcut ? { ...command, shortcut } : command;
@@ -218,13 +219,13 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const jumpTo = useCallback(async (result: SearchResult) => {
     try {
-      if (result.resourceType === "sheet") {
+      if (isFeatureEnabled("sheet") && result.resourceType === "sheet") {
         actions.setSearchQuery("");
         actions.setMobileSidebar(false);
         pushSheetAppPath(result.id);
         return;
       }
-      if (result.resourceType === "mindmap") {
+      if (isFeatureEnabled("mindmap") && result.resourceType === "mindmap") {
         actions.setSearchQuery("");
         actions.setMobileSidebar(false);
         pushMindMapAppPath(result.id);

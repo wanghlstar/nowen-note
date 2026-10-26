@@ -3,6 +3,7 @@ import { Download, Loader2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import SheetGrid from "@/components/SheetGrid";
 import { loadAttachmentWorkbook } from "@/lib/attachmentXlsx";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { workbookSheetToImport, XlsxError, type WorkbookPreviewModel } from "@/lib/sheetXlsx";
 import { knowledgeTreeApi, type KnowledgeTreeNode } from "@/lib/knowledgeTreeApi";
 import { getCurrentWorkspace } from "@/lib/api";
@@ -24,8 +25,13 @@ export default function AttachmentXlsxPreview({ url, filename, size, heightClass
   const importBusy = useRef(false);
   const importWorkspace = useRef("");
   const generation = useRef(0);
+  const sheetPreviewEnabled = isFeatureEnabled("sheet");
 
   useEffect(() => {
+    if (!sheetPreviewEnabled) {
+      setLoading(false);
+      return;
+    }
     const controller = new AbortController();
     generation.current += 1;
     setLoading(true);
@@ -41,7 +47,7 @@ export default function AttachmentXlsxPreview({ url, filename, size, heightClass
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => { controller.abort(); generation.current += 1; };
-  }, [url, size]);
+  }, [url, size, sheetPreviewEnabled]);
 
   const sheet = workbook?.sheets[activeSheet];
   const importData = useMemo(() => sheet ? workbookSheetToImport(sheet.data) : null, [sheet]);
@@ -104,7 +110,8 @@ export default function AttachmentXlsxPreview({ url, filename, size, heightClass
         <button type="button" disabled={busy} onClick={() => void importSheet()} className="rounded bg-accent-primary px-2 py-1 text-white disabled:opacity-40">{t("xlsxPreview.confirmImport", { name: sheet?.name })}</button>
         <button type="button" disabled={busy} onClick={() => setDestinations(null)}>{t("xlsxPreview.cancel")}</button>
       </div>}
-      {loading ? <div className="flex items-center justify-center gap-2 py-16 text-sm text-tx-tertiary"><Loader2 size={16} className="animate-spin" />{t("xlsxPreview.loading")}</div>
+      {!sheetPreviewEnabled ? <div role="alert" className="px-4 py-12 text-center text-sm text-tx-secondary">当前为 Lite 配置，表格预览不可用，请下载后查看。</div>
+        : loading ? <div className="flex items-center justify-center gap-2 py-16 text-sm text-tx-tertiary"><Loader2 size={16} className="animate-spin" />{t("xlsxPreview.loading")}</div>
         : error ? <div role="alert" className="px-4 py-12 text-center text-sm text-tx-secondary">{t(`xlsxPreview.${error}`)}</div>
         : sheet && <>
           <div role="tablist" aria-label={t("xlsxPreview.worksheets")} className="flex shrink-0 overflow-x-auto border-b border-app-border bg-app-surface p-1">

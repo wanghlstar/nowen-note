@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { featureGuard } from "../profile";
 import syncRoutes from "./user-preferences-sync";
 import legacyRoutes from "./user-preferences-legacy";
 import reliableAIRoutes from "./ai-reliable";
@@ -14,6 +15,17 @@ import taskInboxRoutes from "./task-inbox";
  * sub-paths so older clients remain untouched.
  */
 const app = new Hono();
+
+// MIXED（W2）：任务规划/元数据/时间块/收件箱与 ai-reliable 子路径属 P1，
+// lite 下返回 403 feature_disabled；根偏好与 sync 子路径（P0）不受影响。
+const tasksGuard = featureGuard("tasks");
+for (const taskPath of ["/task-day-plans", "/task-metadata", "/task-time-blocks", "/task-inbox"]) {
+  app.use(taskPath, tasksGuard);
+  app.use(`${taskPath}/*`, tasksGuard);
+}
+const aiGuard = featureGuard("ai");
+app.use("/ai-reliable", aiGuard);
+app.use("/ai-reliable/*", aiGuard);
 
 // Task day plans are user-scoped planning state, not task deadlines. Keep them
 // under user-preferences so the feature can sync across devices without changing

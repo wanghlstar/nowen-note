@@ -75,6 +75,7 @@ import {
   type SearchNotebookExclusionStatus,
 } from "@/lib/searchNotebookExclusions";
 import { toast } from "@/lib/toast";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { useApp, useAppActions } from "@/store/AppContext";
 import type { Notebook } from "@/types";
 
@@ -120,7 +121,7 @@ function createChildren(t: TFunction): ContextMenuItem[] {
   return [
     { id: "new_note", label: t("note.contextMenu.document"), icon: <FilePlus size={14} /> },
     { id: "new_markdown", label: t("note.contextMenu.markdownDocument"), icon: <FileCode size={14} /> },
-    { id: "new_mindmap", label: t("note.contextMenu.mindmap"), icon: <BrainCircuit size={14} /> },
+    ...(isFeatureEnabled("mindmap") ? [{ id: "new_mindmap", label: t("note.contextMenu.mindmap"), icon: <BrainCircuit size={14} /> }] : []),
     { id: "new_folder", label: t("note.contextMenu.folder"), icon: <FolderPlus size={14} /> },
   ];
 }
@@ -129,8 +130,10 @@ function importChildren(): ContextMenuItem[] {
   return [
     { id: "import_markdown", label: "Markdown", icon: <FileCode size={14} /> },
     { id: "import_markdown_zip", label: "Markdown + 附件（ZIP）", icon: <FileArchive size={14} /> },
-    { id: "import_word", label: "Word 文档", icon: <FileType2 size={14} /> },
-    { id: "import_url", label: "公众号文章", icon: <Link2 size={14} /> },
+    ...(isFeatureEnabled("importCenter") ? [
+      { id: "import_word", label: "Word 文档", icon: <FileType2 size={14} /> },
+      { id: "import_url", label: "公众号文章", icon: <Link2 size={14} /> },
+    ] : []),
   ];
 }
 
@@ -198,7 +201,9 @@ export function buildKnowledgeTreeNodeMenuItems(
       management.push({ id: "move", label: t("noteList.moveButton"), icon: <FolderInput size={14} /> });
     }
     if (isOwned || capabilities.canReshare) {
-      management.push({ id: "share_note", label: t("note.contextMenu.share"), icon: <Share2 size={14} /> });
+      if (isFeatureEnabled("sharing")) {
+        management.push({ id: "share_note", label: t("note.contextMenu.share"), icon: <Share2 size={14} /> });
+      }
     }
 
     if (capabilities.canEdit) {
@@ -266,7 +271,9 @@ export function buildKnowledgeTreeNodeMenuItems(
   }
   if (capabilities.canEdit) management.push({ id: "rename", label: "重命名", icon: <Pencil size={14} /> });
   if (isNotebook && (capabilities.canReshare || capabilities.canManageMembers)) {
-    management.push({ id: "share", label: "分享与发布", icon: <Link2 size={14} /> });
+    if (isFeatureEnabled("sharing")) {
+      management.push({ id: "share", label: "分享与发布", icon: <Link2 size={14} /> });
+    }
   }
   if (capabilities.canMove && !node.sharedRootId) {
     management.push({ id: "move", label: "移动", icon: <FolderInput size={14} /> });
@@ -703,12 +710,12 @@ export default function KnowledgeTreeNodeMenu({
         case "duplicate": await duplicateCurrentNote(); break;
         case "new_note": onCreate(node, "note"); break;
         case "new_markdown": onCreate(node, "markdown"); break;
-        case "new_mindmap": onCreate(node, "mindmap"); break;
+        case "new_mindmap": if (isFeatureEnabled("mindmap")) { onCreate(node, "mindmap"); } break;
         case "new_folder": onCreate(node, "folder"); break;
         case "import_markdown": await importMarkdown(); break;
         case "import_markdown_zip": await importMarkdownZip(); break;
-        case "import_word": await importWord(); break;
-        case "import_url": await importUrl(); break;
+        case "import_word": if (isFeatureEnabled("importCenter")) { await importWord(); } break;
+        case "import_url": if (isFeatureEnabled("importCenter")) { await importUrl(); } break;
         case "toggle_pin": await patchNote({ isPinned: note?.isPinned === 1 ? 0 : 1 }); break;
         case "toggle_favorite": await patchNote({ isFavorite: note?.isFavorite === 1 ? 0 : 1 }); break;
         case "toggle_lock": await patchNote({ isLocked: note?.isLocked === 1 ? 0 : 1 }); break;
@@ -719,8 +726,8 @@ export default function KnowledgeTreeNodeMenu({
         case "permissions": onPermissions(node); break;
         case "folder_password": onPassword(node); break;
         case "delete": await onDelete(node); break;
-        case "share": setShareNotebook(await getNotebook()); break;
-        case "share_note": setShareNote({ id: node.resourceId, title: node.title }); break;
+        case "share": if (isFeatureEnabled("sharing")) { setShareNotebook(await getNotebook()); } break;
+        case "share_note": if (isFeatureEnabled("sharing")) { setShareNote({ id: node.resourceId, title: node.title }); } break;
         case "search_exclude":
           if (node.resourceType === "notebook") {
             await excludeNotebookFromSearch(node.resourceId);

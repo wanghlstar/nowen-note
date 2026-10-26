@@ -113,6 +113,7 @@ import {
   replaceMindMapAppPath,
   type MindMapAppRoute,
 } from "@/lib/mindMapDeepLink";
+import { isFeatureEnabled, useFeatureProfile } from "@/lib/featureRegistry";
 import {
   getCurrentSheetAppRoute,
   parseSheetAppPath,
@@ -476,6 +477,8 @@ function AppLayout() {
   const { state } = useApp();
   const actions = useAppActions();
   const { t } = useTranslation();
+  // Lite profile 异步到达后重算全部 P1 门（完整模式下恒为 "full"，零变化）。
+  useFeatureProfile();
   const [mindMapRoute, setMindMapRoute] = useState<MindMapAppRoute>(() =>
     getCurrentMindMapAppRoute(),
   );
@@ -507,11 +510,20 @@ function AppLayout() {
         actions.setEditorFullscreen(false);
         actions.setMobileSidebar(false);
       } else if (nextSheetRoute.matched) {
-        actions.setViewMode("all");
-        actions.setActiveNote(null);
-        actions.setMobileView("editor");
+        // Lite 关闭 sheet：保留 URL 归一化到首页，不进入表格视图。
+        if (isFeatureEnabled("sheet")) {
+          actions.setViewMode("all");
+          actions.setActiveNote(null);
+          actions.setMobileView("editor");
+        } else {
+          replaceAppPathState("/");
+        }
       } else if (route.matched) {
-        actions.setViewMode("mindmaps");
+        if (isFeatureEnabled("mindmap")) {
+          actions.setViewMode("mindmaps");
+        } else {
+          replaceAppPathState("/");
+        }
       } else if (pathname === "/" && event?.type === "popstate") {
         // Browser Back/Forward owns navigation intent. Internal root-path normalization must
         // not clobber a concurrent legacy viewMode transition such as tasks/AI/files.
@@ -545,7 +557,7 @@ function AppLayout() {
     }
     if (currentIssueRoute.matched) replaceAppPathState("/");
 
-    if (state.viewMode === "mindmaps") {
+    if (state.viewMode === "mindmaps" && isFeatureEnabled("mindmap")) {
       if (!currentRoute.matched) {
         const pendingId = sessionStorage.getItem("pendingOpenMindMapId");
         replaceMindMapAppPath(isMindMapId(pendingId) ? pendingId : null);
@@ -558,6 +570,17 @@ function AppLayout() {
       replaceAppPathState("/");
     }
   }, [appPathReady, state.viewMode]);
+
+  // Lite profile 到达时，若当前 viewMode 属于被禁模块，回落到笔记工作区。
+  useEffect(() => {
+    const disabled =
+      (state.viewMode === "tasks" && !isFeatureEnabled("tasks")) ||
+      (state.viewMode === "mindmaps" && !isFeatureEnabled("mindmap")) ||
+      (state.viewMode === "ai-chat" && !isFeatureEnabled("ai")) ||
+      (state.viewMode === "diary" && !isFeatureEnabled("diary")) ||
+      (state.viewMode === "shares" && !isFeatureEnabled("sharing"));
+    if (disabled) actions.setViewMode("all");
+  }, [state.viewMode, actions]);
   const { prefs: userPrefs } = useUserPreferences();
   // v16 P3 后续：Rail 视觉模式三档（icon / label / hidden）。
   // 约束：主侧栏折叠时强制显示 Rail（即便偏好是 hidden），
@@ -565,13 +588,13 @@ function AppLayout() {
   const [railMode] = useRailMode();
   const [mobileRailHidden] = useMobileRailHidden();
   const railVisible = railMode !== "hidden" || state.sidebarCollapsed;
-  const isSheetView = sheetRoute.matched && sheetRoute.sheetId !== null;
-  const isTaskView = state.viewMode === "tasks";
-  const isMindMapView = state.viewMode === "mindmaps";
-  const isAIChatView = state.viewMode === "ai-chat";
-  const isDiaryView = state.viewMode === "diary";
+  const isSheetView = sheetRoute.matched && sheetRoute.sheetId !== null && isFeatureEnabled("sheet");
+  const isTaskView = state.viewMode === "tasks" && isFeatureEnabled("tasks");
+  const isMindMapView = state.viewMode === "mindmaps" && isFeatureEnabled("mindmap");
+  const isAIChatView = state.viewMode === "ai-chat" && isFeatureEnabled("ai");
+  const isDiaryView = state.viewMode === "diary" && isFeatureEnabled("diary");
   const isFilesView = state.viewMode === "files";
-  const isSharesView = state.viewMode === "shares";
+  const isSharesView = state.viewMode === "shares" && isFeatureEnabled("sharing");
   const isIssuesView = state.viewMode === "issues";
   const editorFocusLayout = resolveEditorFocusLayout({
     editorFullscreen: state.editorFullscreen,
@@ -656,6 +679,8 @@ function AppLayout() {
   }, [actions]);
 
   useEffect(() => {
+    // Lite 关闭 collab：无 WS 端点，不订阅实时事件。
+    if (!isFeatureEnabled("collab")) return;
     const off = realtime.on("open", () => {
       // Android 已登录客户端的 Native SQLite + Sync V2 是唯一同步写入链路。
       // WebSocket 重连不得再触发旧版 IndexedDB 全量补拉，避免双引擎争用与重复加载。
@@ -669,6 +694,7 @@ function AppLayout() {
 
   // SYNC-DELETE-01-B: 当前打开的笔记被其它端删除/回收时，关闭编辑器并提示
   useEffect(() => {
+    if (!isFeatureEnabled("collab")) return;
     const off = realtime.on("note:deleted", (msg: any) => {
       const noteId = msg?.noteId || msg?.id;
       if (!noteId) return;
@@ -698,6 +724,7 @@ function AppLayout() {
   // 清空回收站使用单条批量事件，避免其它标签页收到数万条 note:deleted 后
   // 逐条 dispatch / IndexedDB delete。列表、标签页和本地缓存都一次性收敛。
   useEffect(() => {
+    if (!isFeatureEnabled("collab")) return;
     const off = realtime.on("notes:deleted", (msg: any) => {
       const noteIds = Array.isArray(msg?.noteIds)
         ? msg.noteIds.filter(
@@ -1181,7 +1208,9 @@ function AppLayout() {
           </div>
         )}
 
-        <CommentManagementCenter onOpenComment={handleOpenComment} />
+        {isFeatureEnabled("sharing") && (
+          <CommentManagementCenter onOpenComment={handleOpenComment} />
+        )}
         <NotificationCenter
           onUnreadChange={setNotificationCount}
           onOpenComment={handleOpenComment}
@@ -1193,7 +1222,7 @@ function AppLayout() {
         />
 
         {/* 全局命令面板（Cmd-K / 菜单搜索 / Dock 搜索统一入口） */}
-        <FloatingLayerHost />
+        {isFeatureEnabled("plugins") && <FloatingLayerHost />}
 
         <CommandPalette
           open={commandPaletteOpen}
@@ -1759,8 +1788,8 @@ function AuthGate() {
   // 已登录
   return (
     <AppProvider>
-      <SidebarSearchExperienceBridge />
-      {user && (
+      {isFeatureEnabled("tasks") && <SidebarSearchExperienceBridge />}
+      {user && isFeatureEnabled("plugins") && (
         <WechatClipboardBridge
           key={`${getServerUrl() || "local"}:${user.id}`}
         />
@@ -1831,7 +1860,10 @@ function App() {
   //   App 直接落到 AuthGate 分支 → 未登录用户被导到登录页，
   //   被误诊为"可评论分享触发登录"。如果再次收紧此正则，请同步约束 token 生成。
   const path = stripServerBasePath(window.location.pathname, getServerUrl());
-  const shareMatch = path.match(/^\/share\/([A-Za-z0-9_-]+)$/);
+  // Lite 关闭 sharing：分享/加入路由直接落入常规应用（后端 /api/shared 亦禁用）。
+  const shareMatch = isFeatureEnabled("sharing")
+    ? path.match(/^\/share\/([A-Za-z0-9_-]+)$/)
+    : null;
   if (shareMatch) {
     return (
       <ThemeProvider>
@@ -1841,7 +1873,9 @@ function App() {
     );
   }
 
-  const notebookShareMatch = path.match(/^\/notebook-share\/([A-Za-z0-9_-]+)$/);
+  const notebookShareMatch = isFeatureEnabled("sharing")
+    ? path.match(/^\/notebook-share\/([A-Za-z0-9_-]+)$/)
+    : null;
   if (notebookShareMatch) {
     return (
       <ThemeProvider>

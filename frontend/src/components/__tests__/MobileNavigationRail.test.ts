@@ -47,7 +47,11 @@ describe("mobile navigation rail contract", () => {
   });
 
   it("shows the complete labeled shortcut rail in Android local mode", () => {
-    expect(railSource).toContain("const capabilityItems = localDeviceMode ? NAV_CONFIG : availableItems");
+    // W1 profile 门后，本地设备模式仍展示完整导航（NAV_CONFIG 全集），
+    // 仅按部署 profile 过滤，不走 workspace 功能过滤的 availableItems。
+    expect(railSource).toContain("const capabilityItems = localDeviceMode");
+    expect(railSource).toContain("NAV_CONFIG.filter((item) => isNavigationModeEnabled(item.mode))");
+    expect(railSource).toContain(": availableItems;");
     expect(railSource).not.toContain('item.mode === "favorites" || item.mode === "trash"');
     for (const mode of ["favorites", "files", "trash", "diary", "tasks", "mindmaps", "ai-chat", "shares"]) {
       expect(railSource).toContain(`mode: "${mode}"`);

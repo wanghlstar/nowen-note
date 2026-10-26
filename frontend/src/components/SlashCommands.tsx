@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { nextFootnoteIdentifier } from "@/components/FootnoteExtensions";
 import { prompt as promptDialog } from "@/components/ui/confirm";
 import { getDailyRecordSlashCommands } from "@/components/daily-records/dailyRecordSlashCommands";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { insertContentPreservingBlockEmbed } from "@/lib/insertContentPreservingBlockEmbed";
 import { convertBlock } from "./blockMenuActions";
 
@@ -194,7 +195,7 @@ export function getDefaultSlashCommands(
 ): SlashCommandItem[] {
   return [
     ...(onVoiceRecord ? [{ id: "voice", label: t("voice.record"), description: t("voice.description"), icon: <span>🎙</span>, category: t("slash.catInsert"), keywords: ["voice", "audio", "录音", "语音"], action: onVoiceRecord }] : []),
-    ...getDailyRecordSlashCommands(),
+    ...(isFeatureEnabled("diary") ? getDailyRecordSlashCommands() : []),
     // 标题
     {
       id: "heading1",

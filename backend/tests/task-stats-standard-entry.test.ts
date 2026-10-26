@@ -11,7 +11,8 @@ test("standard backend entry installs task statistics routes", () => {
 test("recent reminders route is registered before the task reminder parameter route", () => {
   const source = readFileSync("src/index.ts", "utf8");
   const recentRoute = source.indexOf('app.get("/api/task-reminders/recent"');
-  const reminderRouter = source.indexOf('app.route("/api/task-reminders", taskRemindersRouter)');
+  // profile 门（W2）后挂载写法为 mountFeature(...)，完整模式下两者等价。
+  const reminderRouter = source.indexOf('"/api/task-reminders", taskRemindersRouter');
 
   assert.ok(recentRoute >= 0);
   assert.ok(reminderRouter >= 0);

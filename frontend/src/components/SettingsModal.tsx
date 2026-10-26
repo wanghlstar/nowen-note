@@ -59,6 +59,7 @@ import {
   type DesktopKnowledgeTreeViewMode,
   type MobileKnowledgeTreeViewMode,
 } from "@/lib/mobileKnowledgeTreeViewMode";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 type TabId = "appearance" | "switches" | "shortcuts" | "ai" | "plugins" | "automations" | "security" | "tokens" | "data" | "sync" | "folderSync" | "users" | "workspaces" | "download" | "about";
 
@@ -786,11 +787,11 @@ function SwitchesPanel() {
     { id: "notifications", label: t("sidebar.notifications") },
     { id: "favorites", label: t("sidebar.favorites") },
     { id: "files", label: t("sidebar.fileManager") },
-    { id: "diary", label: t("sidebar.dailyRecords", { defaultValue: "每日记录" }) },
-    { id: "tasks", label: t("sidebar.tasks") },
-    { id: "mindmaps", label: t("sidebar.mindMaps") },
-    { id: "ai-chat", label: t("sidebar.aiChat") },
-    { id: "shares", label: t("sidebar.shareManagement") },
+    ...(isFeatureEnabled("diary") ? [{ id: "diary" as const, label: t("sidebar.dailyRecords", { defaultValue: "每日记录" }) }] : []),
+    ...(isFeatureEnabled("tasks") ? [{ id: "tasks" as const, label: t("sidebar.tasks") }] : []),
+    ...(isFeatureEnabled("mindmap") ? [{ id: "mindmaps" as const, label: t("sidebar.mindMaps") }] : []),
+    ...(isFeatureEnabled("ai") ? [{ id: "ai-chat" as const, label: t("sidebar.aiChat") }] : []),
+    ...(isFeatureEnabled("sharing") ? [{ id: "shares" as const, label: t("sidebar.shareManagement") }] : []),
   ];
   const navigationItemById = new Map(navigationVisibilityItems.map((item) => [item.id, item]));
   const orderedNavigationVisibilityItems = normalizeNavigationModuleOrder(userPrefs.navigationModuleOrder)
@@ -1080,7 +1081,7 @@ function SwitchesPanel() {
         </div>
       </div>
 
-      <JournalPrivacySettingsCard />
+      {isFeatureEnabled("diary") && <JournalPrivacySettingsCard />}
 
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 divide-y divide-zinc-200 dark:divide-zinc-800 overflow-hidden">
         <div data-settings-choice="remote-image-paste" className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-white/60 dark:hover:bg-zinc-900/25 transition-colors max-sm:flex-col max-sm:items-stretch">
@@ -1911,13 +1912,13 @@ const SettingsModal = React.forwardRef<HTMLDivElement, SettingsModalProps>(
     { id: "appearance" as const, label: t('settings.appearance'), icon: Palette },
     { id: "switches" as const, label: t('settings.switches'), icon: ToggleLeft },
     ...(shortcutSurface !== "android" ? [{ id: "shortcuts" as const, label: "快捷键", icon: Keyboard }] : []),
-    { id: "ai" as const, label: t('settings.ai'), icon: Bot },
-    { id: "plugins" as const, label: "插件", icon: Puzzle },
-    { id: "automations" as const, label: "自动化", icon: Workflow },
+    ...(isFeatureEnabled("ai") ? [{ id: "ai" as const, label: t('settings.ai'), icon: Bot }] : []),
+    ...(isFeatureEnabled("plugins") ? [{ id: "plugins" as const, label: "插件", icon: Puzzle }] : []),
+    ...(isFeatureEnabled("automation") ? [{ id: "automations" as const, label: "自动化", icon: Workflow }] : []),
     { id: "security" as const, label: isAndroidNativeRuntime() ? t("mobileAccount.accountAndSecurity") : t('settings.security'), icon: Shield },
     // 【个人访问令牌】任意登录用户都可管理自己的 token；与 security 同为"账号安全"类别，
     // 不需要 isAdmin 判定。
-    { id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key },
+    ...(isFeatureEnabled("openApi") ? [{ id: "tokens" as const, label: t('settings.tokens', { defaultValue: '访问令牌' }), icon: Key }] : []),
     ...(isAdmin ? [{ id: "users" as const, label: t('settings.users'), icon: Users }] : []),
     ...(isAdmin ? [{ id: "workspaces" as const, label: t('settings.workspaces'), icon: Building2 }] : []),
     // 三端共用数据管理：先呈现备份/恢复/导入/导出目标，再按权限展示范围及高级操作。

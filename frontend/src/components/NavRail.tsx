@@ -27,6 +27,7 @@ import { openWorkspaceIssue, OPEN_NOTIFICATIONS_EVENT, parseIssueAppPath } from 
 import { resolveCurrentAppPathname } from "@/lib/appPathNavigation";
 import { pushAppPathState } from "@/lib/appPathNavigation";
 import { getCurrentMindMapAppRoute, pushMindMapAppPath } from "@/lib/mindMapDeepLink";
+import { isNavigationModeEnabled } from "@/lib/featureRegistry";
 import { useRailMode } from "@/hooks/useRailMode";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
 import { useMobileRailHidden } from "@/hooks/useMobileRailHidden";
@@ -173,8 +174,12 @@ export default function NavRail({ variant = "desktop", notificationCount = 0 }: 
     && (usingDesktopLiteMode || !isLoopbackUrl(serverUrl) || (!!currentOrigin && normalizeUrl(serverUrl) !== normalizeUrl(currentOrigin)));
   const canSwitchBackToLocal = isDesktopApp() && (usingRemoteServer || usingDesktopLiteMode);
 
-  const availableItems = features ? NAV_CONFIG.filter((item) => !item.feature || features[item.feature] !== false) : NAV_CONFIG;
-  const capabilityItems = localDeviceMode ? NAV_CONFIG : availableItems;
+  const availableItems = features
+    ? NAV_CONFIG.filter((item) => (!item.feature || features[item.feature] !== false) && isNavigationModeEnabled(item.mode))
+    : NAV_CONFIG.filter((item) => isNavigationModeEnabled(item.mode));
+  const capabilityItems = localDeviceMode
+    ? NAV_CONFIG.filter((item) => isNavigationModeEnabled(item.mode))
+    : availableItems;
   const configurableItemById = new Map<NavigationModuleId, NavConfigItem>();
   for (const item of capabilityItems) {
     if (NAVIGATION_MODULE_IDS.includes(item.mode as NavigationModuleId)) {

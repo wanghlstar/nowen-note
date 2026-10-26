@@ -24,10 +24,19 @@ import {
   getSiyuanImportJob,
   getSiyuanImportJobByRequestId,
 } from "../services/siyuanImportJobs";
+import { featureGuard } from "../profile";
 
 const Busboy = require("busboy");
 
 const app = new Hono();
+
+// MIXED（W2）：本文件 P0 基础导入/导出与 P1 多源迁移子路径并存。
+// origins 映射与思源包导入属 importCenter，lite 下返回 403 feature_disabled。
+const importCenterGuard = featureGuard("importCenter");
+app.use("/import/origins", importCenterGuard);
+app.use("/import/origins/*", importCenterGuard);
+app.use("/import/siyuan-package", importCenterGuard);
+app.use("/import/siyuan-package/*", importCenterGuard);
 const SIYUAN_IMPORT_TMP_PREFIX = "nowen-siyuan-import-";
 const SIYUAN_IMPORT_TMP_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const SIYUAN_IMPORT_TMP_STALE_AGE_MS = 24 * 60 * 60 * 1000;

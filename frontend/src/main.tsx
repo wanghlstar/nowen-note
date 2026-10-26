@@ -12,7 +12,7 @@ import "./lib/imageNodeTransformBootstrap";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { SiteSettingsProvider } from "./hooks/useSiteSettings";
 import { ConfirmProvider } from "./components/ui/confirm";
-import VoiceRecorderSheet from "./components/VoiceRecorderSheet";
+import VoiceRecorderSheet from "@/components/VoiceRecorderSheet";
 import Toaster from "./components/Toaster";
 import NoteIconBridge from "./components/NoteIconBridge";
 import EmbedPasswordBridge from "./components/EmbedPasswordBridge";
@@ -71,11 +71,12 @@ import { installKnowledgeTreeScrollbarBridge } from "./lib/knowledgeTreeScrollba
 import { installKnowledgeTreeMarkdownDrop } from "./lib/knowledgeTreeMarkdownDrop";
 import { installInlineCommentTooltipMount } from "./lib/inlineCommentTooltipMount";
 import { resolveCurrentAppPathname } from "./lib/appPathNavigation";
+import { isFeatureEnabled } from "./lib/featureRegistry";
 import { installUgreenCredentialedFetch } from "./lib/ugreenRemoteAccess";
 import { observeBootSplashReadiness } from "./lib/bootSplash";
 
 const App = React.lazy(() => import("./App"));
-const PublicNotebookView = React.lazy(() => import("./components/PublicNotebookView"));
+const PublicNotebookView = React.lazy(() => import("@/components/PublicNotebookView"));
 
 function reportBootError(source: string, error: unknown, fatal: boolean): void {
   try {
@@ -193,6 +194,8 @@ try {
 }
 
 function resolvePublicNotebookRoute(): { matched: boolean; token?: string } {
+  // Lite 关闭 sharing：公开空间路由不匹配，落入常规应用。
+  if (!isFeatureEnabled("sharing")) return { matched: false };
   const match = resolveCurrentAppPathname().match(/^\/public(?:\/([^/]+))?\/?$/);
   if (!match) return { matched: false };
   if (!match[1]) return { matched: true };
@@ -231,7 +234,7 @@ function renderApplication() {
             <NoteIconBridge />
             <EmbedPasswordBridge />
             <CameraCaptureBridge />
-            <VoiceRecorderSheet />
+            {isFeatureEnabled("voiceMemo") && <VoiceRecorderSheet />}
             <MediaExperienceBridge />
             <EditorImageTransformBridge />
             <ImageClipboardBridge />
@@ -242,7 +245,7 @@ function renderApplication() {
             <AndroidShareImportCenter />
             <DeferredGlobalFeatureCentersMount />
             <SiyuanRichTextCalloutBridge />
-            {!isMobileLocalMode() && <InlineCommentBridge />}
+            {!isMobileLocalMode() && isFeatureEnabled("sharing") && <InlineCommentBridge />}
             <React.Suspense fallback={<MainRouteFallback />}>
               <App />
             </React.Suspense>

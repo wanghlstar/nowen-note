@@ -23,6 +23,7 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { useRailMode } from "@/hooks/useRailMode";
 import { useNoteLoader } from "@/hooks/useNoteLoader";
 import { api } from "@/lib/api";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { pushMindMapAppPath } from "@/lib/mindMapDeepLink";
 import { pushSheetAppPath } from "@/lib/sheetDeepLink";
 import { searchIncludingExcludedNotebooks } from "@/lib/searchNotebookExclusions";
@@ -294,7 +295,7 @@ export default function SearchCenter() {
 
   const openResult = useCallback(async (result: EnhancedSearchResult) => {
     setOpeningId(result.id);
-    if (result.resourceType === "sheet") {
+    if (isFeatureEnabled("sheet") && result.resourceType === "sheet") {
       actions.clearSelectedTags();
       actions.setSearchQuery("");
       actions.setMobileSidebar(false);
@@ -303,7 +304,7 @@ export default function SearchCenter() {
       setOpeningId(null);
       return;
     }
-    if (result.resourceType === "mindmap") {
+    if (isFeatureEnabled("mindmap") && result.resourceType === "mindmap") {
       actions.clearSelectedTags();
       actions.setSearchQuery("");
       actions.setMobileSidebar(false);

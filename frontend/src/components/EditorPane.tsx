@@ -82,6 +82,7 @@ import { haptic } from "@/hooks/useCapacitor";
 import { toast } from "@/lib/toast";
 import { exportNoteAsImage, printNote } from "@/lib/exportService";
 import { subscribeOpenInternalNoteLink } from "@/lib/blockNavigation";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 import { extractFinalAnswer, parseAiTags } from "@/lib/aiOutput";
 
@@ -1648,7 +1649,8 @@ function OrdinaryEditorPane({
     selfUser &&
     editorMode === "md" &&
     !isAndroidNativeRuntime() &&
-    !/nowen-encrypted/i.test(activeNote.content || "")
+    !/nowen-encrypted/i.test(activeNote.content || "") &&
+    isFeatureEnabled("collab")
   );
   const {
     doc: collabYDoc,
@@ -3602,6 +3604,7 @@ function OrdinaryEditorPane({
                   />
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* AI ���ɱ��� */}
+                  {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
                       handleAITitle();
@@ -3624,7 +3627,9 @@ function OrdinaryEditorPane({
                     )}
                     <span>{t("editor.aiGenerateTitle")}</span>
                   </button>
+                  )}
                   {/* AI �Ƽ���ǩ */}
+                  {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
                       handleAITags();
@@ -3647,7 +3652,9 @@ function OrdinaryEditorPane({
                     )}
                     <span>{t("editor.aiSuggestTags")}</span>
                   </button>
+                  )}
                   {/* AI �ܽ� */}
+                  {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
                       handleAISummary();
@@ -3670,8 +3677,10 @@ function OrdinaryEditorPane({
                     )}
                     <span>{t("editor.aiSummary")}</span>
                   </button>
+                  )}
                   <div className="h-px bg-app-border mx-2 my-0.5" />
                   {/* ���� */}
+                  {isFeatureEnabled("sharing") && (
                   <button
                     onClick={() => {
                       setShowShareModal(true);
@@ -3682,6 +3691,7 @@ function OrdinaryEditorPane({
                     <Share2 size={15} className="text-emerald-500" />
                     <span>{t("editor.shareNote")}</span>
                   </button>
+                  )}
                   {/* �汾��ʷ */}
                   <button
                     onClick={() => {
@@ -3694,6 +3704,7 @@ function OrdinaryEditorPane({
                     <span>{t("editor.versionHistory")}</span>
                   </button>
                   {/* ���� */}
+                  {isFeatureEnabled("sharing") && (
                   <button
                     onClick={() => {
                       setShowCommentPanel(true);
@@ -3704,6 +3715,7 @@ function OrdinaryEditorPane({
                     <MessageCircle size={15} className="text-blue-500" />
                     <span>{t("editor.noteComments")}</span>
                   </button>
+                  )}
                   {/* 反向链接 BACKLINKS-02 */}
                   <button
                     onClick={() => {
@@ -4186,6 +4198,7 @@ function OrdinaryEditorPane({
               </div>
 
               {/* ���� */}
+              {isFeatureEnabled("sharing") && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -4195,6 +4208,7 @@ function OrdinaryEditorPane({
               >
                 <Share2 size={14} className="text-emerald-500" />
               </Button>
+              )}
 
               <Button
                 variant="ghost"
@@ -4238,6 +4252,7 @@ function OrdinaryEditorPane({
                 </Button>
               )}
 
+              {isFeatureEnabled("ai") && (
               <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-violet-500/5 px-1 py-0.5 dark:bg-violet-500/10">
                 <Button
                   variant="ghost"
@@ -4278,6 +4293,7 @@ function OrdinaryEditorPane({
                   )}
                 </Button>
               </div>
+              )}
 
               {state.editorFullscreen && (
                 <Button
@@ -4409,10 +4425,12 @@ function OrdinaryEditorPane({
                           )}
                         </div>
                         <div className="mt-1">
+                          {isFeatureEnabled("collab") && (
                           <PresenceBar
                             users={presenceUsers}
                             isConnected={isConnected}
                           />
+                          )}
                         </div>
                       </div>
 
@@ -4465,6 +4483,7 @@ function OrdinaryEditorPane({
                         <History size={15} className="text-violet-500" />
                         <span>{t("editor.versionHistory")}</span>
                       </button>
+                      {isFeatureEnabled("sharing") && (
                       <button
                         onClick={() => {
                           setShowCommentPanel(true);
@@ -4475,6 +4494,7 @@ function OrdinaryEditorPane({
                         <MessageCircle size={15} className="text-blue-500" />
                         <span>{t("editor.noteComments")}</span>
                       </button>
+                      )}
 
                       <div className="h-px bg-app-border mx-2 my-0.5" />
                       <button
@@ -4533,6 +4553,7 @@ function OrdinaryEditorPane({
                       )}
 
                       <div className="h-px bg-app-border mx-2 my-0.5" />
+                      {isFeatureEnabled("ai") && (
                       <button
                         onClick={() => {
                           handleAISummary();
@@ -4555,6 +4576,8 @@ function OrdinaryEditorPane({
                         )}
                         <span>{t("editor.aiSummary")}</span>
                       </button>
+                      )}
+                      {isFeatureEnabled("ai") && (
                       <button
                         onClick={() => {
                           handleAIMermaid("mermaid_mindmap");
@@ -4577,6 +4600,7 @@ function OrdinaryEditorPane({
                         )}
                         <span>{t("editor.aiGenMindMap") || "AI 思维导图"}</span>
                       </button>
+                      )}
 
                       <div className="h-px bg-app-border mx-2 my-0.5" />
                       <button
@@ -4758,7 +4782,7 @@ function OrdinaryEditorPane({
               </AnimatePresence>
             </div>
             {/* �������� */}
-            {showShareModal && (
+            {showShareModal && isFeatureEnabled("sharing") && (
               <ShareModal
                 noteId={activeNote.id}
                 noteTitle={activeNote.title}
@@ -4813,7 +4837,7 @@ function OrdinaryEditorPane({
             )}
 
             {/* ������� */}
-            {showCommentPanel && (
+            {showCommentPanel && isFeatureEnabled("sharing") && (
               <CommentPanel
                 noteId={activeNote.id}
                 noteTitle={activeNote.title}
@@ -4985,6 +5009,7 @@ function OrdinaryEditorPane({
             </AnimatePresence>
 
             {/* AI Mermaid Ԥ������ */}
+            {isFeatureEnabled("mindmap") && (
             <MindMapEmbedInsertDialog
               open={
                 showMindMapInsertDialog &&
@@ -5020,6 +5045,7 @@ function OrdinaryEditorPane({
                 return inserted;
               }}
             />
+            )}
             <AnimatePresence>
               {showMermaidDialog && (
                 <motion.div

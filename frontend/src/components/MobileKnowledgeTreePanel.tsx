@@ -54,6 +54,7 @@ import { useContextMenu } from "@/hooks/useContextMenu";
 import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarControlsCollapsed";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
 import { api, getCurrentWorkspace } from "@/lib/api";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { getCurrentMindMapAppId, pushMindMapAppPath, subscribeMindMapAppPath } from "@/lib/mindMapDeepLink";
 import { pushSheetAppPath } from "@/lib/sheetDeepLink";
 import { markNewNoteForImmediateEdit } from "@/lib/newNoteImmediateEdit";
@@ -606,7 +607,7 @@ export default function MobileKnowledgeTreePanel({
       setQuery("");
       return;
     }
-    if (node.resourceType === "mindmap") {
+    if (isFeatureEnabled("mindmap") && node.resourceType === "mindmap") {
       rememberOpened(node.id);
       pushMindMapAppPath(node.resourceId);
       if (variant === "mobile") actions.setMobileSidebar(false);
@@ -620,7 +621,7 @@ export default function MobileKnowledgeTreePanel({
     }
     if (node.resourceType !== "note") return;
     rememberOpened(node.id);
-    if (node.noteType === "sheet") {
+    if (isFeatureEnabled("sheet") && node.noteType === "sheet") {
       pushSheetAppPath(node.resourceId);
       if (variant === "mobile") actions.setMobileSidebar(false);
       return;
@@ -723,13 +724,13 @@ export default function MobileKnowledgeTreePanel({
       }
       if (snapshot.kind === "mindmap") {
         rememberOpened(created.id);
-        pushMindMapAppPath(created.resourceId);
+        if (isFeatureEnabled("mindmap")) pushMindMapAppPath(created.resourceId);
         if (variant === "mobile") actions.setMobileSidebar(false);
         return;
       }
       if (snapshot.kind === "sheet") {
         rememberOpened(created.id);
-        pushSheetAppPath(created.resourceId);
+        if (isFeatureEnabled("sheet")) pushSheetAppPath(created.resourceId);
         if (variant === "mobile") actions.setMobileSidebar(false);
         return;
       }
@@ -764,6 +765,7 @@ export default function MobileKnowledgeTreePanel({
     kind: "markdown" | "markdown-zip" | "word" | "wechat",
   ) => {
     setCreateMenu(null);
+    if ((kind === "word" || kind === "wechat") && !isFeatureEnabled("importCenter")) return;
     const parent = targetParentId ? nodes.find((node) => node.id === targetParentId) || null : null;
     if (targetParentId && !parent) return;
     if (parent && !isFolderUnlocked(parent, unlockedFolderIds)) {

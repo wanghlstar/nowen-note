@@ -9,6 +9,8 @@
  * settings.ts、attachments.ts、user-preferences*.ts）按子路径级切分，见关闭面清单 §MIXED。
  */
 
+import { useEffect, useState } from "react";
+
 export type FeatureTier = "P0" | "P1";
 
 export interface FeatureEntry {
@@ -193,3 +195,74 @@ export const FEATURES = {
 } as const satisfies Record<string, FeatureEntry>;
 
 export type FeatureKey = keyof typeof FEATURES;
+
+// ---------- profile 门（W1） ----------
+
+export type FeatureProfile = "full" | "lite";
+
+/** profile 下发/变化事件：服务端 settings 返回 lite 时各门控表面重算。 */
+export const FEATURE_PROFILE_CHANGED_EVENT = "nowen:feature-profile-changed";
+
+/**
+ * 构建期默认值：VITE_LITE=1 时 P1 代码已从产物剔除，运行期无法再启用。
+ * 未设置时为完整模式——默认行为零变化。
+ */
+const BUILD_LITE =
+  import.meta.env.VITE_LITE === "1" ||
+  import.meta.env.VITE_LITE === "true" ||
+  import.meta.env.VITE_LITE === true;
+
+let serverProfile: FeatureProfile = "full";
+
+/** 生效 profile：构建期 lite 优先，否则以服务端下发为准。 */
+export function getFeatureProfile(): FeatureProfile {
+  return BUILD_LITE || serverProfile === "lite" ? "lite" : "full";
+}
+
+/**
+ * 服务端 profile 下发。来自公开 settings（GET /api/settings 的 profile 字段，
+ * 由后端 NOWEN_PROFILE 决定），登录前即可用；无法反超构建期 lite。
+ */
+export function setServerFeatureProfile(profile: string | undefined | null): void {
+  const next: FeatureProfile = profile === "lite" ? "lite" : "full";
+  if (next === serverProfile) return;
+  serverProfile = next;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(FEATURE_PROFILE_CHANGED_EVENT));
+  }
+}
+
+/** P1 模块在当前 profile 下是否启用。完整模式恒为 true。 */
+export function isFeatureEnabled(feature: FeatureKey): boolean {
+  if (getFeatureProfile() === "full") return true;
+  return FEATURES[feature].tier === "P0";
+}
+
+/**
+ * 订阅生效 profile。服务端 profile 异步到达（公开 settings 在登录前返回）后，
+ * 导航/视图等门控表面需要重算，避免闪现后被禁模块入口。
+ */
+export function useFeatureProfile(): FeatureProfile {
+  const [profile, setProfile] = useState<FeatureProfile>(getFeatureProfile);
+  useEffect(() => {
+    const onChange = () => setProfile(getFeatureProfile());
+    window.addEventListener(FEATURE_PROFILE_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(FEATURE_PROFILE_CHANGED_EVENT, onChange);
+  }, []);
+  return profile;
+}
+
+/** NavRail mode → feature 键（lite 下隐藏对应导航项）。 */
+const NAV_MODE_FEATURE: Record<string, FeatureKey> = {
+  diary: "diary",
+  tasks: "tasks",
+  mindmaps: "mindmap",
+  "ai-chat": "ai",
+  shares: "sharing",
+};
+
+/** 导航 mode 是否可用（无对应 P1 feature 的 mode 恒可用）。 */
+export function isNavigationModeEnabled(mode: string): boolean {
+  const feature = NAV_MODE_FEATURE[mode];
+  return !feature || isFeatureEnabled(feature);
+}
