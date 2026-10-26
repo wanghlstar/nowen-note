@@ -194,7 +194,7 @@ fn pick_backend_port() -> Result<u16, String> {
     Ok(port)
 }
 
-fn node_executable(app: &AppHandle) -> Result<PathBuf, String> {
+fn node_executable(_app: &AppHandle) -> Result<PathBuf, String> {
     if let Some(from_env) = std::env::var_os("NOWEN_TAURI_NODE") {
         let p = PathBuf::from(from_env);
         if p.exists() {
@@ -202,10 +202,14 @@ fn node_executable(app: &AppHandle) -> Result<PathBuf, String> {
         }
     }
     // Packaged: the `node` external binary sits next to the app executable.
-    if let Ok(exe_dir) = app.path().resolve("", tauri::path::BaseDirectory::Executable) {
-        let candidate = exe_dir.join("node");
-        if candidate.exists() {
-            return Ok(candidate);
+    // NOTE: `path().resolve("", BaseDirectory::Executable)` does not reliably
+    // return the executable's directory; `current_exe()` always does.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let candidate = exe_dir.join("node");
+            if candidate.exists() {
+                return Ok(candidate);
+            }
         }
     }
     // Dev: rely on PATH.
@@ -302,6 +306,7 @@ pub fn start_backend(app: &AppHandle) -> Result<u16, String> {
         .arg(&entry)
         .current_dir(&cwd)
         .env("NODE_ENV", "production")
+        .env("NOWEN_PROFILE", "lite")
         .env("PORT", port.to_string())
         .env("DB_PATH", &db_path)
         .env("ELECTRON_USER_DATA", &data_dir)
@@ -462,22 +467,71 @@ pub fn ensure_backend(app: AppHandle, state: State<'_, BackendState>) -> Result<
     start_backend(&app)
 }
 
-/// Bootstraps the local admin account, mirroring electron/localAccountBootstrap.js.
-/// Synchronous on purpose: it runs on Tauri's command thread pool, never on the
-/// async runtime.
-#[tauri::command]
-pub fn get_local_auth(
-    _app: AppHandle,
-    state: State<'_, BackendState>,
-) -> Result<LocalAuthResult, String> {
-    let (port, data_dir) = {
-        let guard = state.process.lock().unwrap();
-        let proc = guard
-            .as_ref()
-            .ok_or_else(|| "backend not started".to_string())?;
-        (proc.port(), proc.app_data_dir.clone())
-    };
+/// Flat response of `/auth/desktop/bootstrap-local`
+/// (backend/src/routes/auth.ts `issueDesktopLocalAuth`): `{token,
+/// refreshToken, user}` on success, `{code}` or a bare status on failure.
+/// NOTE: there is no `{data: ...}` envelope — electron/localAccountBootstrap.js
+/// still reads `response.data?.token` and silently falls back to the login
+/// page on first run (see docs/tauri-lite-plan.md).
+#[derive(Debug, Default, Deserialize)]
+struct BootstrapResponse {
+    #[serde(default)]
+    token: Option<String>,
+    #[serde(rename = "refreshToken", default)]
+    refresh_token: Option<String>,
+    #[serde(default)]
+    user: Option<LocalAuthUser>,
+    #[serde(default)]
+    code: Option<String>,
+}
 
+/// Pure parsing half of `bootstrap_local_account`, split out for testing.
+fn parse_bootstrap_response(status: u16, text: &str) -> LocalAuthResult {
+    let parsed: Option<BootstrapResponse> = serde_json::from_str(text).ok();
+    if status != 200 {
+        let reason = parsed
+            .as_ref()
+            .and_then(|p| p.code.clone())
+            .unwrap_or_else(|| status.to_string());
+        return LocalAuthResult {
+            account: None,
+            reason: Some(reason),
+        };
+    }
+    match parsed {
+        Some(p) => {
+            let BootstrapResponse {
+                token,
+                refresh_token,
+                user,
+                code,
+            } = p;
+            match (token, user) {
+                (Some(token), Some(user)) if user.role == "admin" => LocalAuthResult {
+                    account: Some(LocalAuthAccount {
+                        token,
+                        refresh_token,
+                        user,
+                    }),
+                    reason: None,
+                },
+                _ => LocalAuthResult {
+                    account: None,
+                    reason: Some(code.unwrap_or_else(|| "no_local_account".to_string())),
+                },
+            }
+        }
+        None => LocalAuthResult {
+            account: None,
+            reason: Some("parse bootstrap response failed".to_string()),
+        },
+    }
+}
+
+/// Core bootstrap logic, shared by the `get_local_auth` command and the
+/// window initialization script (which embeds the result so the prebuilt
+/// frontend works without the Tauri JS API — see docs/tauri-lite-plan.md).
+fn bootstrap_local_account(port: u16, data_dir: &std::path::Path) -> Result<LocalAuthResult, String> {
     let secret_path = data_dir.join(".local_account_secret");
     let secret = read_or_create_secret(&secret_path, 32)?;
     let db_path = data_dir.join("nowen-note.db");
@@ -501,47 +555,39 @@ pub fn get_local_auth(
         Some(body.as_bytes()),
     )?;
 
-    if status != 200 {
-        return Ok(LocalAuthResult {
-            account: None,
-            reason: Some(status.to_string()),
-        });
-    }
+    Ok(parse_bootstrap_response(status, &text))
+}
 
-    #[derive(Deserialize)]
-    struct Envelope {
-        #[serde(default)]
-        data: Option<Data>,
-    }
-    #[derive(Deserialize)]
-    struct Data {
-        #[serde(default)]
-        token: Option<String>,
-        #[serde(rename = "refreshToken", default)]
-        refresh_token: Option<String>,
-        #[serde(default)]
-        user: Option<LocalAuthUser>,
-    }
+/// Bootstraps the local admin account, mirroring electron/localAccountBootstrap.js.
+/// Synchronous on purpose: it runs on Tauri's command thread pool, never on the
+/// async runtime.
+#[tauri::command]
+pub fn get_local_auth(
+    _app: AppHandle,
+    state: State<'_, BackendState>,
+) -> Result<LocalAuthResult, String> {
+    let (port, data_dir) = {
+        let guard = state.process.lock().unwrap();
+        let proc = guard
+            .as_ref()
+            .ok_or_else(|| "backend not started".to_string())?;
+        (proc.port(), proc.app_data_dir.clone())
+    };
+    bootstrap_local_account(port, &data_dir)
+}
 
-    let envelope: Envelope =
-        serde_json::from_str(&text).map_err(|e| format!("parse bootstrap response failed: {e}"))?;
-    let account = match envelope.data {
-        Some(data) => match (data.token, data.user) {
-            (Some(token), Some(user)) if user.role == "admin" => Some(LocalAuthAccount {
-                token,
-                refresh_token: data.refresh_token,
-                user,
-            }),
-            _ => None,
-        },
-        None => None,
+/// Bootstraps the local account for the window init script. Returns None on
+/// any failure so the frontend falls back to the login page (same contract
+/// as Electron's getLocalAuth returning null).
+pub fn bootstrap_local_auth(state: &BackendState) -> Option<LocalAuthAccount> {
+    let (port, data_dir) = {
+        let guard = state.process.lock().ok()?;
+        let proc = guard.as_ref()?;
+        (proc.port(), proc.app_data_dir.clone())
     };
-    let reason = if account.is_some() {
-        None
-    } else {
-        Some("no_local_account".to_string())
-    };
-    Ok(LocalAuthResult { account, reason })
+    bootstrap_local_account(port, &data_dir)
+        .ok()
+        .and_then(|result| result.account)
 }
 
 pub fn shutdown(state: State<'_, BackendState>) {
@@ -551,4 +597,41 @@ pub fn shutdown(state: State<'_, BackendState>) {
         }
     }
     state.ready.store(false, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Real response shape captured from a running backend
+    /// (`issueDesktopLocalAuth`: `c.json({ ...tokens, user })` — flat, no
+    /// `{data: ...}` envelope).
+    const LIVE_BOOTSTRAP_OK: &str = r#"{"token":"eyJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJsb2dpbiJ9.sig","refreshToken":"eyJhbGciOiJIUzI1NiJ9.eyJ0eXAiOiJyZWZyZXNoIn0.sig","user":{"id":"1a4938ff-2dda-4282-8e9a-3f812a6488d4","username":"desktop","email":"desktop@nowen-note.local","avatarUrl":null,"displayName":"Local Desktop User","role":"admin","isDemo":false,"personalExportEnabled":true,"personalImportEnabled":true,"tokenVersion":0,"createdAt":"2026-10-26T09:52:13.570Z"}}"#;
+
+    #[test]
+    fn parses_flat_bootstrap_success() {
+        let result = parse_bootstrap_response(200, LIVE_BOOTSTRAP_OK);
+        let account = result.account.expect("flat response must yield an account");
+        assert_eq!(account.user.role, "admin");
+        assert_eq!(account.user.username, "desktop");
+        assert!(account.token.starts_with("eyJ"), "JWT token extracted");
+        assert!(account.refresh_token.is_some(), "refresh token extracted");
+        assert_eq!(result.reason, None);
+    }
+
+    #[test]
+    fn bootstrap_error_codes_surface_as_reason() {
+        let r = parse_bootstrap_response(409, r#"{"code":"LOCAL_ACCOUNT_NOT_FOUND"}"#);
+        assert!(r.account.is_none());
+        assert_eq!(r.reason.as_deref(), Some("LOCAL_ACCOUNT_NOT_FOUND"));
+
+        let r = parse_bootstrap_response(403, r#"{"code":"LOCAL_ACCOUNT_DISABLED"}"#);
+        assert_eq!(r.reason.as_deref(), Some("LOCAL_ACCOUNT_DISABLED"));
+
+        let r = parse_bootstrap_response(403, r#"{"error":"forbidden"}"#);
+        assert_eq!(r.reason.as_deref(), Some("403"));
+
+        let r = parse_bootstrap_response(200, r#"{"user":{"id":"u1","role":"admin"}}"#);
+        assert_eq!(r.reason.as_deref(), Some("no_local_account"));
+    }
 }

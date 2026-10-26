@@ -3,7 +3,13 @@ import test from "node:test";
 import { resolveCorsOrigin } from "../src/lib/cors-policy";
 
 test("production CORS allows native client origins by default", () => {
-  for (const origin of ["https://localhost", "capacitor://localhost", "null"]) {
+  for (const origin of [
+    "https://localhost",
+    "capacitor://localhost",
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "null",
+  ]) {
     assert.equal(resolveCorsOrigin({ origin, isProd: true, corsOrigins: [] }), origin);
   }
 });

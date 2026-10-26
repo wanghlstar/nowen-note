@@ -105,12 +105,15 @@ cd tauri && npx tauri dev
 
 ```bash
 npm run build:backend   # backend/dist/index.js
-npm run build:frontend  # frontend/dist
 cd tauri && npx tauri build
 ```
 
-macOS 产物（实测）：`target/release/bundle/macos/Nowen Note Lite.app`（约 332 MiB）、
-`target/release/bundle/dmg/Nowen Note Lite_1.5.1_aarch64.dmg`（约 114 MiB）。
+`tauri.conf.json` 的 `beforeBuildCommand` 已固定为 `VITE_LITE=1 npm --prefix .. run
+build:frontend`（lite 构建开关，W3），sidecar 固定以 `NOWEN_PROFILE=lite` 启动 backend
+（W2 运行开关）——**Lite 包永远是裁剪版**，完整版请用 Electron。
+
+macOS 产物（实测）：`target/release/bundle/macos/Nowen Note Lite.app`（约 329 MiB）、
+`target/release/bundle/dmg/Nowen Note Lite_1.5.1_aarch64.dmg`（约 113 MiB）。
 Windows/Linux 需在对应平台执行同一命令（targets 已配置 msi/nsis/deb/appimage）。
 
 ### 三平台构建矩阵（D8）
@@ -142,7 +145,59 @@ Windows/Linux 需在对应平台执行同一命令（targets 已配置 msi/nsis/
   dmg 安装后完整 GUI 验收（登录→建/编笔记→断网编辑→联网同步→第二设备读取）
   需用户在真机执行。
 
-## 7. 已知缺口与后续会话
+## 7. Lite 接线与 GUI 集成修复（Phase A.5，本会话实测）
+
+`feat/lite-trim`（W1-W3 裁剪）合入本分支后，GUI 实测暴露 4 个 Phase A 未覆盖的缺陷
+（此前只验了 HTTP 层，没验 webview 内链路），全部已修复：
+
+1. **`window.__TAURI__` 不存在导致零登录/获取应用信息直接抛错**：Tauri 2 只注入
+   `__TAURI_INTERNALS__`，`__TAURI__` 对象由 npm 包 `@tauri-apps/api` 创建，而前端是
+   预构建产物不装 JS 依赖。修复：`init_script.js` 模板在建窗时把 bootstrap 结果、
+   app info、端口**嵌入 initialization script**（`build_init_script`），shim 优先走
+   真实 invoke（未来接入 @tauri-apps/api 时自动生效），否则读嵌入值。嵌入 JSON 对
+   `<`/`>`/`&` 做 `\uXXXX` 转义防 `</script>` 逃逸。
+2. **node sidecar 解析错误**：`path().resolve("", Executable)` 不可靠地返回可执行目录，
+   拼接 "node" 失败后静默回退 PATH（实测跑成了 homebrew node，仅因版本巧合未暴露）。
+   修复：改用 `std::env::current_exe().parent()`；实测包内 `Contents/MacOS/node` 生效。
+3. **bootstrap 响应解析按错误信封**：后端 `issueDesktopLocalAuth`（auth.ts:339）返回
+   **扁平** `{token,refreshToken,user}`，无 `{data:...}` 信封；原解析器按信封读 →
+   永远 account:null → 零登录静默回退登录页。修复：`parse_bootstrap_response` 按扁平
+   结构解析（含 `{code}` 错误码 → reason），用实测响应 JSON 做回归测试。
+   注意 `electron/localAccountBootstrap.js:11` 仍在读 `response.data?.token`——同样
+   的首跑缺陷，因登录后 token 持久化而不可见；修 Electron 需单独评估（不在本 brief 范围）。
+4. **CORS 白名单不含 Tauri origin，local-first 全量请求被拦**：后端生产模式
+   （cors-policy.ts）默认只放行 `https/localhost、capacitor://、ionic://、null`。
+   Electron 渲染进程 origin 是 `file://` → `Origin: null` 命中；Tauri 是
+   `tauri://localhost`（Windows `http://tauri.localhost`）→ 不在名单 → 无
+   `Access-Control-Allow-Origin` → WebKit "Load failed"。这不只影响连远程服务端，
+   **local-first 模式（tauri://localhost → 127.0.0.1 backend）同样跨域被拦**。
+   修复：白名单加入两个 tauri origin（`backend/src/lib/cors-policy.ts` +
+   cors-policy.test.ts 回归）。
+
+### 服务端兼容性
+
+- Lite 客户端连**旧服务端**：功能可用（W1-W3 是加性门控；服务端不下发 profile 时
+  前端按 full 运行）。
+- 但旧服务端（含官方 v1.5.3）**CORS 白名单没有 tauri origin**，远程服务器模式会被拦。
+  立即可用的解法：服务端设环境变量
+  `CORS_ORIGINS=tauri://localhost,http://tauri.localhost` 重启；或升级到含本修复的
+  服务端版本。local-first 模式不受影响（backend 随 app 打包，已含修复）。
+- macOS 15+ 首次访问局域网 IP 可能弹"本地网络"权限，需允许。
+
+### 验证记录（Phase A.5）
+
+- `cargo test` 5/5（init script 嵌入/转义/null 回退、bootstrap 扁平解析/错误码）。
+- `node --import tsx --test tests/cors-policy.test.ts` 3/3。
+- init_script.js 同一份文件用 node 实测三种场景：无 `__TAURI__`（嵌入值生效）、
+  有 `__TAURI__`（优先真实 invoke）、auth=null（回退登录页）。
+- 重新 `tauri build` 后启动实测：sidecar 用包内 node；端口回退正常；
+  `Origin: tauri://localhost` → 200 + `access-control-allow-origin: tauri://localhost`；
+  `http://tauri.localhost`、`capacitor://localhost`（回归）均放行；陌生 origin 无 ACAO；
+  `/api/settings` 返回 `profile: lite`。
+- 未执行：GUI 肉眼验收（登录→笔记→断网→同步→第二设备）需用户真机操作；
+  Windows/Linux 构建。
+
+## 8. 已知缺口与后续会话
 
 1. **node sidecar 二进制分发**：`src-tauri/binaries/` 已 gitignore，不入库。
    CI 需按平台放置对应 node（建议统一 node 22 LTS，保证 better-sqlite3 ABI 127）。

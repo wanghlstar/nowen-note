@@ -4,6 +4,8 @@ export const DEFAULT_NATIVE_CORS_ORIGINS = [
   "http://localhost",
   "capacitor://localhost",
   "ionic://localhost",
+  "tauri://localhost",
+  "http://tauri.localhost",
   "null",
 ];
 
