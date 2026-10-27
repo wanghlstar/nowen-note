@@ -4,4 +4,15 @@
 DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
 mkdir -p "$DATA_DIR"
 chown nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+
+# 从 docker 版迁移：容器的数据落在共享目录且属主为 root。
+# 仅在数据目录尚无数据库时执行一次，源目录保持原样不删除。
+LEGACY_DIR="${NOWEN_LEGACY_DATA_DIR:-/var/apps/nowen-note/shares/nowen-note/data}"
+if [ -f "$LEGACY_DIR/nowen-note.db" ] && [ ! -f "$DATA_DIR/nowen-note.db" ]; then
+    echo "检测到旧版（docker 版）数据，迁移到 $DATA_DIR ..." > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    cp -a "$LEGACY_DIR/." "$DATA_DIR/" 2>/dev/null || true
+    chown -R nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+    rm -f "$DATA_DIR/nowen-note.pid"
+    echo "迁移完成（旧目录 $LEGACY_DIR 保留未删除）。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+fi
 exit 0

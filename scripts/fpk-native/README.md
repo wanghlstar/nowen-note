@@ -89,5 +89,7 @@ app.tgz 的内容会直接解到 `target/`（即 `/vol{n}/@appcenter/nowen-note/
 ## 从 docker 版切换
 
 两个包的 `appname` 都是 `nowen-note`，同一时刻只能装一个。已装 docker 版的
-用户先卸载再装直装版；数据不会自动迁移，需要手动拷贝数据库与附件目录。
-注意 docker 版的数据卷布局与直装版不同（直装版数据在 `$TRIM_PKGVAR`）。
+同一 NAS 上从 docker 版切到直装版时，`install_init`/`upgrade_init` 会发现
+共享目录 `/var/apps/nowen-note/shares/nowen-note/data` 里的旧数据，并在
+数据目录（`$TRIM_PKGVAR`）尚无数据库时一次性迁移（含 `.jwt_secret`，
+保留原有登录态）；旧目录保留不删除。跨机器迁移仍需手动拷贝。
