@@ -1,0 +1,89 @@
+name: fpk-native
+
+# 飞牛 fnOS 直装版（原生应用，不经过 Docker）打包。
+#
+# 产物：nowen-note-<version>.fpk，自带 Node 22 运行时 + backend + frontend，
+#       上传到飞牛 NAS「应用中心 → 设置 → 手动安装」即可使用。
+#
+# 触发方式：
+#   - Actions 页面手动运行（可指定版本号，默认取 package.json）
+#   - 推送 v* tag 自动运行
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "FPK 版本号（X.Y.Z，留空取 package.json.version）"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-fpk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # backend：tsc 产物 + 生产依赖（与 Dockerfile 运行时阶段同口径，
+      # 保证 better-sqlite3 / sqlite-vec / sharp 等原生模块在 ubuntu(glibc) 下
+      # 按 Node 22 ABI 127 安装，与随包分发的 Node 22 运行时匹配）
+      - name: Build backend (tsc + production deps)
+        run: |
+          cd backend
+          npm ci --no-audit --no-fund
+          npx tsc
+          cp src/plugins/runner-child.mjs src/plugins/sandbox-child.mjs dist/plugins/
+          node scripts/smoke-plugin-artifacts.cjs
+          node scripts/smoke-sqlite-vec.cjs
+          npm prune --omit=dev
+
+      - name: Build frontend (web)
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          NODE_OPTIONS=--max-old-space-size=4096 npm run build:web
+
+      # 随包分发的 Node 运行时。版本需与上面 setup-node 的大版本一致；
+      # 升级时同步改这里与 backend 原生模块的 ABI 预期。
+      - name: Download Node.js runtime (linux-x64)
+        env:
+          NODE_VERSION: v22.22.1
+        run: |
+          curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz
+          mkdir -p /tmp/node-runtime
+          tar -xJf /tmp/node.tar.xz -C /tmp/node-runtime --strip-components=1
+          /tmp/node-runtime/bin/node --version
+
+      - name: Download fnpack
+        run: |
+          curl -fsSL "https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64" -o /tmp/fnpack
+          chmod +x /tmp/fnpack
+          /tmp/fnpack --help >/dev/null
+
+      - name: Package fpk
+        env:
+          FNPACK_BIN: /tmp/fnpack
+          NODE_BIN: /tmp/node-runtime/bin/node
+          FPK_VERSION: ${{ inputs.version }}
+        run: node scripts/fpk-native/build-fpk-native.mjs
+
+      - name: Upload fpk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nowen-note-fpk-native
+          path: dist-fpk-native/*.fpk
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
