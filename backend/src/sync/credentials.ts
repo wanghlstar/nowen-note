@@ -28,6 +28,13 @@ interface StoredCredential {
   profileId: string;
   serverUrl: string;
   token: string;
+  /**
+   * 远端刷新令牌。
+   *
+   * access token 只有 15 分钟 TTL（auth-security.ts 默认 "15m"），长期同步
+   * 靠它在过期后静默续期；没有它同步会在 15 分钟后暂停并要求重新登录。
+   */
+  refreshToken?: string;
   /** 远端用户标识，仅用于展示与校验，不参与鉴权。 */
   remoteUserId?: string | null;
   updatedAt: string;
@@ -62,18 +69,29 @@ function writeFile(data: CredentialFile): void {
   }
 }
 
-/** 保存某个 Profile 的远端凭据。同一 Profile 重复保存会覆盖旧 token。 */
+/**
+ * 保存某个 Profile 的远端凭据。同一 Profile 重复保存会覆盖旧 token。
+ *
+ * refreshToken 不传时保留文件中的原有值：token 静默刷新后的持久化只带新
+ * access token，绝不能把仍在有效期内的 refreshToken 清掉。
+ */
 export function saveRemoteCredential(input: {
   profileId: string;
   serverUrl: string;
   token: string;
+  refreshToken?: string | null;
   remoteUserId?: string | null;
 }): void {
   const data = readFile();
+  const previous = data[input.profileId];
+  const refreshToken = typeof input.refreshToken === "string" && input.refreshToken.trim()
+    ? input.refreshToken.trim()
+    : previous?.refreshToken;
   data[input.profileId] = {
     profileId: input.profileId,
     serverUrl: input.serverUrl.replace(/\/+$/, ""),
     token: input.token,
+    ...(refreshToken ? { refreshToken } : {}),
     remoteUserId: input.remoteUserId ?? null,
     updatedAt: new Date().toISOString(),
   };
@@ -118,12 +136,25 @@ export function createRemoteClientForProfile(
 ): SyncRemoteClient | null {
   const stored = getRemoteCredential(profileId);
   if (!stored) return null;
+  // 以 Profile 表里的地址为准：用户可能改过地址而凭据文件还是旧的。
+  const normalizedServerUrl = serverUrl.replace(/\/+$/, "");
   const credentials: RemoteCredentials = {
-    // 以 Profile 表里的地址为准：用户可能改过地址而凭据文件还是旧的。
-    serverUrl: serverUrl.replace(/\/+$/, ""),
+    serverUrl: normalizedServerUrl,
     token: stored.token,
+    ...(stored.refreshToken ? { refreshToken: stored.refreshToken } : {}),
   };
-  return new SyncRemoteClient(credentials);
+  return new SyncRemoteClient(credentials, {
+    onTokenRefreshed: (token) => {
+      // 静默刷新成功后立刻落盘：进程被杀也不会退回旧 token 再撞一次 401。
+      // refreshToken 不传，保留文件中的原值（30 天有效、不轮换）。
+      saveRemoteCredential({
+        profileId,
+        serverUrl: normalizedServerUrl,
+        token,
+        remoteUserId: stored.remoteUserId ?? null,
+      });
+    },
+  });
 }
 
 /**
@@ -139,11 +170,17 @@ export function createBlobClientForProfile(
 ): SyncBlobClient | null {
   const stored = getRemoteCredential(profileId);
   if (!stored) return null;
+  const normalized = serverUrl.replace(/\/+$/, "");
   return new SyncBlobClient({
-    serverUrl: serverUrl.replace(/\/+$/, ""),
+    serverUrl: normalized,
     credential: {
-      serverUrl: serverUrl.replace(/\/+$/, ""),
-      token: stored.token,
+      serverUrl: normalized,
+      // 附件通道与元数据通道各自构造 client，这里用 getter 共享凭据来源：
+      // access token 被静默刷新并落盘后，附件通道下一次请求即用上新 token，
+      // 否则长会话里附件会一直拿旧 token 撞 401（blob 失败只告警不中断同步）。
+      get token() {
+        return getRemoteCredential(profileId)?.token ?? "";
+      },
     },
   });
 }

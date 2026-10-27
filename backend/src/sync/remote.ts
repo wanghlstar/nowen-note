@@ -26,6 +26,8 @@ export interface RemoteCredentials {
   serverUrl: string;
   /** 远端访问令牌。过期时同步暂停，本地读写不受影响。 */
   token: string;
+  /** 远端刷新令牌。access token 15 分钟过期是设计行为，长期同步靠它静默续期。 */
+  refreshToken?: string;
 }
 
 export interface RemotePlan {
@@ -155,14 +157,16 @@ function joinUrl(serverUrl: string, route: string, query = ""): string {
 export class SyncRemoteClient {
   private readonly fetchImpl: FetchLike;
   private readonly timeoutMs: number;
+  private readonly onTokenRefreshed?: (token: string) => void;
 
   constructor(
     private readonly credentials: RemoteCredentials,
-    options: { fetchImpl?: FetchLike; timeoutMs?: number } = {},
+    options: { fetchImpl?: FetchLike; timeoutMs?: number; onTokenRefreshed?: (token: string) => void } = {},
   ) {
     this.fetchImpl = options.fetchImpl
       ?? (globalThis.fetch as unknown as FetchLike);
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.onTokenRefreshed = options.onTokenRefreshed;
   }
 
   /**
@@ -170,7 +174,8 @@ export class SyncRemoteClient {
    *
    * 错误分类是这里最重要的职责：
    * - 网络层异常 / 超时 → NETWORK_UNAVAILABLE（可重试）
-   * - 401 / 403        → AUTH_EXPIRED（暂停同步，等重新授权）
+   * - 401 / 403        → 先尝试 refreshToken 静默续期并重试一次；仍失败才
+   *                      AUTH_EXPIRED（暂停同步，等重新授权）
    * - 404              → 远端未启用 V2，按服务端错误处理，避免误判为"数据不存在"
    * - 5xx              → SERVER_ERROR（可重试）
    * - 其它 4xx         → INVALID_PAYLOAD（重发同样会失败，不该无脑轮询）
@@ -179,17 +184,39 @@ export class SyncRemoteClient {
     route: string,
     init: { method: string; query?: string; body?: unknown },
   ): Promise<T> {
+    let response = await this.send(route, init, this.credentials.token);
+
+    if (!response.ok) {
+      if (
+        (response.status === 401 || response.status === 403)
+        && this.credentials.refreshToken
+        && await this.refreshAccessToken()
+      ) {
+        response = await this.send(route, init, this.credentials.token);
+        if (response.ok) return this.parseJson<T>(response);
+      }
+      await this.throwRemoteFailure(response);
+    }
+
+    return this.parseJson<T>(response);
+  }
+
+  /** 单次 HTTP 发送；token 由调用方显式传入，刷新重试时用新值。 */
+  private async send(
+    route: string,
+    init: { method: string; query?: string; body?: unknown },
+    token: string,
+  ): Promise<Awaited<ReturnType<FetchLike>>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
-    let response: Awaited<ReturnType<FetchLike>>;
     try {
-      response = await this.fetchImpl(
+      return await this.fetchImpl(
         joinUrl(this.credentials.serverUrl, route, init.query || ""),
         {
           method: init.method,
           headers: {
-            Authorization: `Bearer ${this.credentials.token}`,
+            Authorization: `Bearer ${token}`,
             ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
           },
           body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -202,27 +229,74 @@ export class SyncRemoteClient {
     } finally {
       clearTimeout(timer);
     }
+  }
 
-    if (!response.ok) {
-      let payload: any = null;
-      try { payload = await response.json(); } catch { /* 非 JSON 错误响应 */ }
-      const remoteCode = typeof payload?.code === "string" ? payload.code : "";
-      if (remoteCode === "ACCESS_REVOKED" || remoteCode === "SCOPE_FORBIDDEN") {
-        throw new SyncError(remoteCode, payload?.error || remoteCode);
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new SyncError("AUTH_EXPIRED", `远端拒绝访问（${response.status}）`);
-      }
-      if (response.status >= 500 || response.status === 404) {
-        throw new SyncError("SERVER_ERROR", `远端返回 ${response.status}`);
-      }
-      throw new SyncError("INVALID_PAYLOAD", `远端返回 ${response.status}`);
+  /** 把远端错误响应归类为 SyncError。响应体只能读一次，由本方法统一消费。 */
+  private async throwRemoteFailure(
+    response: Awaited<ReturnType<FetchLike>>,
+  ): Promise<never> {
+    let payload: any = null;
+    try { payload = await response.json(); } catch { /* 非 JSON 错误响应 */ }
+    const remoteCode = typeof payload?.code === "string" ? payload.code : "";
+    if (remoteCode === "ACCESS_REVOKED" || remoteCode === "SCOPE_FORBIDDEN") {
+      throw new SyncError(remoteCode, payload?.error || remoteCode);
     }
+    if (response.status === 401 || response.status === 403) {
+      throw new SyncError("AUTH_EXPIRED", `远端拒绝访问（${response.status}）`);
+    }
+    if (response.status >= 500 || response.status === 404) {
+      throw new SyncError("SERVER_ERROR", `远端返回 ${response.status}`);
+    }
+    throw new SyncError("INVALID_PAYLOAD", `远端返回 ${response.status}`);
+  }
 
+  private async parseJson<T>(
+    response: Awaited<ReturnType<FetchLike>>,
+  ): Promise<T> {
     try {
       return await response.json() as T;
     } catch {
       throw new SyncError("SERVER_ERROR", "远端响应不是合法 JSON");
+    }
+  }
+
+  /**
+   * 用 refreshToken 静默续期 access token。
+   *
+   * 官方契约：POST {serverUrl}/api/auth/refresh，body { refreshToken }，
+   * 成功返回 { token }（refresh token 本身 30 天有效、不轮换）。
+   *
+   * 刻意不走 request()：那里的 401 归类会再次触发刷新，形成无限递归。
+   * 任何失败都返回 false，由调用方按原来的 AUTH_EXPIRED 规则处理——
+   * 刷新失败意味着必须重新登录，同步暂停但本地读写不受影响。
+   */
+  private async refreshAccessToken(): Promise<boolean> {
+    const refreshToken = this.credentials.refreshToken;
+    if (!refreshToken) return false;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(
+        `${this.credentials.serverUrl.replace(/\/+$/, "")}/api/auth/refresh`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) return false;
+      const payload = await response.json().catch(() => null) as { token?: unknown } | null;
+      const token = typeof payload?.token === "string" ? payload.token.trim() : "";
+      if (!token) return false;
+      this.credentials.token = token;
+      this.onTokenRefreshed?.(token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
