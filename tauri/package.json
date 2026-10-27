@@ -1,7 +1,7 @@
 {
   "name": "nowen-note-lite-tauri",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.5.3",
   "description": "Tauri shell for Nowen Note Lite (local-first desktop client)",
   "scripts": {
     "tauri": "tauri",
