@@ -1,22 +1,7 @@
 #!/bin/bash
-# 安装前：校验应用负载并准备持久数据目录（此脚本以 root 运行）
-APPDEST="${TRIM_APPDEST:-/var/apps/nowen-note/target}"
-if [ -f "$APPDEST/app/backend/dist/index.hardened.js" ]; then
-    APP_HOME="$APPDEST/app"
-else
-    APP_HOME="$APPDEST"
-fi
+# 安装前：准备持久数据目录（此脚本在应用文件解包之前、以 root 运行，
+# 因此不能校验应用负载，负载校验在 install_callback 中完成）。
 DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
-
-if [ ! -f "$APP_HOME/backend/dist/index.hardened.js" ]; then
-    echo "应用负载不完整：缺少 backend/dist/index.hardened.js，请重新下载安装包。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
-    exit 1
-fi
-if [ ! -x "$APP_HOME/node/bin/node" ]; then
-    echo "应用负载不完整：缺少 node/bin/node 运行时。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
-    exit 1
-fi
-
 mkdir -p "$DATA_DIR"
 chown -R nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
 
