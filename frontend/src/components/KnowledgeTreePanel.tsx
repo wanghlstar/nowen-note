@@ -414,7 +414,7 @@ export function KnowledgeTreePanel({
           : null,
       );
       const merged = Array.from(
-        new Map([...owned.nodes, ...shared].map((node) => [node.id, node])).values(),
+        new Map([...(owned.nodes ?? []), ...(shared ?? [])].map((node) => [node.id, node])).values(),
       );
       if (requestExpansionScope !== getKnowledgeTreeExpansionScope()) return;
       const expandableNodeIds = new Set(

@@ -24,6 +24,7 @@
   var listeners = {};
   window.nowenDesktop = {
     isDesktop: true,
+    isLiteOnly: true,
     platform: 'tauri',
     releaseChannel: 'lite',
     on: function (channel, listener) {
@@ -35,5 +36,10 @@
     getLocalAuth: function () { return invoke('get_local_auth'); },
     getAppInfo: function () { return invoke('get_app_info'); },
     getBackendPort: function () { return invoke('backend_port'); },
+    // Phase A 未实现的能力：返回明确的 not-supported，UI 据此降级提示
+    // （tauri-plugin-updater / opener / 日志目录见 docs/tauri-lite-plan.md §8）。
+    checkForUpdates: function () { return Promise.resolve({ ok: false, reason: 'not-supported' }); },
+    quitAndInstall: function () { return Promise.resolve({ ok: false }); },
+    openLogDir: function () { return Promise.resolve({ ok: false, path: '' }); },
   };
 })();

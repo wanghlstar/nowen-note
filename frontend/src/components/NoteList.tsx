@@ -1630,8 +1630,9 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
   const showAndroidLocalhostHint =
     isNativeCapacitor() && !!currentServerUrl && isAndroidInvalidServerUrl(currentServerUrl);
 
-  // Phase 2: 加载分享状态
+  // Phase 2: 加载分享状态（lite 下 sharing 关闭，跳过探测）
   useEffect(() => {
+    if (!isFeatureEnabled("sharing")) return;
     api.getSharedNoteIds().then((ids) => setSharedNoteIds(new Set(ids))).catch(() => {});
   }, [state.notes]);
 

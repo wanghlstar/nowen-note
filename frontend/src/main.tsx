@@ -75,6 +75,7 @@ import { resolveCurrentAppPathname } from "./lib/appPathNavigation";
 import { isFeatureEnabled } from "./lib/featureRegistry";
 import { installUgreenCredentialedFetch } from "./lib/ugreenRemoteAccess";
 import { observeBootSplashReadiness, reportBootStage } from "./lib/bootSplash";
+import { initializeServerUrlFromRuntime } from "./lib/api";
 
 reportBootStage("runtime");
 
@@ -177,6 +178,15 @@ installOptionalRuntime("editor-performance-global", installEditorPerformanceGlob
 installOptionalRuntime("issue-210-signoff", installIssue210SignoffRuntime);
 installOptionalRuntime("inline-comment-tooltip", installInlineCommentTooltipMount);
 installOptionalRuntime("code-block-theme", initCodeBlockTheme);
+
+// Electron/Tauri 桌面端把 ?serverUrl= query 迁入 localStorage：前端路由导航
+// （history.pushState）会丢掉 query，导航之后发出的 API 调用必须还能读到地址。
+// 必须在 renderApplication 之前同步执行（见 lib/api.impl.ts 该函数文档注释）。
+try {
+  initializeServerUrlFromRuntime();
+} catch (error) {
+  reportBootError("server-url-init", error, false);
+}
 
 const THEME_KEY = "nowen-note-theme";
 try {

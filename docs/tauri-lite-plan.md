@@ -188,6 +188,48 @@ Windows/Linux 需在对应平台执行同一命令（targets 已配置 msi/nsis/
 
 - `cargo test` 5/5（init script 嵌入/转义/null 回退、bootstrap 扁平解析/错误码）。
 - `node --import tsx --test tests/cors-policy.test.ts` 3/3。
+- init_script.js 同一份文件用 node 实测四种场景：无 `__TAURI__`（嵌入值生效）、
+  有 `__TAURI__`（优先真实 invoke）、auth=null（回退登录页）、未实现能力
+  （checkForUpdates/quitAndInstall/openLogDir 返回 not-supported）。
+- 重新 `tauri build` 后启动实测：sidecar 用包内 node；端口回退正常；
+  `Origin: tauri://localhost` → 200 + `access-control-allow-origin: tauri://localhost`；
+  `http://tauri.localhost`、`capacitor://localhost`（回归）均放行；陌生 origin 无 ACAO；
+  `/api/settings` 返回 `profile: lite`。
+- 无头浏览器全流程验收（Chrome + 专用 backend 实例 + 同一份 init_script.js）：
+  加载→零登录→建文件夹→建笔记全过；`__NOWEN_BOOT_DIAGNOSTICS__` 零错误、
+  无 pageerror、API 请求 100% 落 backend origin。
+
+### Phase A.5 第二轮：serverUrl 丢失根因（白屏/“内容暂时未加载”实测定性）
+
+用户实测白屏与“内容暂时未加载 + Spread syntax requires ...iterable not be
+null or undefined”。harness 插桩定性：
+
+1. **前端路由导航丢 query**：桌面端地址 `index.html?serverUrl=http://127.0.0.1:<port>`
+   注入后，前端 `history.pushState` 导航到 `/notes/...` 时 **query 被丢弃**
+   （`window.location.search` 变空）。`initializeServerUrlFromRuntime()`
+   （api.impl.ts:232，设计用途正是“query → localStorage 迁移”，文档注释称在
+   App.tsx 顶层 useEffect 调用）**实际从未被调用**（仅测试引用）→ 导航后
+   `getServerUrl()` 返回空 → 后续 API 全部打向页面 origin → 知识树 reload 失败
+   → “内容暂时未加载”；`KnowledgeTreePanel.tsx` 合并 `[...owned.nodes, ...shared]`
+   在响应缺 `nodes` 时抛出 “Spread syntax requires ...iterable not be null or
+   undefined”（被 catch 成树面板错误详情，非白屏；白屏是旧构建 invoke 缺陷）。
+   修复：`main.tsx` 在 `renderApplication()` 前同步调用
+   `initializeServerUrlFromRuntime()`。
+2. **知识树 spread 防御**：`KnowledgeTreePanel.tsx` / `MobileKnowledgeTreePanel.tsx`
+   的 `[...owned.nodes, ...shared]` 改 `[...(owned.nodes ?? []), ...(shared ?? [])]`，
+   消除“响应缺 nodes”崩溃类。
+3. **NoteList 分享状态探测门控**：lite 下 `shares/status/batch` 必 403，
+   `NoteList.tsx` 加 `isFeatureEnabled("sharing")` 跳过。
+
+### 已知风险（Windows）
+
+Tauri Windows 的 webview origin 是 `http://tauri.localhost`（http 开头），
+`App.tsx` 零登录 effect 的 `setServerUrl(window.location.origin)` 兜底在
+serverUrl 为空时会写入错误地址；本修复（迁移先于渲染）保证 serverUrl 不为空，
+兜底不会被触发。若未来调整启动顺序需复查此耦合。
+
+- `cargo test` 5/5（init script 嵌入/转义/null 回退、bootstrap 扁平解析/错误码）。
+- `node --import tsx --test tests/cors-policy.test.ts` 3/3。
 - init_script.js 同一份文件用 node 实测三种场景：无 `__TAURI__`（嵌入值生效）、
   有 `__TAURI__`（优先真实 invoke）、auth=null（回退登录页）。
 - 重新 `tauri build` 后启动实测：sidecar 用包内 node；端口回退正常；

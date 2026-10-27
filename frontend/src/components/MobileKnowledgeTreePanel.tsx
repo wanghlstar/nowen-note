@@ -359,7 +359,7 @@ export default function MobileKnowledgeTreePanel({
           : null,
       );
       const merged = Array.from(
-        new Map([...owned.nodes, ...shared].map((node) => [node.id, node])).values(),
+        new Map([...(owned.nodes ?? []), ...(shared ?? [])].map((node) => [node.id, node])).values(),
       );
       setNodes(merged);
       setParentId((current) => {
