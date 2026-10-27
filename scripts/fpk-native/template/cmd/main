@@ -30,7 +30,7 @@ PID_FILE="$DATA_DIR/nowen-note.pid"
 LOG_FILE="$DATA_DIR/nowen-note.log"
 NODE_BIN="$APP_HOME/node/bin/node"
 BACKEND_ENTRY="$APP_HOME/backend/dist/index.hardened.js"
-PORT="${NOWEN_PORT:-3001}"
+PORT="${NOWEN_PORT:-19010}"
 
 ensure_secret() {
     if [ -z "${JWT_SECRET:-}" ] || [ "${#JWT_SECRET}" -lt 16 ]; then

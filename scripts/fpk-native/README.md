@@ -34,7 +34,7 @@ frontend `build:web`、下载 Node 22 linux-x64 与 fnpack、组装并打包。
 1. 把 `.fpk` 上传到飞牛 NAS 任意目录
 2. 飞牛桌面 → 「应用中心」→ 右上角「设置」→「手动安装应用」
 3. 选择文件，确认安装；桌面出现「弄文笔记」图标，点击在浏览器打开
-   （地址为 `http://<NAS IP>:3001`）
+   （地址为 `http://<NAS IP>:19010`）
 
 ## 包结构与运行方式
 
@@ -56,7 +56,7 @@ app.tgz 的内容会直接解到 `target/`（即 `/vol{n}/@appcenter/nowen-note/
 `cmd/main` 的职责（复刻 `docker-entrypoint.sh` 的密钥逻辑）：
 
 - `start`：建数据目录（`TRIM_PKGVAR`）→ 生成/复用 `.jwt_secret`（首次随机生成，重启不失效）
-  → 以 `NODE_ENV=production`、`PORT=3001`、`DB_PATH=<数据目录>/nowen-note.db`
+  → 以 `NODE_ENV=production`、`PORT=19010`、`DB_PATH=<数据目录>/nowen-note.db`
   后台拉起 Node → 轮询 `/api/health` 最多 60s
 - `stop`：按 PID 文件停止进程
 - `status`：进程存活且健康检查通过返回 0，否则 3
@@ -70,7 +70,7 @@ app.tgz 的内容会直接解到 `target/`（即 `/vol{n}/@appcenter/nowen-note/
 | JWT 密钥 | 数据目录下 `.jwt_secret`（0600，勿泄漏） |
 | 运行日志 | 数据目录下 `nowen-note.log` |
 | PID 文件 | 数据目录下 `nowen-note.pid` |
-| 端口 | 3001（应用中心内改端口需同步改 `cmd/main` 的 `NOWEN_PORT`） |
+| 端口 | 19010（应用中心内改端口需同步改 `cmd/main` 的 `NOWEN_PORT`） |
 
 升级（覆盖安装）不会动数据目录；卸载按飞牛流程执行，数据目录是否保留以
 飞牛卸载选项为准——**卸载前请自行备份数据库与附件**。

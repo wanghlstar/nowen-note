@@ -5,7 +5,7 @@
             "icon": "images/icon_{0}.png",
             "type": "url",
             "protocol": "",
-            "port": "3001",
+            "port": "19010",
             "url": "/",
             "allUsers": false
         }
