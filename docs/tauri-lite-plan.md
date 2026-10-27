@@ -254,3 +254,11 @@ serverUrl 为空时会写入错误地址；本修复（迁移先于渲染）保�
 6. **双 app 共存**：identifier `com.nowen.note.lite.tauri` 与 electron lite
    （com.nowen.note.lite）、full（com.nowen.note）均不冲突（D4）；两者同时运行
    时 backend 端口自动回退，已验证可共存。
+7. **macOS 15+ 本地网络权限（已修复）**：访问自托管服务器（局域网 IP，
+   如 192.168.x.x）被 macOS 本地网络隐私管控，缺失
+   `NSLocalNetworkUsageDescription` 时系统静默阻断，表现为登录页探测
+   "连接超时"（服务端 curl 实测可达、localhost 模式不受影响——回环豁免）。
+   已通过 `src-tauri/Info.plist` + `tauri.conf.json` `bundle.macOS.infoPlist`
+   合入声明；首次连接局域网服务器时 macOS 弹"允许发现并连接本地网络设备"，
+   需点"允许"。若曾点"不允许"，需到 系统设置 → 隐私与安全性 → 本地网络
+   重新启用。Windows/Linux 无此限制。
