@@ -7,14 +7,25 @@
 #   stop    停止 backend 进程
 #   status  进程存活且健康检查通过 → 0；否则 → 3
 #
+# 目录约定（飞牛文档）：
+#   - TRIM_APPDEST 指向 target/，app.tgz 的内容直接解在这里
+#     （node/、backend/、frontend/、ui/、package.json）
+#   - TRIM_PKGVAR 是系统托管的持久运行数据目录（数据库、密钥、日志），
+#     属主固定为应用运行用户，重启与升级保留
+#
 # 密钥与数据逻辑复刻 docker-entrypoint.sh：
 #   - JWT_SECRET 生产环境必填；未提供时在数据目录维护 .jwt_secret
 #     （首次生成、之后复用，重启/升级不被登出）
 #   - 每台部署机独立随机密钥，不使用硬编码默认值
 # =============================================================================
 
-APP_HOME="${TRIM_APPDEST}/app"
-DATA_DIR="/var/apps/nowen-note/shares/nowen-note/data"
+APPDEST="${TRIM_APPDEST:-/var/apps/nowen-note/target}"
+if [ -f "$APPDEST/app/backend/dist/index.hardened.js" ]; then
+    APP_HOME="$APPDEST/app"
+else
+    APP_HOME="$APPDEST"
+fi
+DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
 PID_FILE="$DATA_DIR/nowen-note.pid"
 LOG_FILE="$DATA_DIR/nowen-note.log"
 NODE_BIN="$APP_HOME/node/bin/node"
@@ -24,16 +35,23 @@ PORT="${NOWEN_PORT:-3001}"
 ensure_secret() {
     if [ -z "${JWT_SECRET:-}" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
         local secret_file="$DATA_DIR/.jwt_secret"
-        if [ -s "$secret_file" ] && [ "$(wc -c < "$secret_file")" -ge 16 ]; then
+        local size=0
+        if [ -f "$secret_file" ] && [ -r "$secret_file" ]; then
+            size="$(wc -c < "$secret_file" 2>/dev/null | tr -d ' ')"
+        fi
+        case "$size" in
+            ''|*[!0-9]*) size=0 ;;
+        esac
+        if [ "$size" -ge 16 ]; then
             JWT_SECRET="$(cat "$secret_file")"
         else
             if command -v openssl >/dev/null 2>&1; then
                 JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
             else
-                JWT_SECRET="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
+                JWT_SECRET="$("$NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(48).toString("base64"))')"
             fi
             printf %s "$JWT_SECRET" > "$secret_file"
-            chmod 600 "$secret_file" || true
+            chmod 600 "$secret_file" 2>/dev/null || true
         fi
         export JWT_SECRET
     fi
@@ -43,13 +61,24 @@ is_running() {
     [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null
 }
 
+health_check() {
+    [ -x "$NODE_BIN" ] || return 1
+    "$NODE_BIN" -e '
+const http = require("http");
+const req = http.get({ host: "127.0.0.1", port: process.argv[1], path: "/api/health", timeout: 2000 }, (res) => {
+  res.resume();
+  process.exit(res.statusCode === 200 ? 0 : 1);
+});
+req.on("timeout", () => { req.destroy(); process.exit(1); });
+req.on("error", () => process.exit(1));
+' "$PORT" >/dev/null 2>&1
+}
+
 wait_healthy() {
     local i
     for i in $(seq 1 60); do
-        if curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
-            return 0
-        fi
-        kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null || return 1
+        health_check && return 0
+        is_running || return 1
         sleep 1
     done
     return 1
@@ -59,7 +88,7 @@ do_start() {
     if is_running; then
         exit 0
     fi
-    mkdir -p "$DATA_DIR"
+    mkdir -p "$DATA_DIR" 2>/dev/null
     ensure_secret
 
     export NODE_ENV=production
@@ -71,8 +100,12 @@ do_start() {
     export NOWEN_APP_VERSION="{{VERSION}}"
 
     cd "$APP_HOME" || exit 1
-    # setsid 脱离应用中心进程组，避免应用中心重启时被连带杀掉
-    nohup setsid "$NODE_BIN" "$BACKEND_ENTRY" >> "$LOG_FILE" 2>&1 &
+    # setsid 脱离应用中心进程组，避免应用中心重启时被连带杀掉（缺失时降级为普通后台进程）
+    if command -v setsid >/dev/null 2>&1; then
+        nohup setsid "$NODE_BIN" "$BACKEND_ENTRY" >> "$LOG_FILE" 2>&1 &
+    else
+        nohup "$NODE_BIN" "$BACKEND_ENTRY" >> "$LOG_FILE" 2>&1 &
+    fi
     echo $! > "$PID_FILE"
 
     if wait_healthy; then
@@ -99,7 +132,7 @@ do_stop() {
 }
 
 do_status() {
-    if is_running && curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+    if is_running && health_check; then
         exit 0
     fi
     exit 3

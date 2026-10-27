@@ -1,5 +1,7 @@
 #!/bin/bash
-
-### This script is called before the user upgrades the application.
-
+# 升级前：确保数据目录存在且归属应用用户（此脚本以 root 运行）。
+# 只修正顶层目录，避免对大量附件递归 chown。
+DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
+mkdir -p "$DATA_DIR"
+chown nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
 exit 0

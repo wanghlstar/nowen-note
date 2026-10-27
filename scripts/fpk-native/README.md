@@ -50,9 +50,12 @@ nowen-note-<version>.fpk（tar.gz）
     └── package.json
 ```
 
+app.tgz 的内容会直接解到 `target/`（即 `/vol{n}/@appcenter/nowen-note/`），
+因此 `cmd/main` 的 `APP_HOME` 取 `TRIM_APPDEST` 本身，而不是 `TRIM_APPDEST/app`。
+
 `cmd/main` 的职责（复刻 `docker-entrypoint.sh` 的密钥逻辑）：
 
-- `start`：建数据目录 → 生成/复用 `.jwt_secret`（首次随机生成，重启不失效）
+- `start`：建数据目录（`TRIM_PKGVAR`）→ 生成/复用 `.jwt_secret`（首次随机生成，重启不失效）
   → 以 `NODE_ENV=production`、`PORT=3001`、`DB_PATH=<数据目录>/nowen-note.db`
   后台拉起 Node → 轮询 `/api/health` 最多 60s
 - `stop`：按 PID 文件停止进程
@@ -62,7 +65,7 @@ nowen-note-<version>.fpk（tar.gz）
 
 | 项 | 位置 |
 | --- | --- |
-| 数据目录 | `/var/apps/nowen-note/shares/nowen-note/data` |
+| 数据目录 | `$TRIM_PKGVAR`（默认 `/var/apps/nowen-note/var`，系统托管、属主为应用用户） |
 | 数据库 | 数据目录下 `nowen-note.db` |
 | JWT 密钥 | 数据目录下 `.jwt_secret`（0600，勿泄漏） |
 | 运行日志 | 数据目录下 `nowen-note.log` |
@@ -79,8 +82,12 @@ nowen-note-<version>.fpk（tar.gz）
 - 未做签名/公证（飞牛手动安装不需要）
 - `ffmpeg-static`/`sharp` 等原生模块使用 npm 预编译包；更换 Node 大版本时
   必须同步工作流里的 `NODE_VERSION`，否则 ABI 不匹配
+- 运行时不需要 `node_modules/.bin`：打包时已删除该目录并实体化所有符号链接
+  （npm 生成的 .bin 是指向构建机绝对路径的符号链接，跨机器无效而且会让
+  飞牛解包失败）
 
 ## 从 docker 版切换
 
 两个包的 `appname` 都是 `nowen-note`，同一时刻只能装一个。已装 docker 版的
 用户先卸载再装直装版；数据不会自动迁移，需要手动拷贝数据库与附件目录。
+注意 docker 版的数据卷布局与直装版不同（直装版数据在 `$TRIM_PKGVAR`）。
