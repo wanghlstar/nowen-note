@@ -53,7 +53,7 @@ jobs:
         run: |
           cd frontend
           npm ci --no-audit --no-fund
-          NODE_OPTIONS=--max-old-space-size=4096 npm run build:web
+          VITE_LITE=1 NODE_OPTIONS=--max-old-space-size=4096 npm run build:web
 
       # 随包分发的 Node 运行时。版本需与上面 setup-node 的大版本一致；
       # 升级时同步改这里与 backend 原生模块的 ABI 预期。

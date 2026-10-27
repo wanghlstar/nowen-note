@@ -92,6 +92,9 @@ do_start() {
     ensure_secret
 
     export NODE_ENV=production
+    # 飞牛直装包按 Lite profile 运行：关闭 P1 模块（ai/tasks/分享/插件等），
+    # 与前端 VITE_LITE=1 构建的界面一致。
+    export NOWEN_PROFILE=lite
     export PORT="$PORT"
     export DB_PATH="$DATA_DIR/nowen-note.db"
     export ELECTRON_USER_DATA="$DATA_DIR"

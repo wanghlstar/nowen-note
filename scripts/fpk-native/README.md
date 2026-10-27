@@ -61,6 +61,14 @@ app.tgz 的内容会直接解到 `target/`（即 `/vol{n}/@appcenter/nowen-note/
 - `stop`：按 PID 文件停止进程
 - `status`：进程存活且健康检查通过返回 0，否则 3
 
+## Profile
+
+直装包按 **Lite** 运行：前端以 `VITE_LITE=1` 构建，`cmd/main` 导出
+`NOWEN_PROFILE=lite`，两端一致关闭 P1 模块（ai / tasks / diary / mindmap /
+collab / sharing / plugins / openApi / importCenter / sheet / voiceMemo /
+automation）。需要完整功能时，改掉工作流里的 `VITE_LITE=1` 与 `cmd/main`
+里的 `NOWEN_PROFILE=lite` 后重新打包。
+
 ## 数据、日志与端口
 
 | 项 | 位置 |
