@@ -262,6 +262,18 @@ serverUrl 为空时会写入错误地址；本修复（迁移先于渲染）保�
    合入声明；首次连接局域网服务器时 macOS 弹"允许发现并连接本地网络设备"，
    需点"允许"。若曾点"不允许"，需到 系统设置 → 隐私与安全性 → 本地网络
    重新启用。Windows/Linux 无此限制。
+8. **同步授权 15 分钟过期（已修复）**：access token TTL 15 分钟
+   （auth-security.ts 默认 "15m"），同步引擎此前只存 access token、
+   无刷新逻辑，15 分钟后每次同步 401 → "同步授权已失效，请重新登录"
+   （原版 v1.5.3 同款缺陷）。修复：凭据文件存 refreshToken，remote.ts
+   遇 401/403 先 POST `/api/auth/refresh` 续期并以新 token 重试一次，
+   成功后立刻落盘。**升级后需重新登录一次同步服务器**（旧凭据没有
+   refreshToken，无法从 access token 推导）。
+9. **服务端侧 applyTag 同型隐患（未修）**：`idx_tags_personal_name_unique`
+   唯一索引下，服务端 applyTag（apply.ts）同样只按 id upsert。若另一台
+   设备先推了同名标签，本机折叠后的推送仍可能在官方服务端撞唯一索引。
+   本机侧已最大化规避；彻底修复需要服务端升级（官方 v1.5.3 同款缺陷，
+   本次未改服务端代码）。
 8. **首次同步同名标签折叠（已修复，`14188264` 之后）**：本机测试期建的个人标签
    （重要/技术/灵感）与服务器上真实账号同名标签 id 不同，快照重建拉取时
    `applyTagLocal` 只按 id upsert，撞 `idx_tags_personal_name_unique` 导致整轮
