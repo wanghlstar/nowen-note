@@ -32,6 +32,9 @@ import {
     writeFileSync,
     chmodSync,
     readdirSync,
+    copyFileSync,
+    realpathSync,
+    statSync,
 } from 'node:fs';
 import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +96,65 @@ if (existsSync(BACKEND_TEMPLATES)) {
 cpSync(FRONTEND_DIST, join(APP_DIR, 'frontend', 'dist'), { recursive: true });
 // 根 package.json 供 version 路由在无 NOWEN_APP_VERSION 时兜底
 cpSync(join(PROJECT_ROOT, 'package.json'), join(APP_DIR, 'package.json'));
+
+// 2.5 清除 npm CLI shim 与所有符号链接。
+// npm 在 macOS 上会把 node_modules/.bin/* 建成指向绝对路径的符号链接，
+// 这类条目在飞牛上既无意义（运行时不需要 CLI shim），也可能让解包器拒绝。
+function removeBinDirs(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const full = join(dir, entry.name);
+        if (entry.name === '.bin') {
+            rmSync(full, { recursive: true, force: true });
+            continue;
+        }
+        removeBinDirs(full);
+    }
+}
+
+function dereferenceSymlinks(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isSymbolicLink()) {
+            let target;
+            try {
+                target = realpathSync(full);
+            } catch {
+                rmSync(full, { force: true });
+                continue;
+            }
+            const stat = statSync(target);
+            rmSync(full, { recursive: true, force: true });
+            if (stat.isDirectory()) {
+                cpSync(target, full, { recursive: true });
+            } else {
+                copyFileSync(target, full);
+            }
+            chmodSync(full, stat.mode & 0o777);
+            continue;
+        }
+        if (entry.isDirectory()) dereferenceSymlinks(full);
+    }
+}
+
+function countSymlinks(dir) {
+    let count = 0;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isSymbolicLink()) count += 1;
+        else if (entry.isDirectory()) count += countSymlinks(full);
+    }
+    return count;
+}
+
+removeBinDirs(APP_DIR);
+dereferenceSymlinks(APP_DIR);
+const remainingLinks = countSymlinks(APP_DIR);
+if (remainingLinks > 0) {
+    console.error(`[fpk-native] 错误：应用负载仍有 ${remainingLinks} 个符号链接，飞牛解包可能失败`);
+    process.exit(1);
+}
+console.log('[fpk-native] 已移除 .bin 并消除全部符号链接');
 
 // 3. 注入版本号
 function injectInto(filePath, replacements) {
