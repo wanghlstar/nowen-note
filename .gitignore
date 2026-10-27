@@ -19,6 +19,7 @@ frontend/android/build_output.txt
 # 打包产物
 nowen-note-*.zip
 dist-fpk/
+dist-fpk-native/
 dist-upk/
 fnpack-1.2.1-*
 ugcli.exe

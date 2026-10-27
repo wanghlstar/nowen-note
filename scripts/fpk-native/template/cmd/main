@@ -1,0 +1,113 @@
+#!/bin/bash
+# =============================================================================
+# Nowen Note 直装版主控脚本（fnOS 原生应用，不经过 Docker）
+# -----------------------------------------------------------------------------
+# 生命周期由飞牛应用中心调用：start / stop / status。
+#   start   准备数据目录与密钥，后台拉起 Node backend，等待 /api/health 就绪
+#   stop    停止 backend 进程
+#   status  进程存活且健康检查通过 → 0；否则 → 3
+#
+# 密钥与数据逻辑复刻 docker-entrypoint.sh：
+#   - JWT_SECRET 生产环境必填；未提供时在数据目录维护 .jwt_secret
+#     （首次生成、之后复用，重启/升级不被登出）
+#   - 每台部署机独立随机密钥，不使用硬编码默认值
+# =============================================================================
+
+APP_HOME="${TRIM_APPDEST}/app"
+DATA_DIR="/var/apps/nowen-note/shares/nowen-note/data"
+PID_FILE="$DATA_DIR/nowen-note.pid"
+LOG_FILE="$DATA_DIR/nowen-note.log"
+NODE_BIN="$APP_HOME/node/bin/node"
+BACKEND_ENTRY="$APP_HOME/backend/dist/index.hardened.js"
+PORT="${NOWEN_PORT:-3001}"
+
+ensure_secret() {
+    if [ -z "${JWT_SECRET:-}" ] || [ "${#JWT_SECRET}" -lt 16 ]; then
+        local secret_file="$DATA_DIR/.jwt_secret"
+        if [ -s "$secret_file" ] && [ "$(wc -c < "$secret_file")" -ge 16 ]; then
+            JWT_SECRET="$(cat "$secret_file")"
+        else
+            if command -v openssl >/dev/null 2>&1; then
+                JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+            else
+                JWT_SECRET="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
+            fi
+            printf %s "$JWT_SECRET" > "$secret_file"
+            chmod 600 "$secret_file" || true
+        fi
+        export JWT_SECRET
+    fi
+}
+
+is_running() {
+    [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null
+}
+
+wait_healthy() {
+    local i
+    for i in $(seq 1 60); do
+        if curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+            return 0
+        fi
+        kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null || return 1
+        sleep 1
+    done
+    return 1
+}
+
+do_start() {
+    if is_running; then
+        exit 0
+    fi
+    mkdir -p "$DATA_DIR"
+    ensure_secret
+
+    export NODE_ENV=production
+    export PORT="$PORT"
+    export DB_PATH="$DATA_DIR/nowen-note.db"
+    export ELECTRON_USER_DATA="$DATA_DIR"
+    export FRONTEND_DIST="$APP_HOME/frontend/dist"
+    # 打包时注入，避免 NAS 面板复用旧环境变量导致版本号停留下次升级前
+    export NOWEN_APP_VERSION="{{VERSION}}"
+
+    cd "$APP_HOME" || exit 1
+    # setsid 脱离应用中心进程组，避免应用中心重启时被连带杀掉
+    nohup setsid "$NODE_BIN" "$BACKEND_ENTRY" >> "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+
+    if wait_healthy; then
+        exit 0
+    fi
+    echo "[nowen-note] backend 启动失败或 60s 内未就绪，详见 $LOG_FILE" >&2
+    exit 1
+}
+
+do_stop() {
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid="$(cat "$PID_FILE" 2>/dev/null)"
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null
+        local i
+        for i in $(seq 1 10); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+        done
+        [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null
+        rm -f "$PID_FILE"
+    fi
+    exit 0
+}
+
+do_status() {
+    if is_running && curl -fsS -m 2 "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then
+        exit 0
+    fi
+    exit 3
+}
+
+case "$1" in
+start)  do_start ;;
+stop)   do_stop ;;
+status) do_status ;;
+*)      exit 1 ;;
+esac

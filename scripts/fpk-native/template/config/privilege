@@ -1,0 +1,8 @@
+{
+    "defaults":
+    {
+        "run-as": "package"
+    },
+    "username": "nowen-note",
+    "groupname": "nowen-note"
+}

@@ -1,0 +1,28 @@
+{
+    "data-share":
+    {
+        "shares":
+        [
+            {
+                "name": "nowen-note",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "nowen-note"
+                    ]
+                }
+            },
+            {
+                "name": "nowen-note/data",
+                "permission":
+                {
+                    "rw":
+                    [
+                        "nowen-note"
+                    ]
+                }
+            }
+        ]
+    }
+}
