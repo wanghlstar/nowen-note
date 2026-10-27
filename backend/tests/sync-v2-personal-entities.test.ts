@@ -658,3 +658,167 @@ test("Change Feed 的 sequence 单调递增，保证游标可靠", () => {
     assert.ok(rows[i].sequence > rows[i - 1].sequence, "sequence 必须严格递增");
   }
 });
+
+// ===========================================================================
+// 契约：远端同名标签（不同 id）拉取时折叠，不撞 scope 唯一索引
+//
+// 背景（实测）：本机测试期建有个人标签"重要"（id L），自托管服务器上
+// 真实账号已有同名标签（id R）。首次同步快照重建把 R 拉回本机时，
+// applyTagLocal 的 ON CONFLICT(id) 不覆盖同名不同 id，直接撞
+// idx_tags_personal_name_unique，整轮同步永久失败。
+// v59 起个人/工作区空间内标签名称唯一，拉取侧必须做同名折叠。
+// ===========================================================================
+
+function clearTags(): void {
+  runWithOutboxSuppressed(() => runChangeFeedSuppressed(db(), () => {
+    db().exec("DELETE FROM note_tags; DELETE FROM tags; DELETE FROM sync_outbox;");
+  }));
+}
+
+function makeNotebookAndNote(title = "笔记"): { notebookId: string; noteId: string } {
+  const notebookId = randomUUID();
+  db().prepare(`
+    INSERT INTO notebooks (id, userId, name, icon, sortOrder, createdAt, updatedAt)
+    VALUES (?, ?, '本', '📒', 0, datetime('now'), datetime('now'))
+  `).run(notebookId, USER_ID);
+  const noteId = randomUUID();
+  db().prepare(`
+    INSERT INTO notes (
+      id, userId, notebookId, title, content, contentText, contentFormat,
+      version, sortOrder, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, '{}', '正文', 'richtext', 1, 0, datetime('now'), datetime('now'))
+  `).run(noteId, USER_ID, notebookId, title);
+  return { notebookId, noteId };
+}
+
+test("拉取远端同名个人标签（不同 id）时折叠为同一标签", () => {
+  resetAll();
+  clearTags();
+  const { noteId } = makeNotebookAndNote();
+  const localTagId = randomUUID();
+  const remoteTagId = randomUUID();
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, '重要', NULL)")
+    .run(localTagId, USER_ID);
+  db().prepare("INSERT INTO note_tags (noteId, tagId) VALUES (?, ?)").run(noteId, localTagId);
+
+  // 快照顺序：tag 先于 note_tag 落库。
+  assert.doesNotThrow(() => applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload: { name: "重要", color: "#ff0000" } },
+  ], { userId: USER_ID }));
+
+  const tags = db().prepare("SELECT id, name FROM tags").all() as Array<{ id: string; name: string }>;
+  assert.equal(tags.length, 1, "同名标签必须折叠成一行");
+  assert.equal(tags[0].id, remoteTagId, "远端 id 成为正式 id（后续 note_tag 按它落库）");
+  assert.equal(tags[0].name, "重要");
+
+  const links = db().prepare("SELECT noteId, tagId FROM note_tags").all() as Array<{ noteId: string; tagId: string }>;
+  assert.equal(links.length, 1);
+  assert.equal(links[0].tagId, remoteTagId, "本地关系必须迁移到折叠后的标签");
+
+  // note_tag 随后拉取时能找到标签（复现真实快照顺序的下一个实体）。
+  assert.doesNotThrow(() => applyRemoteChanges(db(), [
+    { entityType: "note_tag", entityId: `${noteId}:${remoteTagId}`, operation: "upsert", payload: { noteId, tagId: remoteTagId } },
+  ], { userId: USER_ID }));
+});
+
+test("拉取远端同名工作区标签（不同 id）时同样折叠", () => {
+  resetAll();
+  clearTags();
+  const localTagId = randomUUID();
+  const remoteTagId = randomUUID();
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, '项目', 'ws-1')")
+    .run(localTagId, USER_ID);
+
+  assert.doesNotThrow(() => applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload: { name: "项目" } },
+  ], { userId: USER_ID, workspaceId: "ws-1" }));
+
+  const tags = db().prepare("SELECT id FROM tags").all() as Array<{ id: string }>;
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].id, remoteTagId);
+});
+
+test("远端标签改名与本地另一标签同名时折叠，更新路径不撞索引", () => {
+  resetAll();
+  clearTags();
+  const tagA = randomUUID();
+  const tagB = randomUUID();
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, 'a', NULL)").run(tagA, USER_ID);
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, 'b', NULL)").run(tagB, USER_ID);
+
+  assert.doesNotThrow(() => applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: tagA, operation: "upsert", payload: { name: "b" } },
+  ], { userId: USER_ID }));
+
+  const tags = db().prepare("SELECT id, name FROM tags ORDER BY name").all() as Array<{ id: string; name: string }>;
+  assert.equal(tags.length, 1, "被改名的远端标签折叠本地重复行");
+  assert.equal(tags[0].id, tagA);
+  assert.equal(tags[0].name, "b");
+});
+
+test("重复拉取同一远端标签保持幂等（ON CONFLICT(id) 路径不受影响）", () => {
+  resetAll();
+  clearTags();
+  const remoteTagId = randomUUID();
+  const payload = { name: "技术", color: "#00ff00" };
+  applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload },
+  ], { userId: USER_ID });
+  applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload },
+  ], { userId: USER_ID });
+
+  const tags = db().prepare("SELECT id, name, color FROM tags").all() as Array<{ id: string; name: string; color: string }>;
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].id, remoteTagId);
+  assert.equal(tags[0].color, "#00ff00");
+});
+
+test("折叠时清理本地重复标签的待推送条目，避免服务端同名撞索引", () => {
+  resetAll();
+  clearTags();
+  const { profileId, deviceId } = enableSync();
+  const localTagId = randomUUID();
+  const remoteTagId = randomUUID();
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, '灵感', NULL)")
+    .run(localTagId, USER_ID);
+  db().prepare(`
+    INSERT INTO sync_outbox (id, mutationId, profileId, scopeKey, deviceId, entityType, entityId, operation, status)
+    VALUES (?, ?, ?, 'personal', ?, 'tag', ?, 'upsert', 'pending')
+  `).run(randomUUID(), randomUUID(), profileId, deviceId, localTagId);
+
+  applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload: { name: "灵感" } },
+  ], { userId: USER_ID });
+
+  const orphan = db().prepare(`
+    SELECT COUNT(*) AS n FROM sync_outbox WHERE entityType = 'tag' AND entityId = ?
+  `).get(localTagId) as { n: number };
+  assert.equal(orphan.n, 0, "被折叠的本地标签不能再留在 Outbox，否则推送时在服务端撞同名唯一索引");
+  assert.equal(db().prepare("SELECT COUNT(*) AS n FROM tags").get().n, 1);
+});
+
+test("折叠时把本地重复标签的待推送 note_tag 关系改绑到远端 id", () => {
+  resetAll();
+  clearTags();
+  const { profileId, deviceId } = enableSync();
+  const { noteId } = makeNotebookAndNote();
+  const localTagId = randomUUID();
+  const remoteTagId = randomUUID();
+  db().prepare("INSERT INTO tags (id, userId, name, workspaceId) VALUES (?, ?, '灵感', NULL)")
+    .run(localTagId, USER_ID);
+  db().prepare(`
+    INSERT INTO sync_outbox (id, mutationId, profileId, scopeKey, deviceId, entityType, entityId, operation, payload, status)
+    VALUES (?, ?, ?, 'personal', ?, 'note_tag', ?, 'upsert', ?, 'pending')
+  `).run(randomUUID(), randomUUID(), profileId, deviceId, `${noteId}:${localTagId}`, JSON.stringify({ noteId, tagId: localTagId }));
+
+  applyRemoteChanges(db(), [
+    { entityType: "tag", entityId: remoteTagId, operation: "upsert", payload: { name: "灵感" } },
+  ], { userId: USER_ID });
+
+  const rows = db().prepare(`
+    SELECT entityId FROM sync_outbox WHERE entityType = 'note_tag'
+  `).all() as Array<{ entityId: string }>;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].entityId, `${noteId}:${remoteTagId}`, "待推送关系必须改绑到折叠后的标签 id");
+});

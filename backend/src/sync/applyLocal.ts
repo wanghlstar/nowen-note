@@ -156,6 +156,25 @@ function applyTagLocal(db: Database.Database, item: RemoteEntityPayload, options
     return;
   }
   const p = item.payload || {};
+  const name = str(p.name, "未命名标签");
+  // v59 起个人/工作区空间内标签名称唯一。远端快照可能带回与本地已有标签
+  // 同名但 id 不同的行（两端各自独立创建），直接 upsert 只按 id 去重，
+  // 会撞 idx_tags_personal_name_unique / idx_tags_workspace_name_unique，
+  // 整轮同步永久失败。折叠策略：先把本地重复行改名腾出名称唯一位，
+  // upsert 远端行（远端 id 成为正式 id，快照中 note_tag 按它落库），
+  // 再把本地重复行的关系迁移过去并删除；同时处理本地重复标签的待推送
+  // 条目，否则推送时会在服务端撞同名唯一索引或缺依赖。
+  const duplicate = db.prepare(`
+    SELECT id FROM tags
+    WHERE id != ?
+      AND workspaceId IS ?
+      AND (? IS NOT NULL OR userId = ?)
+      AND lower(trim(name)) = lower(trim(?))
+    LIMIT 1
+  `).get(item.entityId, workspaceId, workspaceId, userId, name) as { id: string } | undefined;
+  if (duplicate) {
+    db.prepare("UPDATE tags SET name = '__folded__' || id WHERE id = ?").run(duplicate.id);
+  }
   db.prepare(`
     INSERT INTO tags (id, userId, name, color, createdAt, workspaceId)
     VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), ?)
@@ -163,11 +182,28 @@ function applyTagLocal(db: Database.Database, item: RemoteEntityPayload, options
   `).run(
     item.entityId,
     userId,
-    str(p.name, "未命名标签"),
+    name,
     str(p.color, "#58a6ff"),
     p.createdAt ?? null,
     workspaceId,
   );
+  if (duplicate) {
+    db.prepare("INSERT OR IGNORE INTO note_tags (noteId, tagId) SELECT noteId, ? FROM note_tags WHERE tagId = ?")
+      .run(item.entityId, duplicate.id);
+    db.prepare("DELETE FROM note_tags WHERE tagId = ?").run(duplicate.id);
+    db.prepare("DELETE FROM tags WHERE id = ?").run(duplicate.id);
+    db.prepare(`
+      DELETE FROM sync_outbox
+      WHERE entityType = 'tag' AND entityId = ? AND status IN ('pending', 'inflight', 'failed')
+    `).run(duplicate.id);
+    // 待推送的 note_tag 关系改绑到折叠后的标签 id（entityId 形如 noteId:tagId）。
+    db.prepare(`
+      UPDATE sync_outbox
+      SET entityId = substr(entityId, 1, length(entityId) - length(?)) || ?
+      WHERE entityType = 'note_tag' AND status IN ('pending', 'inflight', 'failed')
+        AND entityId LIKE '%:' || ?
+    `).run(duplicate.id, item.entityId, duplicate.id);
+  }
 }
 
 function applyNoteLocal(db: Database.Database, item: RemoteEntityPayload, options: ApplyLocalOptions): void {
