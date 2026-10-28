@@ -364,7 +364,10 @@ export default function DataManager() {
   );
   const [activeImportMethod, setActiveImportMethod] = useState<ImportMethod>(() => {
     const stored = readImportMethod();
-    return isFeatureEnabled("importCenter") || stored === "generic" ? stored : "generic";
+    // generic（MD/TXT/HTML/PDF）与 nowen（.nowen.zip 整库恢复）都是 P0，lite 保留。
+    return isFeatureEnabled("importCenter") || stored === "generic" || stored === "nowen"
+      ? stored
+      : "generic";
   });
   const [activeMobileMemoMethod, setActiveMobileMemoMethod] = useState<MobileMemoMethod>("xiaomi");
   const selectSiyuanImportContentFormat = useCallback((format: ImportTargetContentFormat) => {
@@ -377,7 +380,9 @@ export default function DataManager() {
   }, []);
 
   useEffect(() => {
-    if (!isFeatureEnabled("importCenter") && activeImportMethod !== "generic") {
+    if (!isFeatureEnabled("importCenter")
+      && activeImportMethod !== "generic"
+      && activeImportMethod !== "nowen") {
       setActiveImportMethod("generic");
     }
   }, [featureProfile, activeImportMethod]);
@@ -987,7 +992,7 @@ export default function DataManager() {
       ...group,
       ...importGroupCopy[group.id],
       methods: group.methods
-        .filter((id) => isFeatureEnabled("importCenter") || id === "generic")
+        .filter((id) => isFeatureEnabled("importCenter") || id === "generic" || id === "nowen")
         .map((id) => ({ id, ...importMethodConfigs[id] })),
     }))
     .filter((group) => group.methods.length > 0);
@@ -1943,7 +1948,7 @@ export default function DataManager() {
                 </>
               )}
 
-              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "nowen" && (
+              {!personalImportLocked && activeImportMethod === "nowen" && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Package size={16} className="text-violet-500" />
