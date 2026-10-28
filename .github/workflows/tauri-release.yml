@@ -3,16 +3,17 @@ name: Tauri Release
 on:
   workflow_dispatch:
     inputs:
-      platform:
+      target:
         description: "构建范围"
         required: false
         default: all
         type: choice
         options:
           - all
-          - macos
-          - windows
-          - linux
+          - macos-arm64
+          - macos-x64
+          - windows-x64
+          - linux-x64
   push:
     tags:
       - "v*"
@@ -40,16 +41,16 @@ jobs:
         shell: bash
         run: |
           ALL='[
-            {"os":"macos-14","target":"aarch64-apple-darwin","node_dist":"darwin-arm64","npm_arch":"arm64","artifact":"macos-arm64","platform":"macos"},
-            {"os":"macos-14","target":"x86_64-apple-darwin","node_dist":"darwin-x64","npm_arch":"x64","artifact":"macos-x64","platform":"macos"},
-            {"os":"windows-latest","target":"x86_64-pc-windows-msvc","node_dist":"win-x64","npm_arch":"x64","artifact":"windows-x64","platform":"windows"},
-            {"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","node_dist":"linux-x64","npm_arch":"x64","artifact":"linux-x64","platform":"linux"}
+            {"os":"macos-14","target":"aarch64-apple-darwin","node_dist":"darwin-arm64","npm_arch":"arm64","artifact":"macos-arm64","platform":"macos","bundles":""},
+            {"os":"macos-14","target":"x86_64-apple-darwin","node_dist":"darwin-x64","npm_arch":"x64","artifact":"macos-x64","platform":"macos","bundles":""},
+            {"os":"windows-latest","target":"x86_64-pc-windows-msvc","node_dist":"win-x64","npm_arch":"x64","artifact":"windows-x64","platform":"windows","bundles":""},
+            {"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","node_dist":"linux-x64","npm_arch":"x64","artifact":"linux-x64","platform":"linux","bundles":"deb"}
           ]'
-          P="${{ github.event.inputs.platform }}"
-          if [ -z "$P" ] || [ "$P" = "all" ]; then
+          T="${{ github.event.inputs.target }}"
+          if [ -z "$T" ] || [ "$T" = "all" ]; then
             echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
           else
-            FILTERED=$(echo "$ALL" | jq -c --arg p "$P" '{include: [.[] | select(.platform == $p)]}')
+            FILTERED=$(echo "$ALL" | jq -c --arg t "$T" '{include: [.[] | select(.artifact == $t)]}')
             echo "matrix=$FILTERED" >> "$GITHUB_OUTPUT"
           fi
 
@@ -134,7 +135,12 @@ jobs:
         working-directory: tauri
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
-        run: npx tauri build --target ${{ matrix.target }}
+        run: |
+          if [ -n "${{ matrix.bundles }}" ]; then
+            npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          else
+            npx tauri build --target ${{ matrix.target }}
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
