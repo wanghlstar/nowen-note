@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wifi, Radar, Loader2, ChevronDown, RefreshCw } from "lucide-react";
+import { Wifi, Radar, Loader2, ChevronDown, RefreshCw, Clock } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
 import { getLanDiscovery, type DiscoveredService } from "@/lib/lanDiscovery";
+import { listRecentServers, rememberServer, type RecentServer } from "@/lib/recentServers";
 
 /**
  * 局域网 nowen-note 服务器发现面板
@@ -65,6 +66,11 @@ export default function LanDiscoveryPanel({
   const [scanTimedOut, setScanTimedOut] = useState(false);
   // 保证"自动填"仅做一次——用户一旦手动改 host 后就不再覆盖
   const autoFilledRef = useRef(false);
+  // 组网/跨网段单播扫描
+  const [subnet, setSubnet] = useState("");
+  const [port, setPort] = useState("3001");
+  const [scanning, setScanning] = useState(false);
+  const [recents, setRecents] = useState<RecentServer[]>(() => listRecentServers());
 
   const discovery = getLanDiscovery();
   const hasDiscovery = discovery.isAvailable();
@@ -116,6 +122,40 @@ export default function LanDiscoveryPanel({
     // 就会移除订阅，违反"持续推送更新"的预期。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDiscovery]);
+
+  const rememberFromService = (svc: DiscoveredService) => {
+    const host = preferredHost(svc);
+    if (!host) return;
+    const protocol = svc.txt?.https === "1" ? "https" : "http";
+    rememberServer(`${protocol}://${host}:${svc.port}`, svc.txt?.name || svc.name);
+    setRecents(listRecentServers());
+  };
+
+  const handleSelectService = (svc: DiscoveredService) => {
+    rememberFromService(svc);
+    onSelect(toAddressParts(svc));
+  };
+
+  const handleSelectRecent = (url: string) => {
+    rememberServer(url);
+    setRecents(listRecentServers());
+    onSelect(parseServerUrl(url));
+  };
+
+  const handleScanSubnet = async () => {
+    const scanner = discovery.scanSubnet;
+    const cidr = subnet.trim();
+    if (!scanner || !cidr) return;
+    setScanning(true);
+    try {
+      const portNumber = Number(port) || 3001;
+      await scanner.call(discovery, cidr, portNumber);
+    } catch (error) {
+      console.warn("[lanDiscovery] subnet scan failed:", error);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   /** 用户主动重新扫描：清空旧结果 + 重置超时 + 重新 start */
   const handleRescan = () => {
@@ -169,6 +209,46 @@ export default function LanDiscoveryPanel({
             transition={{ duration: 0.18 }}
           >
             <div className="px-3 pb-2 space-y-1">
+              {typeof discovery.scanSubnet === "function" && (
+                <div className="space-y-1 py-1">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={subnet}
+                      onChange={(event) => setSubnet(event.target.value)}
+                      placeholder={t("server.lanScanSubnetPlaceholder", {
+                        defaultValue: "网段，如 192.168.2.0/24",
+                      })}
+                      className="flex-1 min-w-0 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] font-mono outline-none focus:border-indigo-400"
+                    />
+                    <input
+                      value={port}
+                      onChange={(event) => setPort(event.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="3001"
+                      className="w-16 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1 text-[11px] font-mono outline-none focus:border-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleScanSubnet()}
+                      disabled={scanning || !subnet.trim()}
+                      className="inline-flex items-center gap-1 rounded-md bg-indigo-500/10 px-2 py-1 text-[11px] text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
+                    >
+                      {scanning ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Radar className="w-3 h-3" />
+                      )}
+                      {t("server.lanScanAction", { defaultValue: "扫描" })}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    {t("server.lanScanHint", {
+                      defaultValue:
+                        "组网/跨网段时 mDNS 不通：填服务器所在网段与端口做单播扫描（仅私有网段，最多 /24）。",
+                    })}
+                  </p>
+                </div>
+              )}
+
               {available === false && (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 py-1">
                   {t("server.lanUnavailable", {
@@ -220,7 +300,7 @@ export default function LanDiscoveryPanel({
                   <button
                     key={svc.name || `${host}:${svc.port}`}
                     type="button"
-                    onClick={() => onSelect(toAddressParts(svc))}
+                    onClick={() => handleSelectService(svc)}
                     className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-white dark:hover:bg-zinc-700/60 transition-colors group"
                     title={`${friendly}\n${label}${svc.txt?.v ? `  v${svc.txt.v}` : ""}`}
                   >
@@ -244,6 +324,27 @@ export default function LanDiscoveryPanel({
                   </button>
                 );
               })}
+
+              {recents.length > 0 && (
+                <div className="pt-1 mt-1 border-t border-zinc-200/70 dark:border-zinc-700/70 space-y-0.5">
+                  <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                    {t("server.recentServers", { defaultValue: "最近使用" })}
+                  </div>
+                  {recents.map((item) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      onClick={() => handleSelectRecent(item.url)}
+                      className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left hover:bg-white dark:hover:bg-zinc-700/60 transition-colors"
+                    >
+                      <Clock className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                      <span className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
+                        {item.name ? `${item.name} · ${item.url}` : item.url}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* 已经有结果时也提供"重新扫描"——多设备/路由切换后能让用户主动刷新 */}
               {services.length > 0 && (

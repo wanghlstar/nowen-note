@@ -28,6 +28,7 @@ import {
 import type { User as AuthUser } from "@/types";
 import { isUgreenRemoteAccessUrl, openUgreenRemoteWorkspace } from "@/lib/ugreenRemoteAccess";
 import { clearAuthTokens, storeAuthTokens } from "@/lib/authSession";
+import { rememberServer } from "@/lib/recentServers";
 import {
   completeDesktopLocalLoginHint,
   getDesktopLocalLoginHint,
@@ -559,6 +560,7 @@ export default function LoginPage({ onLogin, onAccountLogin, isClientMode = fals
 
       await persistRememberedLogin(baseUrl || "");
       storeAuthTokens({ token: data.token, refreshToken: data.refreshToken ?? null });
+      if (baseUrl) rememberServer(baseUrl);
       await completeLocalLoginHintIfMatched(baseUrl || "", data.user?.username || username.trim());
       onLogin(data.token, data.user);
     } catch (err: any) {
@@ -629,6 +631,7 @@ export default function LoginPage({ onLogin, onAccountLogin, isClientMode = fals
 
       await persistRememberedLogin(baseUrl || "");
       storeAuthTokens({ token: data.token, refreshToken: data.refreshToken ?? null });
+      if (baseUrl) rememberServer(baseUrl);
       await completeLocalLoginHintIfMatched(baseUrl || "", data.user?.username || twoFactorUsername || username.trim());
       onLogin(data.token, data.user);
     } catch (err: any) {

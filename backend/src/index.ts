@@ -107,6 +107,7 @@ import {
   isStaticAssetNotModified,
 } from "./lib/static-asset-response";
 import { featureDisabledBody, isFeatureEnabled, SERVER_PROFILE } from "./profile";
+import { listMdnsServices, localPrivateSubnets, parsePrivateCidr, scanSubnet } from "./services/lanDiscovery";
 
 const app = new Hono();
 
@@ -367,6 +368,46 @@ app.get("/api/health", (c) => c.json({
   version: resolveAppVersion(),
   profile: SERVER_PROFILE,
 }));
+
+// 局域网发现（无需 JWT）：mDNS 浏览 + 可选私有网段单播扫描。
+// 组网 / VPN 场景 mDNS 通常不通，此时用 subnet + port 做单播探测。
+app.get("/api/discovery/lan", async (c) => {
+  const subnet = (c.req.query("subnet") || "").trim();
+  const mdns = listMdnsServices();
+
+  if (!subnet) {
+    const merged = mdns;
+    return c.json({
+      services: merged,
+      mdns: merged.length > 0,
+      subnets: localPrivateSubnets(),
+    });
+  }
+
+  if (!parsePrivateCidr(subnet)) {
+    return c.json(
+      {
+        error: "只支持私有 IPv4 网段，且前缀不小于 /24（例如 192.168.2.0/24）",
+        code: "INVALID_SUBNET",
+      },
+      400,
+    );
+  }
+  const portRaw = Number(c.req.query("port"));
+  const port = Number.isInteger(portRaw) && portRaw > 0 && portRaw < 65536 ? portRaw : 3001;
+  const scanned = await scanSubnet(subnet, port);
+  const byKey = new Map<string, (typeof mdns)[number]>();
+  for (const item of [...mdns, ...scanned]) {
+    byKey.set(`${item.ipv4 || item.host}:${item.port}`, item);
+  }
+  const services = [...byKey.values()];
+  return c.json({
+    services,
+    mdns: mdns.length > 0,
+    subnets: localPrivateSubnets(),
+    scannedPort: port,
+  });
+});
 
 // 版本信息 & GitHub 最新 release（无需 JWT）
 //

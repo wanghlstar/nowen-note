@@ -27,6 +27,7 @@
  */
 
 import { Capacitor } from "@capacitor/core";
+import { getServerUrl } from "@/lib/api.impl";
 
 // ---- 公开接口 ----
 
@@ -66,6 +67,11 @@ export interface LanDiscovery {
    * 订阅时会立即收到一次当前快照（即使为空数组）。
    */
   onUpdate(cb: (list: DiscoveredService[]) => void): () => void;
+  /**
+   * 单播扫描私有网段（组网 / 跨网段场景用 mDNS 不通，靠 TCP 探测）。
+   * 返回本次新增/命中的服务数量。不支持的环境不实现该方法。
+   */
+  scanSubnet?(cidr: string, port: number): Promise<number>;
 }
 
 // ---- 工具：从 Capacitor / Electron 原始 service 归一化为 DiscoveredService ----
@@ -340,7 +346,125 @@ class CapacitorDiscovery implements LanDiscovery {
 }
 
 // ============================================================================
-// 实现 3：Web —— 不可用兜底，统一接口避免上层 if/else 判平台
+// 实现 3：本机 backend 代理（Tauri / 浏览器）
+// ============================================================================
+//
+// Tauri 的 WKWebView 与普通浏览器都没有 mDNS API，但应用始终连着一个
+// backend（Tauri 内置 sidecar，或 Web 端同源服务）。让 backend 去浏览 mDNS
+// 并可选地扫描私有网段，前端只做轮询即可同时覆盖「普通局域网」与「组网」。
+
+class BackendDiscovery implements LanDiscovery {
+  private listeners = new Set<(list: DiscoveredService[]) => void>();
+  private services = new Map<string, DiscoveredService>();
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private started = false;
+  private available = true;
+
+  isAvailable() {
+    return true;
+  }
+
+  private endpoint(): string {
+    const raw = getServerUrl();
+    return `${raw ? raw.replace(/\/+$/, "") : ""}/api/discovery/lan`;
+  }
+
+  private keyOf(service: DiscoveredService): string {
+    return `${service.ipv4 || service.host}:${service.port}`;
+  }
+
+  private snapshot(): DiscoveredService[] {
+    return [...this.services.values()].sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+  }
+
+  private broadcast() {
+    const list = this.snapshot();
+    for (const cb of this.listeners) {
+      try {
+        cb(list);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  private merge(list: DiscoveredService[]) {
+    for (const item of list) {
+      if (!item || !item.port) continue;
+      this.services.set(this.keyOf(item), { ...item, lastSeen: item.lastSeen || Date.now() });
+    }
+    this.broadcast();
+  }
+
+  private async request(query = ""): Promise<DiscoveredService[]> {
+    const res = await fetch(`${this.endpoint()}${query}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { services?: DiscoveredService[] };
+    return Array.isArray(data?.services) ? data.services : [];
+  }
+
+  async start(): Promise<StartResult> {
+    this.started = true;
+    try {
+      this.merge(await this.request());
+      this.available = true;
+    } catch {
+      this.available = false;
+    }
+    if (!this.timer) {
+      this.timer = setInterval(() => {
+        void this.poll();
+      }, 3000);
+    }
+    return { ok: this.available, available: this.available };
+  }
+
+  private async poll() {
+    if (!this.started) return;
+    try {
+      this.merge(await this.request());
+      this.available = true;
+    } catch {
+      /* 保留上一次结果，网络偶尔抖动不清空 */
+    }
+  }
+
+  async stop(): Promise<void> {
+    this.started = false;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.services.clear();
+    this.broadcast();
+  }
+
+  async scanSubnet(cidr: string, port: number): Promise<number> {
+    const list = await this.request(
+      `?subnet=${encodeURIComponent(cidr)}&port=${encodeURIComponent(String(port))}`,
+    );
+    this.merge(list);
+    return list.length;
+  }
+
+  onUpdate(cb: (list: DiscoveredService[]) => void): () => void {
+    this.listeners.add(cb);
+    try {
+      cb(this.snapshot());
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      this.listeners.delete(cb);
+      if (this.listeners.size === 0) void this.stop();
+    };
+  }
+}
+
+// ============================================================================
+// 实现 4：Web —— 不可用兜底，统一接口避免上层 if/else 判平台
 // ============================================================================
 
 class UnavailableDiscovery implements LanDiscovery {
@@ -383,7 +507,7 @@ export function getLanDiscovery(): LanDiscovery {
     singleton = new CapacitorDiscovery();
     return singleton;
   }
-  // 普通浏览器
-  singleton = new UnavailableDiscovery();
+  // Tauri / 浏览器：由本机（或同源）backend 代理 mDNS 浏览与网段扫描
+  singleton = new BackendDiscovery();
   return singleton;
 }
