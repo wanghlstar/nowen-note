@@ -36,6 +36,7 @@ import { useMobileSidebarControlsCollapsed } from "@/hooks/useMobileSidebarContr
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { api, getCurrentWorkspace } from "@/lib/api";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import {
   openWorkspaceIssue,
   OPEN_NOTIFICATIONS_EVENT,
@@ -464,7 +465,7 @@ export default function Sidebar({
                 {t("sidebar.issues")}
               </button>
             )}
-            {showNotifications && (
+            {showNotifications && isFeatureEnabled("sharing") && (
               <button
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-tx-secondary hover:bg-app-hover"
                 onClick={() => {

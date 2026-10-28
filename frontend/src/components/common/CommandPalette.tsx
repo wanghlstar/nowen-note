@@ -156,6 +156,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
     setResults([]);
     setActiveIdx(0);
     requestAnimationFrame(() => inputRef.current?.focus());
+    if (!isFeatureEnabled("plugins")) {
+      setPluginContributions([]);
+      return;
+    }
     void pluginApi.contributions().then((rows) => setPluginContributions(rows as typeof pluginContributions)).catch(() => setPluginContributions([]));
   }, [open]);
 
@@ -188,7 +192,10 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
       try {
         const rows = await api.search(normalizedQuery);
         if (request.signal.aborted) return;
-        setResults(rows);
+        setResults(rows.filter((result) => (
+          (result.resourceType !== "sheet" || isFeatureEnabled("sheet"))
+          && (result.resourceType !== "mindmap" || isFeatureEnabled("mindmap"))
+        )));
         setActiveIdx(0);
       } catch (error) {
         if (request.signal.aborted) return;
@@ -302,7 +309,7 @@ export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onInputKeyDown}
-              placeholder="搜索笔记、脑图、表格，或输入 > 执行命令…"
+              placeholder={`搜索${["笔记", ...(isFeatureEnabled("mindmap") ? ["脑图"] : []), ...(isFeatureEnabled("sheet") ? ["表格"] : [])].join("、")}，或输入 > 执行命令…`}
               className="flex-1 bg-transparent text-sm text-tx-primary outline-none placeholder:text-tx-tertiary"
               autoComplete="off"
               spellCheck={false}

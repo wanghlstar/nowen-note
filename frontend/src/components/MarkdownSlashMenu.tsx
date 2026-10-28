@@ -11,6 +11,7 @@
  */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import ReactDOM from "react-dom";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import { StateEffect } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
@@ -73,7 +74,7 @@ export function getDefaultMdSlashItems(
 ): MdSlashItem[] {
   const size = 16;
   return [
-    ...(opts.onVoiceRecord ? [{ id: "voice", label: t("voice.record"), description: t("voice.description"), icon: <span>🎙</span>, category: t("slash.catInsert"), keywords: ["voice", "audio", "录音", "语音"], run: opts.onVoiceRecord }] : []),
+    ...(opts.onVoiceRecord && isFeatureEnabled("voiceMemo") ? [{ id: "voice", label: t("voice.record"), description: t("voice.description"), icon: <span>🎙</span>, category: t("slash.catInsert"), keywords: ["voice", "audio", "录音", "语音"], run: opts.onVoiceRecord }] : []),
     {
       id: "h1",
       label: t("slash.heading1"),
@@ -227,7 +228,7 @@ export function getDefaultMdSlashItems(
       keywords: ["table", "grid", "表格"],
       run: (v) => insertTable(v),
     },
-    ...(opts.onAIAssistant
+    ...(opts.onAIAssistant && isFeatureEnabled("ai")
       ? [
           {
             id: "ai",

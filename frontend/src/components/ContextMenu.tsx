@@ -19,6 +19,7 @@ import { useApp, useAppActions } from "@/store/AppContext";
 import { getLatestContextMenuState } from "@/hooks/useContextMenu";
 import { api } from "@/lib/api";
 import { exportSingleNote, exportSingleNoteAsImage, exportSingleNoteAsPDF } from "@/lib/exportService";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { Notebook } from "@/types";
@@ -506,7 +507,7 @@ export default function ContextMenu({
             { id: "export_pdf", label: t("noteList.exportAsPDF") || "PDF", icon: <Printer size={14} /> },
             { id: "export_png", label: t("note.exportAsPng") || "PNG", icon: <ImageIcon size={14} /> },
             { id: "export_jpg", label: t("note.exportAsJpg") || "JPG", icon: <ImageIcon size={14} /> },
-            { id: "export_word", label: t("noteList.exportAsWord") || "Word", icon: <FileType2 size={14} /> },
+            ...(isFeatureEnabled("importCenter") ? [{ id: "export_word", label: t("noteList.exportAsWord") || "Word", icon: <FileType2 size={14} /> }] : []),
           ],
         },
         { id: "sep_context_note_exports", label: "", separator: true },

@@ -196,7 +196,7 @@ export function getDefaultSlashCommands(
   onVoiceRecord?: () => void,
 ): SlashCommandItem[] {
   return [
-    ...(onVoiceRecord ? [{ id: "voice", label: t("voice.record"), description: t("voice.description"), icon: <span>🎙</span>, category: t("slash.catInsert"), keywords: ["voice", "audio", "录音", "语音"], action: onVoiceRecord }] : []),
+    ...(onVoiceRecord && isFeatureEnabled("voiceMemo") ? [{ id: "voice", label: t("voice.record"), description: t("voice.description"), icon: <span>🎙</span>, category: t("slash.catInsert"), keywords: ["voice", "audio", "录音", "语音"], action: onVoiceRecord }] : []),
     ...(isFeatureEnabled("diary") ? getDailyRecordSlashCommands() : []),
     // 标题
     {
@@ -344,7 +344,7 @@ export function getDefaultSlashCommands(
         });
       },
     },
-    {
+    ...(isFeatureEnabled("mindmap") ? [{
       id: "mindmap",
       label: "思维导图",
       description: "选择已有脑图或新建后插入",
@@ -354,7 +354,7 @@ export function getDefaultSlashCommands(
       action: () => {
         window.dispatchEvent(new CustomEvent("nowen:open-mindmap-insert"));
       },
-    },
+    }] : []),
     {
       // LaTeX 数学公式（块级）：插入一个空的 mathBlock 节点，自动进入编辑态
       // 让用户立即输入公式源码。行内公式由 input rule `$..$ ` 触发，不在
@@ -584,7 +584,7 @@ export function getDefaultSlashCommands(
       action: (editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
     },
     // AI
-    {
+    ...(isFeatureEnabled("ai") ? [{
       id: "ai",
       label: t("slash.ai"),
       description: t("slash.aiDesc"),
@@ -592,7 +592,7 @@ export function getDefaultSlashCommands(
       category: t("slash.catAI"),
       keywords: ["ai", "assistant", "智能", "助手", "写作"],
       action: () => onAIAssistant?.(),
-    },
+    }] : []),
   ];
 }
 

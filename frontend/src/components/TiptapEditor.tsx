@@ -4613,7 +4613,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
         alt: item.filename,
         title: item.filename,
       }).run();
-    } else if (isInlineAudioAttachment(item)) {
+    } else if (isFeatureEnabled("voiceMemo") && isInlineAudioAttachment(item)) {
       chain.insertContent({ type: "voiceMemo", attrs: { attachmentId: item.id, src: `/api/attachments/${item.id}`, filename: item.filename, mimeType: item.mimeType, size: item.size, durationMs: 0 } }).run();
     } else if (inlineVideo) {
       chain.setVideoFile({
@@ -5583,6 +5583,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
         <ToolbarButton onClick={insertMermaid} title={t('tiptap.insertMermaid')}>
           <Workflow size={iconSize} />
         </ToolbarButton>
+        {isFeatureEnabled("mindmap") && (
         <ToolbarButton
           onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-mindmap-insert"))}
           disabled={!editable || isGuest}
@@ -5590,6 +5591,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
         >
           <BrainCircuit size={iconSize} />
         </ToolbarButton>
+        )}
         <ToolbarButton onClick={insertMath} title={t('tiptap.insertMath')}>
           <Sigma size={iconSize} />
         </ToolbarButton>
@@ -5727,15 +5729,19 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
         {!isGuest && (
           <>
             <ToolbarDivider />
+            {isFeatureEnabled("tasks") && (
             <ToolbarButton
               onClick={openTaskCapture}
               title={t("tasks.quickCaptureToInbox", { defaultValue: "快速捕获到收集箱" })}
             >
               <ClipboardPlus size={iconSize} className="text-blue-500" />
             </ToolbarButton>
+            )}
+            {isFeatureEnabled("ai") && (
             <ToolbarButton onClick={openAIAssistant} title={t('tiptap.aiAssistant')}>
               <Sparkles size={iconSize} className="text-violet-500" />
             </ToolbarButton>
+            )}
           </>
         )}
       </div>
@@ -5945,15 +5951,19 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
           {!isGuest && (
             <>
               <div className="w-px h-4 bg-app-border mx-0.5" />
+              {isFeatureEnabled("tasks") && (
               <ToolbarButton
                 onClick={openTaskCapture}
                 title={t("tasks.quickCaptureToInbox", { defaultValue: "快速捕获到收集箱" })}
               >
                 <ClipboardPlus size={14} className="text-blue-500" />
               </ToolbarButton>
+              )}
+              {isFeatureEnabled("ai") && (
               <ToolbarButton onClick={openAIAssistant} title={t('tiptap.aiAssistant')}>
                 <Sparkles size={14} className="text-violet-500" />
               </ToolbarButton>
+              )}
             </>
           )}
         </div>
@@ -6633,7 +6643,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
                       url={detail.url}
                       filename={detail.filename}
                       heightClass={expanded ? "min-h-[80vh]" : "min-h-[600px]"}
-                      onReplace={async (file) => {
+                      onReplace={isFeatureEnabled("importCenter") ? async (file) => {
                         // 上传新 .docx 覆盖旧附件 + 更新笔记 content 指向新 url。
                         const oldId = detail.id;
                         const noteId = noteRef.current?.id || "";
@@ -6655,7 +6665,7 @@ const TiptapEditor = forwardRef<NoteEditorHandle, TiptapEditorProps>(function Ti
                           console.error("Replace docx failed:", err);
                           toast.error(err?.message || "上传新版本失败");
                         }
-                      }}
+                      } : undefined}
                     />
                   </Suspense>
                 )

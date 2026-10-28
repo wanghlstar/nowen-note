@@ -2478,25 +2478,31 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           >
             <Table2 size={iconSize} />
           </ToolbarButton>
+          {isFeatureEnabled("mindmap") && (
           <ToolbarButton
             onClick={() => window.dispatchEvent(new CustomEvent("nowen:open-mindmap-insert"))}
             title={tr("tiptap.insertMindMap")}
           >
             <BrainCircuit size={iconSize} />
           </ToolbarButton>
+          )}
 
           {!isGuest && <ToolbarDivider />}
           {!isGuest && (
             <>
+              {isFeatureEnabled("tasks") && (
               <ToolbarButton
                 onClick={openTaskCapture}
                 title={tr("tasks.quickCaptureToInbox", { defaultValue: "快速捕获到收集箱" })}
               >
                 <ClipboardPlus size={iconSize} className="text-blue-500" />
               </ToolbarButton>
+              )}
+              {isFeatureEnabled("ai") && (
               <ToolbarButton onClick={openAIAssistant} title={tr("tiptap.aiAssistant") || "AI 助手"}>
                 <Sparkles size={iconSize} className="text-violet-500" />
               </ToolbarButton>
+              )}
             </>
           )}
 

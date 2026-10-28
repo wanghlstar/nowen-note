@@ -113,7 +113,7 @@ function exportChildren(t: TFunction): ContextMenuItem[] {
     { id: "export_note_pdf", label: "PDF", icon: <Printer size={14} /> },
     { id: "export_note_png", label: "PNG", icon: <ImageIcon size={14} /> },
     { id: "export_note_jpg", label: "JPG", icon: <ImageIcon size={14} /> },
-    { id: "export_note_word", label: "Word", icon: <FileType2 size={14} /> },
+    ...(isFeatureEnabled("importCenter") ? [{ id: "export_note_word", label: "Word", icon: <FileType2 size={14} /> }] : []),
   ];
 }
 
@@ -150,6 +150,7 @@ export function buildKnowledgeTreeNodeMenuItems(
   const isOwned = !node.sharedRootId;
 
   if (node.resourceType === "mindmap") {
+    if (!isFeatureEnabled("mindmap")) return [];
     return [
       { id: "open", label: "打开脑图", icon: <BrainCircuit size={14} /> },
       ...(capabilities.canEdit ? [{ id: "rename", label: "重命名", icon: <Pencil size={14} /> }] : []),

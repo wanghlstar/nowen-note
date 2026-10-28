@@ -1809,7 +1809,7 @@ function AuthGate() {
   return (
     <AppProvider>
       {isFeatureEnabled("ai") && <AICollaborationCenter />}
-      {isFeatureEnabled("tasks") && <SidebarSearchExperienceBridge />}
+      <SidebarSearchExperienceBridge />
       {user && isFeatureEnabled("plugins") && (
         <WechatClipboardBridge
           key={`${getServerUrl() || "local"}:${user.id}`}

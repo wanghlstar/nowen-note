@@ -49,7 +49,7 @@ import { openTaskDataTransfer } from "@/lib/taskDataTransferBridge";
 import BackupCenter from "./dataManagement/BackupCenter";
 import DataTransferCenter from "./dataManagement/DataTransferCenter";
 import { isMobileLocalMode } from "@/lib/mobileLocalMode";
-import { isFeatureEnabled } from "@/lib/featureRegistry";
+import { isFeatureEnabled, useFeatureProfile } from "@/lib/featureRegistry";
 
 // Scope is selected only inside import/export workflows.
 type Scope = "personal" | "workspace";
@@ -255,6 +255,7 @@ function DesktopDataSafetyCard({ currentUser }: { currentUser: Pick<User, "id" |
 }
 
 export default function DataManager() {
+  const featureProfile = useFeatureProfile();
   const { t } = useTranslation();
   const { state } = useApp();
   const actions = useAppActions();
@@ -361,7 +362,10 @@ export default function DataManager() {
   const siyuanImportFormatUserSelectedRef = useRef(
     hasPersistedImportFormat(IMPORT_FORMAT_STORAGE.siyuan),
   );
-  const [activeImportMethod, setActiveImportMethod] = useState<ImportMethod>(() => readImportMethod());
+  const [activeImportMethod, setActiveImportMethod] = useState<ImportMethod>(() => {
+    const stored = readImportMethod();
+    return isFeatureEnabled("importCenter") || stored === "generic" ? stored : "generic";
+  });
   const [activeMobileMemoMethod, setActiveMobileMemoMethod] = useState<MobileMemoMethod>("xiaomi");
   const selectSiyuanImportContentFormat = useCallback((format: ImportTargetContentFormat) => {
     siyuanImportFormatUserSelectedRef.current = true;
@@ -372,6 +376,11 @@ export default function DataManager() {
     setSiyuanImportContentFormat(format);
   }, []);
 
+  useEffect(() => {
+    if (!isFeatureEnabled("importCenter") && activeImportMethod !== "generic") {
+      setActiveImportMethod("generic");
+    }
+  }, [featureProfile, activeImportMethod]);
   useEffect(() => persistImportMethod(activeImportMethod), [activeImportMethod]);
   useEffect(
     () => persistImportFormat(IMPORT_FORMAT_STORAGE.siyuan, siyuanImportContentFormat),
@@ -978,7 +987,7 @@ export default function DataManager() {
       ...group,
       ...importGroupCopy[group.id],
       methods: group.methods
-        .filter((id) => isFeatureEnabled("importCenter") || (id !== "url" && group.id !== "migration"))
+        .filter((id) => isFeatureEnabled("importCenter") || id === "generic")
         .map((id) => ({ id, ...importMethodConfigs[id] })),
     }))
     .filter((group) => group.methods.length > 0);
@@ -1934,7 +1943,7 @@ export default function DataManager() {
                 </>
               )}
 
-              {!personalImportLocked && activeImportMethod === "nowen" && (
+              {isFeatureEnabled("importCenter") && !personalImportLocked && activeImportMethod === "nowen" && (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Package size={16} className="text-violet-500" />

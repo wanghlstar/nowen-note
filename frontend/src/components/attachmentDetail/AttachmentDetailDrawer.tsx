@@ -1,4 +1,5 @@
 import AssetDescription from "../fileExplorer/AssetDescription";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import AssetTagEditor from "../fileExplorer/AssetTagEditor";
 /**
  * AttachmentDetailDrawer
@@ -514,7 +515,7 @@ export default function AttachmentDetailDrawer({
               </div>
 
               <AssetTagEditor key={detail.id} ids={[detail.id]} onChanged={onAfterOrganize} onOpen={onOpenAttachment} />
-              <AssetDescription key={`description:${detail.id}`} id={detail.id} />
+              {isFeatureEnabled("ai") && <AssetDescription key={`description:${detail.id}`} id={detail.id} />}
               {detail.category === "image" && onFindSimilar && <button className="rounded border border-app-border px-3 py-2 text-sm text-accent-primary hover:bg-app-hover" onClick={() => onFindSimilar(detail)}>{t("assetTools.similar")}</button>}
 
               {isAutoCleanupProtected && (

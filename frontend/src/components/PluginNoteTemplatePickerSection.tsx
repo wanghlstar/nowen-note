@@ -3,11 +3,12 @@ import { Boxes, FileCode, FileText, Loader2 } from "lucide-react";
 import { pluginApi } from "@/lib/pluginApi";
 import { listPluginNoteTemplates, replacePluginNoteTemplates, type RegisteredPluginNoteTemplate } from "@/lib/pluginTemplateRegistry";
 import { prompt } from "@/components/ui/confirm";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 export default function PluginNoteTemplatePickerSection({ disabled, onCreate }: { disabled?: boolean; onCreate?: (pluginId: string, templateId: string, values: Record<string, unknown>) => Promise<void> }) {
   const [templates, setTemplates] = useState<RegisteredPluginNoteTemplate[]>([]); const [creating, setCreating] = useState<string | null>(null);
   const load = useCallback(async () => { try { replacePluginNoteTemplates(await pluginApi.contributions()); setTemplates(listPluginNoteTemplates()); } catch { setTemplates([]); } }, []);
-  useEffect(() => { void load(); }, [load]);
-  if (!templates.length || !onCreate) return null;
+  useEffect(() => { if (isFeatureEnabled("plugins")) void load(); }, [load]);
+  if (!isFeatureEnabled("plugins") || !templates.length || !onCreate) return null;
   const create = async (template: RegisteredPluginNoteTemplate) => {
     const values: Record<string, unknown> = {};
     for (const field of template.variables || []) {

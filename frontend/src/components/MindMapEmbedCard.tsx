@@ -82,6 +82,7 @@ function SnapshotSurface({
 }
 
 export default function MindMapEmbedCard({ href }: { href: string }) {
+  const mindmapEnabled = isFeatureEnabled("mindmap");
   const mapId = parseMindMapEmbedHref(href);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
@@ -116,7 +117,7 @@ export default function MindMapEmbedCard({ href }: { href: string }) {
   }, [mapId]);
 
   useEffect(() => {
-    if (!mapId || !visible) return;
+    if (!mindmapEnabled || !mapId || !visible) return;
     let alive = true;
     setLoading(true);
     setError(false);
@@ -140,7 +141,7 @@ export default function MindMapEmbedCard({ href }: { href: string }) {
       if (alive) setLoading(false);
     });
     return () => { alive = false; };
-  }, [mapId, visible, revision]);
+  }, [mapId, visible, revision, mindmapEnabled]);
 
   useEffect(() => {
     if (!visible) return;
@@ -219,6 +220,8 @@ export default function MindMapEmbedCard({ href }: { href: string }) {
     setFullscreen(false);
     setEditing(true);
   };
+
+  if (!mindmapEnabled) return null;
 
   const toolbar = (
     <div className="flex items-center gap-1">

@@ -4171,6 +4171,7 @@ function OrdinaryEditorPane({
                       {/* ���� P3��AI ������� ����
                     ���ڶ�������λ�ã����������� �� չʾ���� �� ������ƶ���
                     ���鲻����"ȫ���ʼǱ�"��ѡ�б����û����ֶ��߹��档 */}
+                      {isFeatureEnabled("ai") && (
                       <div className="px-2 pt-1 pb-0.5">
                         <button
                           onClick={handleAiClassify}
@@ -4227,6 +4228,7 @@ function OrdinaryEditorPane({
                         )}
                       </div>
 
+                      )}
                       <div className="px-3 py-1.5 mt-1 text-[10px] font-medium text-tx-tertiary border-t border-b border-app-border">
                         {t("editor.moveToLabel")}
                       </div>

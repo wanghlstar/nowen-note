@@ -16,6 +16,7 @@ import {
 } from "@/lib/knowledgeTreeExpansion";
 import { revealCreatedKnowledgeTreeNote } from "@/lib/knowledgeTreeCreateVisibility";
 import { toast } from "@/lib/toast";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 const TREE_SELECTOR = '[data-nowen-knowledge-tree="embedded"]';
 const TREE_NODE_SELECTOR = "[data-knowledge-tree-node-id]";
@@ -84,7 +85,7 @@ export function markdownFilesFromDataTransfer(dataTransfer: Pick<DataTransfer, "
 
 export function knowledgeTreeFilesFromDataTransfer(dataTransfer: Pick<DataTransfer, "files">): File[] {
   return Array.from(dataTransfer.files || []).filter((file) => (
-    isMarkdownDropFile(file) || isMarkdownZipDropFile(file) || isWordDropFile(file)
+    isMarkdownDropFile(file) || isMarkdownZipDropFile(file) || (isFeatureEnabled("importCenter") && isWordDropFile(file))
   ));
 }
 
@@ -785,7 +786,7 @@ async function handleKnowledgeTreeFileDrop(row: HTMLElement, dataTransfer: DataT
 
   if (!nodeId) return;
   if (supportedFiles.length === 0) {
-    toast.warning("这里只支持拖入 .md、.markdown、Markdown 附件 ZIP 或 .docx 文件");
+    toast.warning(isFeatureEnabled("importCenter") ? "这里只支持拖入 .md、.markdown、Markdown 附件 ZIP 或 .docx 文件" : "这里只支持拖入 .md、.markdown 或 Markdown 附件 ZIP 文件");
     return;
   }
   if (importing) {
@@ -815,7 +816,7 @@ async function handleKnowledgeTreeFileDrop(row: HTMLElement, dataTransfer: DataT
 
     const markdownFiles = filesToImport.filter(isMarkdownDropFile);
     const markdownZipFiles = filesToImport.filter(isMarkdownZipDropFile);
-    const wordFiles = filesToImport.filter(isWordDropFile);
+    const wordFiles = filesToImport.filter((file) => isFeatureEnabled("importCenter") && isWordDropFile(file));
     const markdownResult = await importMarkdownFilesIntoKnowledgeTree(markdownFiles, target.id);
     successCount += markdownResult.imported.length;
     failures.push(...markdownResult.failures);

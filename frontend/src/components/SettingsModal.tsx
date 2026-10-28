@@ -469,8 +469,11 @@ function AboutPanel() {
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">{t('about.features')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
-            'featureEditor', 'featureAI', 'featureClipper',
-            'featureMindMap', 'featureSync', 'featureSelfHost',
+            'featureEditor',
+            ...(isFeatureEnabled("ai") ? ['featureAI'] : []),
+            'featureClipper',
+            ...(isFeatureEnabled("mindmap") ? ['featureMindMap'] : []),
+            'featureSync', 'featureSelfHost',
           ].map((key) => (
             <div key={key} className="flex items-start gap-2 p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/40">
               <Check size={14} className="text-accent-primary mt-0.5 shrink-0" />
@@ -1072,6 +1075,7 @@ function SwitchesPanel() {
         </div>
       </div>
 
+      {isFeatureEnabled("tasks") && (
       <div className="space-y-3">
         <div>
           <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
@@ -1095,6 +1099,7 @@ function SwitchesPanel() {
           ))}
         </div>
       </div>
+      )}
 
       {isFeatureEnabled("diary") && <JournalPrivacySettingsCard />}
 
@@ -1577,6 +1582,8 @@ function AppearancePanel() {
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">{title.length} / 20</p>
             </div>
 
+            {isFeatureEnabled("sharing") && (
+            <>
             <div className="space-y-1.5">
               <label htmlFor="site-share-footer-text" className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('settings.shareFooterText')}</label>
               <input
@@ -1610,6 +1617,8 @@ function AppearancePanel() {
             </div>
 
             <ShareBannerEditor value={shareBanner} onChange={value => { setShareBanner(value); setSaveMessage(""); }} disabled={!canEditSiteIdentity} />
+            </>
+            )}
 
             {isAdmin && (
               <div className="flex items-center gap-3">

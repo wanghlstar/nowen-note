@@ -6,6 +6,7 @@ import { confirm } from "@/components/ui/confirm";
 import { noteTemplatesApi, type NoteTemplateSummary } from "@/lib/noteTemplatesApi";
 import PluginNoteTemplatePickerSection from "@/components/PluginNoteTemplatePickerSection";
 import { cn } from "@/lib/utils";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 export interface NoteTemplatePickerDialogProps {
   open: boolean;
@@ -210,7 +211,7 @@ export default function NoteTemplatePickerDialog({
               })}
             </div>
           )}
-          <PluginNoteTemplatePickerSection disabled={Boolean(creatingId || deletingId)} onCreate={onCreatePlugin} />
+          {isFeatureEnabled("plugins") && <PluginNoteTemplatePickerSection disabled={Boolean(creatingId || deletingId)} onCreate={onCreatePlugin} />}
         </div>
       </section>
     </div>,

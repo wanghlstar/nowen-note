@@ -2578,7 +2578,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
       management: [
         { id: "rename_note", label: t("common.rename"), icon: <Pencil size={14} />, disabled: targetNote.isLocked === 1 },
         { id: "move", label: t('noteList.moveTo'), icon: <FolderInput size={14} />, disabled: targetNote.isLocked === 1 },
-        { id: "share_note", label: t("note.contextMenu.share"), icon: <Share2 size={14} /> },
+        ...(isFeatureEnabled("sharing") ? [{ id: "share_note", label: t("note.contextMenu.share"), icon: <Share2 size={14} /> }] : []),
       ],
       more: [
         {
@@ -2610,7 +2610,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
             { id: "export_pdf", label: t("noteList.exportAsPDF") || "PDF", icon: <Printer size={14} /> },
             { id: "export_png", label: t("note.exportAsPng") || "图片 PNG", icon: <ImageIcon size={14} /> },
             { id: "export_jpg", label: t("note.exportAsJpg") || "图片 JPG", icon: <ImageIcon size={14} /> },
-            { id: "export_word", label: t("noteList.exportAsWord") || "Word", icon: <FileType2 size={14} /> },
+            ...(isFeatureEnabled("importCenter") ? [{ id: "export_word", label: t("noteList.exportAsWord") || "Word", icon: <FileType2 size={14} /> }] : []),
           ],
         },
       ],
@@ -3192,7 +3192,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
         lower.endsWith(".md") ||
         lower.endsWith(".markdown") ||
         lower.endsWith(".txt") ||
-        lower.endsWith(".docx")
+        (isFeatureEnabled("importCenter") && lower.endsWith(".docx"))
       ) {
         supported.push(f);
       } else {
@@ -3202,7 +3202,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
 
     if (unsupported.length > 0) {
       toast.warning(
-        `已忽略 ${unsupported.length} 个不支持的文件（仅支持 .md / .markdown / .txt / .docx）`,
+        `已忽略 ${unsupported.length} 个不支持的文件（仅支持 ${isFeatureEnabled("importCenter") ? ".md / .markdown / .txt / .docx" : ".md / .markdown / .txt"}）`,
       );
     }
     if (supported.length === 0) return;
@@ -3461,7 +3461,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
         </button>
         <h2 className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-tx-primary">{viewTitles[state.viewMode]}</h2>
         <div className="flex shrink-0 items-center gap-1 relative">
-          <button onClick={openAICollaboration} aria-label={t("aiCollaboration.entry")} title={t("aiCollaboration.entry")} className="shrink-0 rounded-lg p-2 text-accent-primary hover:bg-app-hover"><Sparkles size={18} /></button>
+          {isFeatureEnabled("ai") && <button onClick={openAICollaboration} aria-label={t("aiCollaboration.entry")} title={t("aiCollaboration.entry")} className="shrink-0 rounded-lg p-2 text-accent-primary hover:bg-app-hover"><Sparkles size={18} /></button>}
           {/* 移动端排序按钮（搜索/回收站不显示） */}
           {state.viewMode !== "search" && (
             <button
@@ -3959,7 +3959,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
               </p>
               <p className="text-xs text-tx-tertiary leading-relaxed">
                 {t('noteList.dropToImportHint', {
-                  defaultValue: '导入到《{{name}}》・支持 .md / .docx / .txt',
+                  defaultValue: isFeatureEnabled("importCenter") ? '导入到《{{name}}》・支持 .md / .docx / .txt' : '导入到《{{name}}》・支持 .md / .txt',
                   name: state.notebooks.find((n) => n.id === state.selectedNotebookId)?.name
                     || t('noteList.notebook', { defaultValue: '当前笔记本' }),
                 })}

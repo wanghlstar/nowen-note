@@ -5,6 +5,7 @@ import KnowledgeTreePanel from "@/components/KnowledgeTreeCreateMenuRuntime";
 import KnowledgeTreeSortButton from "@/components/KnowledgeTreeSortButton";
 import NoteAppearanceBridge from "@/components/NoteAppearanceBridge";
 import TaskQuickCaptureBridge from "@/components/tasks/TaskQuickCaptureBridge";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 import {
   applySidebarSearchExperience,
   KNOWLEDGE_TREE_FILTER_SELECTOR,
@@ -319,7 +320,7 @@ export default function SidebarSearchExperienceBridge() {
     <>
       <style data-mobile-markdown-keyboard-layout="">{MOBILE_MARKDOWN_KEYBOARD_LAYOUT_CSS}</style>
       <NoteAppearanceBridge />
-      <TaskQuickCaptureBridge />
+      {isFeatureEnabled("tasks") && <TaskQuickCaptureBridge />}
       {sortSlots.map((slot) => createPortal(
         <KnowledgeTreeSortButton />,
         slot,

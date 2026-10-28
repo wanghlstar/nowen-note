@@ -246,6 +246,8 @@ export default function SearchCenter() {
 
   const visibleResults = useMemo(() => {
     const filtered = results.filter((result) => {
+      if (!isFeatureEnabled("sheet") && result.resourceType === "sheet") return false;
+      if (!isFeatureEnabled("mindmap") && result.resourceType === "mindmap") return false;
       if (filter === "all") return true;
       if (filter === "title") return result.matchedField === "title" || result.matchedField === "title+content";
       return result.matchedField === "content" || result.matchedField === "title+content";
