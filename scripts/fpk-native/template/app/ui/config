@@ -1,7 +1,7 @@
 {
     ".url": {
         "nowen-note.Application": {
-            "title": "弄文笔记",
+            "title": "弄文笔记 Lite",
             "icon": "images/icon_{0}.png",
             "type": "url",
             "protocol": "",

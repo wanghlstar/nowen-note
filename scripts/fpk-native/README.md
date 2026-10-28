@@ -1,5 +1,15 @@
 # 飞牛 fpk 直装版制作（原生应用，不经过 Docker）
 
+> **Nowen Note Lite（弄文笔记 Lite）**
+>
+> 本项目基于开源项目 **Nowen Note（弄文笔记）** 修改而来，原项目名称与仓库：
+> [cropflre/nowen-note](https://github.com/cropflre/nowen-note)，遵循 **GPL-3.0** 许可。
+> 本仓库为 **Lite** 版本：按 `docs/lite-mode-design.md` 的决策关闭 P1 功能
+> （AI、任务、日记、脑图、实时协作、分享、插件、开放 API、多源导入、表格、语音、自动化），
+> 并新增 Tauri 桌面客户端与飞牛 fnOS 直装包；其余能力来自原项目。
+> 需要完整功能请使用原仓库发布版本。
+
+
 与 `scripts/fpk/`（docker-project 类型）并列的另一种打包方式：**应用进程直接跑在
 fnOS 上**，不依赖 Docker。产物自带 Node 22 运行时、backend（tsc 产物 + 生产
 node_modules）与 frontend/dist，由 `cmd/main` 拉起并管理生命周期。

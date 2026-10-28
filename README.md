@@ -1,3 +1,12 @@
+> **Nowen Note Lite（弄文笔记 Lite）**
+>
+> 本项目基于开源项目 **Nowen Note（弄文笔记）** 修改而来，原项目名称与仓库：
+> [cropflre/nowen-note](https://github.com/cropflre/nowen-note)，遵循 **GPL-3.0** 许可。
+> 本仓库为 **Lite** 版本：按 `docs/lite-mode-design.md` 的决策关闭 P1 功能
+> （AI、任务、日记、脑图、实时协作、分享、插件、开放 API、多源导入、表格、语音、自动化），
+> 并新增 Tauri 桌面客户端与飞牛 fnOS 直装包；其余能力来自原项目。
+> 需要完整功能请使用原仓库发布版本。
+
 <div align="center">
   <img src="./electron/icon.png" alt="Nowen Note" width="104" />
   <h1>Nowen Note（弄文笔记）</h1>

@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm --prefix .. run dev:frontend",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "VITE_LITE=1 npm --prefix .. run build:frontend",
+    "beforeBuildCommand": "npm --prefix .. run build:frontend",
     "frontendDist": "../../frontend/dist"
   },
   "app": {

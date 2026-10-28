@@ -1,3 +1,13 @@
+> **Nowen Note Lite**
+>
+> This project is a modified build of the open-source **Nowen Note** project
+> ([cropflre/nowen-note](https://github.com/cropflre/nowen-note), GPL-3.0).
+> This fork is the **Lite** edition: P1 features (AI, tasks, diary, mind map,
+> realtime collaboration, sharing, plugins, open API, multi-source import,
+> spreadsheet, voice memo, automation) are disabled according to
+> `docs/lite-mode-design.md`. It also adds a Tauri desktop client and a native
+> fnOS package. Use the upstream repository for the full edition.
+
 <div align="center">
   <img src="./electron/icon.png" alt="Nowen Note" width="104" />
   <h1>Nowen Note</h1>

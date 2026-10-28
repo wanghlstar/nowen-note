@@ -1,5 +1,15 @@
 # Nowen Note Lite · Tauri 客户端落地计划（S4 / W4）
 
+> **Nowen Note Lite（弄文笔记 Lite）**
+>
+> 本项目基于开源项目 **Nowen Note（弄文笔记）** 修改而来，原项目名称与仓库：
+> [cropflre/nowen-note](https://github.com/cropflre/nowen-note)，遵循 **GPL-3.0** 许可。
+> 本仓库为 **Lite** 版本：按 `docs/lite-mode-design.md` 的决策关闭 P1 功能
+> （AI、任务、日记、脑图、实时协作、分享、插件、开放 API、多源导入、表格、语音、自动化），
+> 并新增 Tauri 桌面客户端与飞牛 fnOS 直装包；其余能力来自原项目。
+> 需要完整功能请使用原仓库发布版本。
+
+
 > 本文档记录 Tauri 客户端（Phase A）的架构决策、插件映射、Electron 能力重建计划、
 > 构建运行步骤与已知缺口。对应分支 `feat/lite-tauri`，工程目录 `tauri/`。
 > 设计依据：`docs/lite-mode-design.md` D4/D5/D7/D8/D10/D11。
@@ -105,12 +115,27 @@ cd tauri && npx tauri dev
 
 ```bash
 npm run build:backend   # backend/dist/index.js
-cd tauri && npx tauri build
+cd tauri && VITE_LITE=1 npx tauri build
 ```
 
-`tauri.conf.json` 的 `beforeBuildCommand` 已固定为 `VITE_LITE=1 npm --prefix .. run
-build:frontend`（lite 构建开关，W3），sidecar 固定以 `NOWEN_PROFILE=lite` 启动 backend
+前端 Lite 开关 `VITE_LITE=1` 由**调用方注入**（`beforeBuildCommand` 只执行
+`npm --prefix .. run build:frontend`，因为 Windows cmd 不支持 `VAR=val cmd` 语法）；
+CI 里统一在 job 级 `env` 设置。sidecar 固定以 `NOWEN_PROFILE=lite` 启动 backend
 （W2 运行开关）——**Lite 包永远是裁剪版**，完整版请用 Electron。
+
+### 三平台 CI 构建（`.github/workflows/tauri-release.yml`）
+
+| 平台 | runner | target | 产物 |
+| --- | --- | --- | --- |
+| macOS arm64 | macos-14 | aarch64-apple-darwin | dmg + app |
+| macOS x64 | macos-14（`npm_config_arch=x64` 交叉准备后端依赖） | x86_64-apple-darwin | dmg + app |
+| Windows x64 | windows-latest | x86_64-pc-windows-msvc | msi + nsis exe |
+| Linux x64 | ubuntu-22.04 | x86_64-unknown-linux-gnu | deb + AppImage |
+
+触发：`workflow_dispatch`（可选 all/macos/windows/linux）或推送 `v*` 标签
+（标签会额外创建 draft GitHub Release）。每个平台都会下载对应版本的官方
+Node 22 静态二进制放到 `src-tauri/binaries/node-<target>` 作为 sidecar；
+macOS 产物未签名/未公证，首次打开需右键「打开」。
 
 macOS 产物（实测）：`target/release/bundle/macos/Nowen Note Lite.app`（约 329 MiB）、
 `target/release/bundle/dmg/Nowen Note Lite_1.5.1_aarch64.dmg`（约 113 MiB）。
