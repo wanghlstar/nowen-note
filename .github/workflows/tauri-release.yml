@@ -10,8 +10,7 @@ on:
         type: choice
         options:
           - all
-          - macos-arm64
-          - macos-x64
+          - macos
           - windows-x64
           - linux-x64
   push:
@@ -41,10 +40,9 @@ jobs:
         shell: bash
         run: |
           ALL='[
-            {"os":"macos-14","target":"aarch64-apple-darwin","node_dist":"darwin-arm64","npm_arch":"arm64","artifact":"macos-arm64","platform":"macos","bundles":""},
-            {"os":"macos-14","target":"x86_64-apple-darwin","node_dist":"darwin-x64","npm_arch":"x64","artifact":"macos-x64","platform":"macos","bundles":""},
-            {"os":"windows-latest","target":"x86_64-pc-windows-msvc","node_dist":"win-x64","npm_arch":"x64","artifact":"windows-x64","platform":"windows","bundles":""},
-            {"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","node_dist":"linux-x64","npm_arch":"x64","artifact":"linux-x64","platform":"linux","bundles":"deb"}
+            {"os":"macos-14","targets":"aarch64-apple-darwin x86_64-apple-darwin","node_dists":"darwin-arm64 darwin-x64","npm_archs":"arm64 x64","artifact":"macos","platform":"macos","bundles":""},
+            {"os":"windows-latest","targets":"x86_64-pc-windows-msvc","node_dists":"win-x64","npm_archs":"x64","artifact":"windows-x64","platform":"windows","bundles":""},
+            {"os":"ubuntu-22.04","targets":"x86_64-unknown-linux-gnu","node_dists":"linux-x64","npm_archs":"x64","artifact":"linux-x64","platform":"linux","bundles":"deb"}
           ]'
           T="${{ github.event.inputs.target }}"
           if [ -z "$T" ] || [ "$T" = "all" ]; then
@@ -77,25 +75,15 @@ jobs:
             librsvg2-dev libxdo-dev patchelf libssl-dev libfuse2 file
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+
+      - name: Add Rust targets
+        shell: bash
+        run: |
+          for t in ${{ matrix.targets }}; do rustup target add "$t"; done
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: tauri/src-tauri
-
-      # 后端产物（tsc 输出 + 运行时 externals）。npm_config_arch 保证 macOS x64
-      # 交叉构建时 better-sqlite3 / sqlite-vec 拉取 x64 预编译包。
-      - name: Build backend
-        shell: bash
-        env:
-          npm_config_arch: ${{ matrix.npm_arch }}
-        run: |
-          cd backend
-          npm ci --no-audit --no-fund
-          npx tsc
-          cp src/plugins/runner-child.mjs src/plugins/sandbox-child.mjs dist/plugins/
-          npm prune --omit=dev
 
       - name: Build frontend (Lite)
         shell: bash
@@ -110,37 +98,51 @@ jobs:
           cd tauri
           npm ci --no-audit --no-fund
 
-      - name: Prepare Node sidecar (unix)
-        if: matrix.platform != 'windows'
-        run: |
-          cd tauri
-          mkdir -p src-tauri/binaries
-          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${{ matrix.node_dist }}.tar.xz" -o /tmp/node.tar.xz
-          tar -xJf /tmp/node.tar.xz -C /tmp
-          cp "/tmp/node-v${NODE_VERSION}-${{ matrix.node_dist }}/bin/node" "src-tauri/binaries/node-${{ matrix.target }}"
-          chmod +x "src-tauri/binaries/node-${{ matrix.target }}"
-
-      - name: Prepare Node sidecar (windows)
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          cd tauri
-          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
-          Invoke-WebRequest -Uri "https://nodejs.org/dist/v$env:NODE_VERSION/node-v$env:NODE_VERSION-${{ matrix.node_dist }}.zip" -OutFile node.zip
-          Expand-Archive -Path node.zip -DestinationPath .
-          Copy-Item "node-v$env:NODE_VERSION-${{ matrix.node_dist }}\node.exe" "src-tauri/binaries/node-${{ matrix.target }}.exe"
-
-      - name: Build bundles
+      # 每个目标：按目标架构准备后端依赖（原生模块）+ Node sidecar，再打包。
+      # macOS 两个架构在同一 runner 顺序执行，避免第二个 macOS job 排队超时被取消。
+      - name: Build bundles (per target)
         shell: bash
-        working-directory: tauri
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          TARGETS: ${{ matrix.targets }}
+          NODE_DISTS: ${{ matrix.node_dists }}
+          NPM_ARCHS: ${{ matrix.npm_archs }}
+          BUNDLES: ${{ matrix.bundles }}
         run: |
-          if [ -n "${{ matrix.bundles }}" ]; then
-            npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
-          else
-            npx tauri build --target ${{ matrix.target }}
-          fi
+          set -euo pipefail
+          read -r -a T <<< "$TARGETS"
+          read -r -a D <<< "$NODE_DISTS"
+          read -r -a A <<< "$NPM_ARCHS"
+          for i in "${!T[@]}"; do
+            target="${T[$i]}"; dist="${D[$i]}"; arch="${A[$i]}"
+            echo "==> building $target (node $dist, npm arch $arch)"
+            (
+              cd backend
+              rm -rf node_modules
+              npm_config_arch="$arch" npm ci --no-audit --no-fund
+              npx tsc
+              cp src/plugins/runner-child.mjs src/plugins/sandbox-child.mjs dist/plugins/
+              npm prune --omit=dev
+            )
+            mkdir -p tauri/src-tauri/binaries
+            if [ "${{ matrix.platform }}" = "windows" ]; then
+              curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${dist}.zip" -o /tmp/node.zip
+              rm -rf /tmp/node-dist && mkdir -p /tmp/node-dist
+              unzip -q /tmp/node.zip -d /tmp/node-dist || powershell -NoProfile -Command "Expand-Archive -Path /tmp/node.zip -DestinationPath /tmp/node-dist -Force"
+              cp "/tmp/node-dist/node-v${NODE_VERSION}-${dist}/node.exe" "tauri/src-tauri/binaries/node-${target}.exe"
+            else
+              curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${dist}.tar.xz" -o /tmp/node.tar.xz
+              rm -rf /tmp/node-dist && mkdir -p /tmp/node-dist
+              tar -xJf /tmp/node.tar.xz -C /tmp/node-dist
+              cp "/tmp/node-dist/node-v${NODE_VERSION}-${dist}/bin/node" "tauri/src-tauri/binaries/node-${target}"
+              chmod +x "tauri/src-tauri/binaries/node-${target}"
+            fi
+            if [ -n "$BUNDLES" ]; then
+              (cd tauri && npx tauri build --target "$target" --bundles "$BUNDLES")
+            else
+              (cd tauri && npx tauri build --target "$target")
+            fi
+          done
 
       - uses: actions/upload-artifact@v4
         with:
@@ -148,17 +150,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           path: |
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            tauri/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            tauri/src-tauri/target/**/release/bundle/dmg/*.dmg
+            tauri/src-tauri/target/**/release/bundle/macos/*.app
+            tauri/src-tauri/target/**/release/bundle/msi/*.msi
+            tauri/src-tauri/target/**/release/bundle/nsis/*.exe
+            tauri/src-tauri/target/**/release/bundle/deb/*.deb
+            tauri/src-tauri/target/**/release/bundle/appimage/*.AppImage
 
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: always() && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
