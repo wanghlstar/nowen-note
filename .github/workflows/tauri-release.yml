@@ -2,15 +2,9 @@ name: Tauri Release
 
 on:
   workflow_dispatch:
-    inputs:
-      platform:
-        description: "构建范围：all / macos / windows / linux"
-        required: false
-        default: all
-        type: choice
-        options: [all, macos, windows, linux]
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
 
 permissions:
   contents: read
@@ -24,7 +18,6 @@ env:
 jobs:
   build:
     name: ${{ matrix.artifact }}
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all' || github.event.inputs.platform == matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
