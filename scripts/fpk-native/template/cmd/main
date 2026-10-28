@@ -25,7 +25,19 @@ if [ -f "$APPDEST/app/backend/dist/index.hardened.js" ]; then
 else
     APP_HOME="$APPDEST"
 fi
-DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
+# 数据目录：安装向导自定义位置 > 安装时保存的配置 > 默认应用数据目录。
+APPNAME="${TRIM_APPNAME:-nowen-note}"
+DATA_DIR=""
+if [ -n "${wizard_data_dir:-}" ]; then
+    DATA_DIR="${wizard_data_dir%/}/nowen-note"
+fi
+if [ -z "$DATA_DIR" ]; then
+    CONF_FILE="${TRIM_PKGETC:-/var/apps/$APPNAME/etc}/data-dir"
+    if [ -f "$CONF_FILE" ]; then
+        DATA_DIR="$(cat "$CONF_FILE" 2>/dev/null)"
+    fi
+fi
+[ -n "$DATA_DIR" ] || DATA_DIR="${TRIM_PKGVAR:-/var/apps/$APPNAME/var}"
 PID_FILE="$DATA_DIR/nowen-note.pid"
 LOG_FILE="$DATA_DIR/nowen-note.log"
 NODE_BIN="$APP_HOME/node/bin/node"

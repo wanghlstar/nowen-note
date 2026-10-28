@@ -1,0 +1,27 @@
+[
+  {
+    "stepTitle": "数据存储位置",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "笔记数据库、附件与备份默认保存在飞牛应用数据目录（随应用管理，推荐）。如需放到指定存储空间，请填写以 /vol1、/vol2 等开头的目录，安装时会在其中创建 nowen-note 子目录存放数据。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_data_dir",
+        "label": "自定义数据目录（留空使用默认）",
+        "initValue": "",
+        "rules": [
+          {
+            "pattern": "^$|^/vol[0-9]+/.+$",
+            "message": "请填写以 /vol1/、/vol2/ 等开头的绝对路径，或留空使用默认"
+          }
+        ]
+      },
+      {
+        "type": "tips",
+        "helpText": "安装后如需更换位置，请先停止应用并手动迁移数据目录，再修改 /var/apps/nowen-note/etc/data-dir。升级不会自动迁移数据。"
+      }
+    ]
+  }
+]

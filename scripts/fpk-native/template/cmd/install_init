@@ -1,17 +1,72 @@
 #!/bin/bash
-# 安装前：准备持久数据目录（此脚本在应用文件解包之前、以 root 运行，
-# 因此不能校验应用负载，负载校验在 install_callback 中完成）。
-DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
-mkdir -p "$DATA_DIR"
-chown -R nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+# 安装前：解析数据目录（支持向导自定义位置）并准备目录（此脚本以 root 运行）
+APPDEST="${TRIM_APPDEST:-/var/apps/nowen-note/target}"
+if [ -f "$APPDEST/app/backend/dist/index.hardened.js" ]; then
+    APP_HOME="$APPDEST/app"
+else
+    APP_HOME="$APPDEST"
+fi
+APPNAME="${TRIM_APPNAME:-nowen-note}"
+RUN_USER="${TRIM_USERNAME:-$APPNAME}"
+RUN_GROUP="${TRIM_GROUPNAME:-$RUN_USER}"
+CONF_DIR="${TRIM_PKGETC:-/var/apps/$APPNAME/etc}"
+CONF_FILE="$CONF_DIR/data-dir"
+DEFAULT_DIR="${TRIM_PKGVAR:-/var/apps/$APPNAME/var}"
 
-# 从 docker 版迁移：docker 容器的数据落在共享目录且属主为 root。
+mkdir -p "$CONF_DIR" 2>/dev/null
+
+# 向导字段 wizard_data_dir：留空表示使用默认应用数据目录。
+RAW_DIR="${wizard_data_dir:-}"
+DATA_DIR=""
+if [ -n "$RAW_DIR" ]; then
+    # 只接受存储空间绝对路径；避免把系统目录当成数据目录。
+    case "$RAW_DIR" in
+        /vol[0-9]*) ;;
+        *)
+            echo "数据目录必须以 /vol1/、/vol2/ 等存储空间路径开头：$RAW_DIR" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+            exit 1
+            ;;
+    esac
+    if [ ! -d "$RAW_DIR" ]; then
+        echo "数据目录不存在：$RAW_DIR" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+        exit 1
+    fi
+    # 固定在该目录下使用 nowen-note 子目录，避免与其他数据混放或覆盖用户目录。
+    DATA_DIR="${RAW_DIR%/}/nowen-note"
+fi
+
+if [ -z "$DATA_DIR" ]; then
+    # 升级/重装时沿用上次保存的位置。
+    if [ -f "$CONF_FILE" ]; then
+        SAVED="$(cat "$CONF_FILE" 2>/dev/null)"
+        [ -n "$SAVED" ] && DATA_DIR="$SAVED"
+    fi
+fi
+[ -n "$DATA_DIR" ] || DATA_DIR="$DEFAULT_DIR"
+
+if ! mkdir -p "$DATA_DIR"; then
+    echo "无法创建数据目录：${DATA_DIR}（请检查存储空间是否可用）" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    exit 1
+fi
+chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true
+
+# 应用用户必须真的能写入，否则启动时会表现为难以定位的 Permission denied。
+if [ "$(id -u)" = "0" ] && id -u "$RUN_USER" >/dev/null 2>&1 && command -v su >/dev/null 2>&1; then
+    if ! su -s /bin/sh -c "touch '$DATA_DIR/.write-test' && rm -f '$DATA_DIR/.write-test'" "$RUN_USER" 2>/dev/null; then
+        echo "应用用户 $RUN_USER 无法写入 ${DATA_DIR}。请在飞牛中为该目录授予 $RUN_USER 读写权限，或留空使用默认数据目录。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+        exit 1
+    fi
+fi
+
+printf %s "$DATA_DIR" > "$CONF_FILE"
+
+# 从 docker 版迁移：容器的数据落在共享目录且属主为 root。
 # 仅在数据目录尚无数据库时执行一次，源目录保持原样不删除。
-LEGACY_DIR="${NOWEN_LEGACY_DATA_DIR:-/var/apps/nowen-note/shares/nowen-note/data}"
+LEGACY_DIR="${NOWEN_LEGACY_DATA_DIR:-/var/apps/$APPNAME/shares/nowen-note/data}"
 if [ -f "$LEGACY_DIR/nowen-note.db" ] && [ ! -f "$DATA_DIR/nowen-note.db" ]; then
     echo "检测到旧版（docker 版）数据，迁移到 $DATA_DIR ..." > "${TRIM_TEMP_LOGFILE:-/dev/null}"
     cp -a "$LEGACY_DIR/." "$DATA_DIR/" 2>/dev/null || true
-    chown -R nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+    chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true
     rm -f "$DATA_DIR/nowen-note.pid"
     echo "迁移完成（旧目录 $LEGACY_DIR 保留未删除）。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
 fi

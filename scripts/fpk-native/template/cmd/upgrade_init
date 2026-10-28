@@ -1,17 +1,53 @@
 #!/bin/bash
-# 升级前：确保数据目录存在且归属应用用户（此脚本以 root 运行）。
+# 升级前：沿用已保存的数据目录（此脚本以 root 运行）。
+# 升级不支持更换数据位置：真换了会让应用以空库启动，看起来像数据丢失。
+APPNAME="${TRIM_APPNAME:-nowen-note}"
+RUN_USER="${TRIM_USERNAME:-$APPNAME}"
+RUN_GROUP="${TRIM_GROUPNAME:-$RUN_USER}"
+CONF_DIR="${TRIM_PKGETC:-/var/apps/$APPNAME/etc}"
+CONF_FILE="$CONF_DIR/data-dir"
+DEFAULT_DIR="${TRIM_PKGVAR:-/var/apps/$APPNAME/var}"
+
+mkdir -p "$CONF_DIR" 2>/dev/null
+
+DATA_DIR=""
+if [ -f "$CONF_FILE" ]; then
+    DATA_DIR="$(cat "$CONF_FILE" 2>/dev/null)"
+fi
+[ -n "$DATA_DIR" ] || DATA_DIR="$DEFAULT_DIR"
+
+RAW_DIR="${wizard_data_dir:-}"
+if [ -n "$RAW_DIR" ]; then
+    case "$RAW_DIR" in
+        /vol[0-9]*) ;;
+        *)
+            echo "数据目录必须以 /vol1/、/vol2/ 等存储空间路径开头：$RAW_DIR" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+            exit 1
+            ;;
+    esac
+    NEW_DIR="${RAW_DIR%/}/nowen-note"
+    if [ "$NEW_DIR" != "$DATA_DIR" ] && [ -f "$DATA_DIR/nowen-note.db" ]; then
+        echo "升级过程中不支持更换数据目录。请先停止应用并手动迁移数据，再修改 ${CONF_FILE}。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+        exit 1
+    fi
+    DATA_DIR="$NEW_DIR"
+fi
+
+if ! mkdir -p "$DATA_DIR"; then
+    echo "无法创建数据目录：${DATA_DIR}（请检查存储空间是否可用）" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    exit 1
+fi
 # 只修正顶层目录，避免对大量附件递归 chown。
-DATA_DIR="${TRIM_PKGVAR:-/var/apps/nowen-note/var}"
-mkdir -p "$DATA_DIR"
-chown nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+chown "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true
+printf %s "$DATA_DIR" > "$CONF_FILE"
 
 # 从 docker 版迁移：容器的数据落在共享目录且属主为 root。
 # 仅在数据目录尚无数据库时执行一次，源目录保持原样不删除。
-LEGACY_DIR="${NOWEN_LEGACY_DATA_DIR:-/var/apps/nowen-note/shares/nowen-note/data}"
+LEGACY_DIR="${NOWEN_LEGACY_DATA_DIR:-/var/apps/$APPNAME/shares/nowen-note/data}"
 if [ -f "$LEGACY_DIR/nowen-note.db" ] && [ ! -f "$DATA_DIR/nowen-note.db" ]; then
     echo "检测到旧版（docker 版）数据，迁移到 $DATA_DIR ..." > "${TRIM_TEMP_LOGFILE:-/dev/null}"
     cp -a "$LEGACY_DIR/." "$DATA_DIR/" 2>/dev/null || true
-    chown -R nowen-note:nowen-note "$DATA_DIR" 2>/dev/null || true
+    chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true
     rm -f "$DATA_DIR/nowen-note.pid"
     echo "迁移完成（旧目录 $LEGACY_DIR 保留未删除）。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
 fi
