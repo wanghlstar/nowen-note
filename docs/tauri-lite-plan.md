@@ -141,6 +141,13 @@ macOS 产物（实测）：`target/release/bundle/macos/Nowen Note Lite.app`（�
 `target/release/bundle/dmg/Nowen Note Lite_1.5.1_aarch64.dmg`（约 113 MiB）。
 Windows/Linux 需在对应平台执行同一命令（targets 已配置 msi/nsis/deb/appimage）。
 
+### Android（Capacitor，`.github/workflows/android-lite.yml`）
+
+Android 不是 Tauri 客户端，而是原有的 Capacitor 工程（`frontend/android`）。
+Lite 版把 `applicationId` 改为 `com.nowen.note.lite`，避免与官方安卓包互相覆盖；
+CI 用 `VITE_LITE=1 npm run build` → `npx cap sync android` → `./gradlew assembleDebug`
+产出可直接安装的 debug APK（alpha 阶段用 debug 签名，后续正式签名需固定 keystore）。
+
 ### 三平台构建矩阵（D8）
 
 | 平台 | 目标 | node sidecar 命名 | 状态 |

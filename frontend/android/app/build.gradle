@@ -11,7 +11,7 @@ android {
     namespace "com.nowen.note"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.nowen.note"
+        applicationId "com.nowen.note.lite"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10509
