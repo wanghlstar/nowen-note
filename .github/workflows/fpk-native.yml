@@ -90,6 +90,7 @@ jobs:
 
   publish-release:
     name: Attach fpk to GitHub Release
+    needs: build-fpk
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

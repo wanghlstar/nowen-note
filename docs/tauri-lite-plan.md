@@ -127,8 +127,7 @@ CI 里统一在 job 级 `env` 设置。sidecar 固定以 `NOWEN_PROFILE=lite` �
 
 | 平台 | runner | target | 产物 |
 | --- | --- | --- | --- |
-| macOS arm64 | macos-14 | aarch64-apple-darwin | dmg + app |
-| macOS x64 | macos-14（`npm_config_arch=x64` 交叉准备后端依赖） | x86_64-apple-darwin | dmg + app |
+| macOS arm64 + x64 | macos-14（同一 job 顺序构建，按目标重装后端依赖） | aarch64 / x86_64-apple-darwin | dmg + app |
 | Windows x64 | windows-latest | x86_64-pc-windows-msvc | msi + nsis exe |
 | Linux x64 | ubuntu-22.04 | x86_64-unknown-linux-gnu | deb + AppImage |
 
