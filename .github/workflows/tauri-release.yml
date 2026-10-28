@@ -53,6 +53,7 @@ jobs:
       # 后端产物（tsc 输出 + 运行时 externals）。npm_config_arch 保证 macOS x64
       # 交叉构建时 better-sqlite3 / sqlite-vec 拉取 x64 预编译包。
       - name: Build backend
+        shell: bash
         env:
           npm_config_arch: ${{ matrix.npm_arch }}
         run: |
@@ -63,6 +64,7 @@ jobs:
           npm prune --omit=dev
 
       - name: Build frontend (Lite)
+        shell: bash
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: |
@@ -71,6 +73,7 @@ jobs:
           npm run build:web
 
       - name: Install Tauri CLI
+        shell: bash
         run: |
           cd tauri
           npm ci --no-audit --no-fund
@@ -96,6 +99,7 @@ jobs:
           Copy-Item "node-v$env:NODE_VERSION-${{ matrix.node_dist }}\node.exe" "src-tauri/binaries/node-${{ matrix.target }}.exe"
 
       - name: Build bundles
+        shell: bash
         working-directory: tauri
         run: npx tauri build --target ${{ matrix.target }}
 
