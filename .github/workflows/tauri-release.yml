@@ -48,7 +48,7 @@ jobs:
           ]'
           T="${{ github.event.inputs.target }}"
           if [ -z "$T" ] || [ "$T" = "all" ]; then
-            echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
+            echo "matrix=$(echo "$ALL" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
           else
             FILTERED=$(echo "$ALL" | jq -c --arg t "$T" '{include: [.[] | select(.artifact == $t)]}')
             echo "matrix=$FILTERED" >> "$GITHUB_OUTPUT"
