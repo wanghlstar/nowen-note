@@ -132,7 +132,7 @@ CI 里统一在 job 级 `env` 设置。sidecar 固定以 `NOWEN_PROFILE=lite` �
 | Windows x64 | windows-latest | x86_64-pc-windows-msvc | msi + nsis exe |
 | Linux x64 | ubuntu-22.04 | x86_64-unknown-linux-gnu | deb + AppImage |
 
-触发：`workflow_dispatch`（可选 all/macos/windows/linux）或推送 `v*` 标签
+触发：`workflow_dispatch`（一次构建四个目标）或推送 `v*` 标签
 （标签会额外创建 draft GitHub Release）。每个平台都会下载对应版本的官方
 Node 22 静态二进制放到 `src-tauri/binaries/node-<target>` 作为 sidecar；
 macOS 产物未签名/未公证，首次打开需右键「打开」。
