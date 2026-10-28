@@ -2,6 +2,17 @@ name: Tauri Release
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "构建范围"
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+          - linux
   push:
     tags:
       - "v*"
@@ -14,18 +25,40 @@ env:
   # Lite 前端构建开关：tauri.conf 的 beforeBuildCommand 不再内联环境变量
   # （Windows 的 cmd 不支持 `VAR=val cmd` 语法），统一由这里注入。
   VITE_LITE: "1"
+  # tauri build 会再跑一次 beforeBuildCommand（vite build），同样需要更大的堆，
+  # 否则 macOS 上会 heap OOM。
+  NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
+  prepare:
+    name: Prepare matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        shell: bash
+        run: |
+          ALL='[
+            {"os":"macos-14","target":"aarch64-apple-darwin","node_dist":"darwin-arm64","npm_arch":"arm64","artifact":"macos-arm64","platform":"macos"},
+            {"os":"macos-14","target":"x86_64-apple-darwin","node_dist":"darwin-x64","npm_arch":"x64","artifact":"macos-x64","platform":"macos"},
+            {"os":"windows-latest","target":"x86_64-pc-windows-msvc","node_dist":"win-x64","npm_arch":"x64","artifact":"windows-x64","platform":"windows"},
+            {"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","node_dist":"linux-x64","npm_arch":"x64","artifact":"linux-x64","platform":"linux"}
+          ]'
+          P="${{ github.event.inputs.platform }}"
+          if [ -z "$P" ] || [ "$P" = "all" ]; then
+            echo "matrix={\"include\":$ALL}" >> "$GITHUB_OUTPUT"
+          else
+            FILTERED=$(echo "$ALL" | jq -c --arg p "$P" '{include: [.[] | select(.platform == $p)]}')
+            echo "matrix=$FILTERED" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.artifact }}
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { os: macos-14,        target: aarch64-apple-darwin,     node_dist: darwin-arm64, npm_arch: arm64, artifact: macos-arm64,  platform: macos }
-          - { os: macos-14,        target: x86_64-apple-darwin,      node_dist: darwin-x64,   npm_arch: x64,   artifact: macos-x64,    platform: macos }
-          - { os: windows-latest,  target: x86_64-pc-windows-msvc,   node_dist: win-x64,      npm_arch: x64,   artifact: windows-x64,  platform: windows }
-          - { os: ubuntu-22.04,    target: x86_64-unknown-linux-gnu, node_dist: linux-x64,    npm_arch: x64,   artifact: linux-x64,    platform: linux }
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -40,8 +73,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-            libappindicator3-dev librsvg2-dev libxdo-dev patchelf \
-            libssl-dev libfuse2 file
+            librsvg2-dev libxdo-dev patchelf libssl-dev libfuse2 file
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -66,8 +98,6 @@ jobs:
 
       - name: Build frontend (Lite)
         shell: bash
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           cd frontend
           npm ci --no-audit --no-fund
