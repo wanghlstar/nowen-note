@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { featureGuard } from "../profile";
 import { Hono } from "hono";
 import attachmentsCoreRouter, {
   handleDownloadAttachment as handleFullAttachmentDownload,
@@ -169,6 +170,10 @@ function handleSharedAttachmentAccess(c: Context): Response {
  * correct Content-Type without weakening executable-file checks.
  */
 const attachmentsRouter = new Hono();
+
+// 稳定文件分享属于 P1 sharing：Lite 部署下整组路由返回 403。
+attachmentsRouter.use("/file-share", featureGuard("sharing"));
+attachmentsRouter.use("/file-share/*", featureGuard("sharing"));
 attachmentsRouter.use("*", async (c, next) => {
   await next();
   if (c.req.method !== "POST" || c.res.status !== 201) return;

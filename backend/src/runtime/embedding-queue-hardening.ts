@@ -147,6 +147,9 @@ export function stopEmbeddingQueueHardening(): void {
   maintenanceTimer = null;
 }
 
-if (process.env.NODE_ENV !== "test") {
+// Lite 部署没有 AI/向量检索：不启动恢复与周期维护定时器。
+import { isFeatureEnabled } from "../profile.js";
+
+if (process.env.NODE_ENV !== "test" && isFeatureEnabled("ai")) {
   installEmbeddingQueueHardening();
 }

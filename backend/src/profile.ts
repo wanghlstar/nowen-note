@@ -40,6 +40,23 @@ export function isFeatureEnabled(feature: string): boolean {
   return !(SERVER_PROFILE === "lite" && P1_FEATURES.has(feature));
 }
 
+/**
+ * Sync V2 实体 → 功能键。只有 P1 实体需要映射，其余（notebook/note/tag/
+ * note_tag/favorite/attachment/知识树节点）属于 P0。
+ */
+const SYNC_ENTITY_FEATURES: Record<string, string> = {
+  task: "tasks",
+  task_reminder: "tasks",
+  diary: "diary",
+  mindmap: "mindmap",
+};
+
+/** Lite 部署下，P1 实体不得出现在同步协议的任何一侧。 */
+export function isSyncEntityEnabled(entityType: string): boolean {
+  const feature = SYNC_ENTITY_FEATURES[entityType];
+  return feature === undefined || isFeatureEnabled(feature);
+}
+
 /** 被禁模块的统一响应体：明确禁用错误，而非 500 或误导性 404。 */
 export function featureDisabledBody(feature: string) {
   return {

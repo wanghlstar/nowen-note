@@ -41,6 +41,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { getDb } from "../db/schema";
+import { featureGuard } from "../profile";
 import { attachmentQueryService } from "../queries";
 import { attachmentDeletionRisk } from "../services/attachment-deletion-safety";
 import { fileExplorerFilters } from "../services/file-explorer-filters";
@@ -93,6 +94,9 @@ const app = new Hono();
 app.route("/organization", assetOrganization);
 app.route("/trash", attachmentTrash);
 app.route("/tools", assetVisualTools);
+// AI 素材工具属于 P1：Lite 部署下整段子路由返回 403 feature_disabled。
+app.use("/ai", featureGuard("ai"));
+app.use("/ai/*", featureGuard("ai"));
 app.route("/ai", assetAI);
 
 // ---------------------------------------------------------------------------
@@ -914,7 +918,7 @@ app.post("/batch-move", async (c) => {
   return c.json({ success: true, moved: ids.length, folderId: body.folderId, folderName: outcome.folderName });
 });
 
-app.patch("/:id/external-access", async (c) => {
+app.patch("/:id/external-access", featureGuard("sharing"), async (c) => {
   const userId = c.req.header("X-User-Id") || "";
   if (!userId) return c.json({ error: "未授权" }, 401);
   const body = await c.req.json().catch(() => null);

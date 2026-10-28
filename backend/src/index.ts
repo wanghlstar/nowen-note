@@ -365,6 +365,7 @@ app.get("/api/health", (c) => c.json({
   status: "ok",
   service: "nowen-note",
   version: resolveAppVersion(),
+  profile: SERVER_PROFILE,
 }));
 
 // 版本信息 & GitHub 最新 release（无需 JWT）
@@ -378,7 +379,10 @@ app.route("/api/version", versionRouter);
 app.route("/api/releases", releasesRouter);
 
 // OpenAPI 规范（无需 JWT）
-app.get("/api/openapi.json", (c) => c.json(generateOpenAPISpec()));
+app.get("/api/openapi.json", (c) => {
+  if (!isFeatureEnabled("openApi")) return c.json(featureDisabledBody("openApi"), 403);
+  return c.json(generateOpenAPISpec());
+});
 
 // 站点设置（GET 无需 JWT，允许未登录时加载品牌信息）
 app.get("/api/settings", (c) => {
@@ -457,7 +461,10 @@ app.get("/api/backups/full-download/:token", handleFullBackupJobDownload);
 
 // 任务附件下载（无需 JWT），与 attachments 同款"id 不可枚举"授权模型。
 // 任务列表里的图片缩略图通过 <img src="/api/task-attachments/<id>"> 拉取。
-app.get("/api/task-attachments/:id", handleDownloadTaskAttachment);
+app.get("/api/task-attachments/:id", (c) => {
+  if (!isFeatureEnabled("tasks")) return c.json(featureDisabledBody("tasks"), 403);
+  return handleDownloadTaskAttachment(c);
+});
 
 // 说说图片下载（同样不走 JWT，授权模型同上）。
 //   注意路径具体：/api/diary/attachments/:id，必须比 diaryRouter（在 JWT 之后挂的

@@ -7,6 +7,7 @@ import { EncryptedNotePayloadError, guardEncryptedBlockWriter, guardEncryptedNot
 import { createKnowledgeChild, KnowledgeTreeError } from "../services/knowledgeTree.js";
 import { projectMarkdownNoteForUser } from "../lib/markdownUserContent";
 import { getDb } from "../db/schema";
+import { featureDisabledBody, isFeatureEnabled as isProfileFeatureEnabled } from "../profile";
 import { isLegacyWeChatHtmlImport } from "../lib/legacyWeChatHtmlFormat.js";
 import { diagnoseTiptapContent } from "../lib/tiptap-note-format.js";
 import { v4 as uuid } from "uuid";
@@ -545,6 +546,13 @@ app.get("/:id", (c) => {
     return c.json({ error: "Note not found or forbidden" }, 404);
   }
 
+  // Lite 部署不提供表格笔记：/api/sheets 已禁用，但表格数据仍是 note_type='sheet'
+  // 的普通笔记，必须在这里同时关闭，否则可用 /api/notes 绕过门控。
+  if (!isProfileFeatureEnabled("sheet")) {
+    const typeRow = db.prepare("SELECT note_type FROM notes WHERE id = ?").get(id) as { note_type?: string } | undefined;
+    if (typeRow?.note_type === "sheet") return c.json(featureDisabledBody("sheet"), 403);
+  }
+
   // Phase 3: 若该笔记有活跃 Y.Doc，先把内存里的最新内容 flush 到磁盘
   // slim 模式不需要 content，因此跳过 flush（flush 本身也要读写大字段，很慢）。
   if (!slim) {
@@ -889,6 +897,12 @@ app.put("/:id", async (c) => {
     ? resolveTrashedNotePermission
     : resolveNotePermission;
   const { permission, workspaceId: noteWorkspaceId } = notePermissionResolver(id, userId);
+
+  // 同上：Lite 下禁止经 P0 接口写入表格笔记。
+  if (!isProfileFeatureEnabled("sheet")) {
+    const typeRow = db.prepare("SELECT note_type FROM notes WHERE id = ?").get(id) as { note_type?: string } | undefined;
+    if (typeRow?.note_type === "sheet") return c.json(featureDisabledBody("sheet"), 403);
+  }
 
   // 根据变更字段决定所需权限
   const writeFields = ["title", "content", "contentText", "contentFormat", "notebookId", "isPinned", "isFavorite",

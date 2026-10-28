@@ -11,6 +11,7 @@ import {
   SYNC_SNAPSHOT_PAGE_SIZE,
 } from "../sync/constants";
 import { isLocalFirstSyncV2Enabled } from "../sync/flag";
+import { isSyncEntityEnabled } from "../profile";
 import {
   isSyncNegotiatedEntityType,
   isSyncOperation,
@@ -67,7 +68,20 @@ function sameEntitySet(values: string[], expected: readonly string[]): boolean {
     && values.every((value) => expected.includes(value));
 }
 
+/**
+ * Lite 部署下从订阅集合中剔除 P1 实体：plan/changes/snapshot 的查询与 push
+ * 的订阅校验都基于 subscription.types，一处过滤即可全覆盖。
+ */
+function filterEntitySubscription(subscription: EntitySubscription): EntitySubscription {
+  const types = subscription.types.filter((type) => isSyncEntityEnabled(type));
+  return types.length === subscription.types.length ? subscription : { ...subscription, types };
+}
+
 function resolveEntitySubscription(c: any): EntitySubscription {
+  return filterEntitySubscription(resolveRawEntitySubscription(c));
+}
+
+function resolveRawEntitySubscription(c: any): EntitySubscription {
   const requested = c.req.queries("entityTypes") as string[] | undefined;
   if (requested === undefined) {
     return { types: SYNC_V2_LEGACY_ENTITY_TYPES, entitySet: LEGACY_ENTITY_SET, explicit: false };

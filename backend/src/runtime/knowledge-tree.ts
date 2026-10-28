@@ -3,6 +3,7 @@ import { Hono, type Context } from "hono";
 import { getDb } from "../db/schema.js";
 import { ensureKnowledgeTreeTables } from "../db/knowledgeTreeMigration.js";
 import { ensureMindmapSchema } from "../lib/mindmap-schema.js";
+import { isFeatureEnabled as isProfileFeatureEnabled } from "../profile.js";
 import {
   enforceKnowledgeNoteCapabilities,
   enforceKnowledgeNotebookCapabilities,
@@ -35,7 +36,7 @@ type KnowledgeMiddleware = (c: any, next: any) => any;
 
 const db = getDb();
 ensureKnowledgeTreeTables(db);
-ensureMindmapSchema(db);
+if (isProfileFeatureEnabled("mindmap")) ensureMindmapSchema(db);
 const filesObject = db.prepare("SELECT type FROM sqlite_master WHERE name = 'files'").get() as { type: string } | undefined;
 if (!filesObject) {
   db.exec("CREATE VIEW files AS SELECT id, filename FROM attachments");

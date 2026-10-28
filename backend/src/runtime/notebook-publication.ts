@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
 import notebooksRouter from "../routes/notebooks.js";
+import { featureGuard } from "../profile.js";
 import { sharedRouter } from "../routes/shares.js";
 import { getDb } from "../db/schema.js";
 import { hasPermission, resolveNotebookPermission } from "../middleware/acl.js";
@@ -522,6 +523,12 @@ sharedRouter.post("/notebook-public/:token/join", async (c) => {
 // ---------------------------------------------------------------------------
 // 管理接口：挂载到 /api/notebooks，经过全局登录 JWT。
 // ---------------------------------------------------------------------------
+
+// 笔记本发布/评论/权限覆盖属于 P1 sharing：Lite 部署下整组返回 403。
+notebooksRouter.use("/:id/publication", featureGuard("sharing"));
+notebooksRouter.use("/:id/publication/*", featureGuard("sharing"));
+notebooksRouter.use("/:id/permission-overrides", featureGuard("sharing"));
+notebooksRouter.use("/:id/permission-overrides/*", featureGuard("sharing"));
 
 notebooksRouter.get("/:id/publication", (c) => {
   ensureNotebookPublicationTables();

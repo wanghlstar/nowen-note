@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { featureGuard } from "../profile";
 import { randomBytes } from "node:crypto";
 import { getDb } from "../db/schema";
 import { v4 as uuid } from "uuid";
@@ -22,6 +23,10 @@ import {
 } from "../services/legacyKnowledgeHierarchy";
 
 const app = new Hono();
+
+// 笔记本分享属于 P1 sharing：Lite 部署下整组路由返回 403 feature_disabled。
+app.use("/shared-with-me", featureGuard("sharing"));
+app.use("/:id/share-link", featureGuard("sharing"));
 const notebookPerfDiagnosticsEnabled = process.env.NOTEBOOK_PERF_DIAGNOSTICS === "1";
 
 function parseNotebookMemberRole(role: unknown): "editor" | "viewer" | null {

@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getDb } from "../db/schema.js";
 import { MINDMAP_LEGACY_NOTEBOOK_PREFIX } from "../db/knowledgeTreeMindmapFolderMigration.js";
 import { getUserWorkspaceRole, hasRole, isFeatureEnabled, isSystemAdmin, resolveWorkspaceFeatures } from "../middleware/acl.js";
+import { featureDisabledBody, featureGuard, isFeatureEnabled as isProfileFeatureEnabled } from "../profile.js";
 import { broadcastNotesDeleted } from "../services/realtime.js";
 import { notifySyncChanged } from "../sync/notify";
 import { ensureKnowledgeTreePasswordTable } from "../db/knowledgeTreePasswordMigration.js";
@@ -189,6 +190,8 @@ app.get("/", (c) => {
     return mapError(c, error);
   }
 });
+
+app.use("/shared-with-me", featureGuard("sharing"));
 
 app.get("/shared-with-me", (c) => {
   try {
@@ -380,6 +383,14 @@ app.post("/nodes", async (c) => {
     }
     if (!["folder", "note", "markdown", "word", "mindmap", "sheet"].includes(nodeType)) {
       return c.json({ error: "不支持的节点类型", code: "KNOWLEDGE_NODE_TYPE_UNSUPPORTED" }, 400);
+    }
+    // Lite 部署不提供脑图/表格：知识树同样不允许创建，避免绕过 /api/mindmaps、
+    // /api/sheets 的门控。
+    if (nodeType === "mindmap" && !isProfileFeatureEnabled("mindmap")) {
+      return c.json(featureDisabledBody("mindmap"), 403);
+    }
+    if (nodeType === "sheet" && !isProfileFeatureEnabled("sheet")) {
+      return c.json(featureDisabledBody("sheet"), 403);
     }
     const parentId = typeof body.parentId === "string" && body.parentId ? body.parentId : null;
     if (nodeType === "mindmap") {
