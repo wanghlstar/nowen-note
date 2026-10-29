@@ -26,7 +26,7 @@
  *   - 任何底层 API 失败一律降级成 "available=false"，不抛给上层。
  */
 
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { getServerUrl } from "@/lib/api.impl";
 
 // ---- 公开接口 ----
@@ -88,6 +88,109 @@ function sortV4First(addresses: string[] | undefined | null): string[] {
   // 兜底：可能既不是 v4 也不是 v6（极端情况主机名），追加在末尾
   const others = addresses.filter((a) => !v4.includes(a) && !v6.includes(a));
   return [...v4, ...v6, ...others];
+}
+
+// ============================================================================
+// Android 单播扫描工具
+// ============================================================================
+//
+// 安卓壳没有内置 node 后端，无法复用后端 /api/discovery/lan；而 mDNS 不跨
+// 组网/VPN。因此在 WebView 侧直接做单播探测：
+//   - 本机网段：WebRTC ICE host candidate 枚举（无需原生代码）
+//   - 端口探测：CapacitorHttp 走原生 HTTP，不受 WebView CORS / 混合内容限制
+//   - 命中判定：TCP 能建立连接即视为候选，再由用户点选登录时校验
+
+const AUTO_SCAN_PORTS = [19010, 3001, 57892, 8080, 80];
+const SCAN_CONCURRENCY = 48;
+const SCAN_TIMEOUT_MS = 500;
+
+/** 本机所有网卡的 IPv4（排除回环与链路本地地址）。 */
+async function localIPv4Addresses(): Promise<string[]> {
+  if (typeof RTCPeerConnection === "undefined") return [];
+  return new Promise<string[]>((resolve) => {
+    const found = new Set<string>();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        pc.close();
+      } catch {
+        /* ignore */
+      }
+      resolve([...found]);
+    };
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    pc.createDataChannel("nowen-lan-scan");
+    pc.onicecandidate = (event) => {
+      const line = event?.candidate?.candidate;
+      // candidate 为 null 表示枚举结束
+      if (!line) {
+        finish();
+        return;
+      }
+      const match = /(\d{1,3}(?:\.\d{1,3}){3})/.exec(line);
+      if (!match) return;
+      const ip = match[1];
+      if (ip.startsWith("127.") || ip.startsWith("169.254.") || ip.startsWith("0.")) return;
+      found.add(ip);
+    };
+    pc.createOffer()
+      .then((offer) => pc.setLocalDescription(offer))
+      .catch(() => finish());
+    // 某些 WebView 不吐 ICE candidate，1.5s 后无论结果如何都收尾
+    setTimeout(finish, 1500);
+  });
+}
+
+/** 取 IPv4 所在 /24 的 CIDR；非私有地址返回 null。 */
+function privateSubnetOf(ip: string): string | null {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+  const [a, b] = parts;
+  const isPrivate =
+    a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+  return isPrivate ? `${a}.${b}.${parts[2]}.0/24` : null;
+}
+
+/** 枚举 /24 内全部主机地址。 */
+function hostList(cidr: string): string[] {
+  const match = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/.exec(cidr.trim());
+  if (!match) return [];
+  const prefix = Number(match[2]);
+  if (prefix < 8 || prefix > 32) return [];
+  const base = match[1].split(".").map(Number);
+  if (prefix > 24) return [base.join(".")];
+  const hosts: string[] = [];
+  for (let last = 1; last <= 254; last += 1) hosts.push(`${base[0]}.${base[1]}.${base[2]}.${last}`);
+  return hosts;
+}
+
+/** 探测主机端口是否有服务在监听（原生 HTTP，不受 CORS/混合内容限制）。 */
+async function probeHost(ip: string, port: number): Promise<boolean> {
+  try {
+    await CapacitorHttp.request({
+      url: `http://${ip}:${port}/api/health`,
+      method: "GET",
+      connectTimeout: SCAN_TIMEOUT_MS,
+      readTimeout: SCAN_TIMEOUT_MS,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function scanService(ip: string, port: number): DiscoveredService {
+  return {
+    name: `${ip}:${port}`,
+    host: ip,
+    port,
+    addresses: [ip],
+    ipv4: ip,
+    txt: {},
+    lastSeen: Date.now(),
+  };
 }
 
 // ============================================================================
@@ -187,6 +290,9 @@ class CapacitorDiscovery implements LanDiscovery {
   private starting: Promise<StartResult> | null = null;
   private stopping: Promise<void> | null = null;
   private started = false;
+  /** 递增 generation：stop 后仍在飞的探测结果不得再合并回来 */
+  private generation = 0;
+  private autoScanning = false;
 
   isAvailable() {
     // 只判定原生平台；插件加载失败会在 start() 中降级
@@ -289,6 +395,8 @@ class CapacitorDiscovery implements LanDiscovery {
         this.started = true;
         // 订阅后立即推一次快照（即使是空），让 UI 能从"未订阅"切到"扫描中"。
         this.broadcast();
+        // mDNS 不跨组网/VPN，补一轮零输入单播扫描（结果渐进合并）
+        void this.runAutoScan();
         return { ok: true, available: true };
       } catch (err) {
         console.warn("[lanDiscovery] zeroconf watch failed:", err);
@@ -310,6 +418,7 @@ class CapacitorDiscovery implements LanDiscovery {
       return;
     }
     this.started = false;
+    this.generation += 1;
     this.stopping = (async () => {
       try {
         if (this.plugin) {
@@ -324,6 +433,70 @@ class CapacitorDiscovery implements LanDiscovery {
       }
     })();
     return this.stopping;
+  }
+
+  /** 手动扫描指定网段（高级入口），命中数即返回值。 */
+  async scanSubnet(cidr: string, port: number): Promise<number> {
+    const generation = this.generation;
+    const hosts = hostList(cidr);
+    const hits: DiscoveredService[] = [];
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < hosts.length) {
+        const ip = hosts[cursor];
+        cursor += 1;
+        if (await probeHost(ip, port)) hits.push(scanService(ip, port));
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(SCAN_CONCURRENCY, Math.max(hosts.length, 1)) }, () => worker()),
+    );
+    if (generation === this.generation) {
+      for (const hit of hits) this.services.set(`${hit.ipv4}:${hit.port}`, hit);
+      this.broadcast();
+    }
+    return hits.length;
+  }
+
+  /**
+   * 零输入自动扫描：从本机网卡地址推导私有网段，逐个尝试常见自托管端口。
+   * 命中即刻合并并广播，面板无需改动即可渐进显示。
+   */
+  private async runAutoScan(): Promise<void> {
+    if (this.autoScanning || !this.started) return;
+    this.autoScanning = true;
+    const generation = this.generation;
+    try {
+      const locals = await localIPv4Addresses();
+      const own = new Set(locals);
+      const subnets = [...new Set(locals.map(privateSubnetOf).filter((v): v is string => Boolean(v)))].slice(0, 2);
+      if (subnets.length === 0) return;
+      const jobs: Array<{ ip: string; port: number }> = [];
+      for (const cidr of subnets) {
+        for (const ip of hostList(cidr)) {
+          if (own.has(ip)) continue;
+          for (const port of AUTO_SCAN_PORTS) jobs.push({ ip, port });
+        }
+      }
+      let cursor = 0;
+      const worker = async () => {
+        while (cursor < jobs.length) {
+          const job = jobs[cursor];
+          cursor += 1;
+          if (await probeHost(job.ip, job.port)) {
+            if (generation !== this.generation) return;
+            const hit = scanService(job.ip, job.port);
+            this.services.set(`${hit.ipv4}:${hit.port}`, hit);
+            this.broadcast();
+          }
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(SCAN_CONCURRENCY, Math.max(jobs.length, 1)) }, () => worker()),
+      );
+    } finally {
+      this.autoScanning = false;
+    }
   }
 
   onUpdate(cb: (list: DiscoveredService[]) => void): () => void {
