@@ -5,6 +5,16 @@ export interface InternalMarkdownMarkerRange {
   to: number;
   kind: InternalMarkdownMarkerKind;
   blockId: string;
+  /**
+   * 编辑器里真正要被隐藏的区间（仅 `^blk_xxx` 本身，不含前后空白）。
+   *
+   * 为什么不能直接用 from/to：正则里的 `[ \t]*` 会把标记前后的空白一起算进
+   * 区间。早期实现用整个区间做隐藏装饰，导致用户在新行尾敲的空格被"吞"进
+   * 隐藏区（看不见），光标随后停在隐藏区里，继续输入/回车会把 `^blk_xxx`
+   * 截断并泄漏成可见乱码。line 类型没有该字段（整行已 display:none）。
+   */
+  hideFrom?: number;
+  hideTo?: number;
 }
 
 // 系统生成的块 ID 偶尔会在隐藏标记边界被误删尾部字符；仍按内部标记处理，
@@ -62,20 +72,26 @@ export function findInternalMarkdownMarkerRanges(markdown: string): InternalMark
         } else {
           const inline = line.match(INLINE_MARKER_RE);
           if (inline && inline.index != null) {
+            const hideFrom = offset + inline.index + inline[0].indexOf("^");
             ranges.push({
               from: offset + inline.index,
               to: lineEnd,
               kind: "inline",
               blockId: inline[1],
+              hideFrom,
+              hideTo: hideFrom + 1 + inline[1].length,
             });
           } else {
             const legacyPrefix = line.match(LEGACY_PREFIX_MARKER_RE);
             if (legacyPrefix) {
+              const hideFrom = offset + legacyPrefix[0].indexOf("^");
               ranges.push({
                 from: offset,
                 to: offset + legacyPrefix[0].length,
                 kind: "inline",
                 blockId: legacyPrefix[1],
+                hideFrom,
+                hideTo: hideFrom + 1 + legacyPrefix[1].length,
               });
             }
           }
@@ -113,8 +129,13 @@ export function resolveInternalMarkdownTypingPosition(
   text: string,
 ): number | null {
   if (from !== to || !text || /[\r\n]/.test(text)) return null;
-  const marker = findInternalMarkdownMarkerRanges(markdown)
-    .find((range) => range.kind === "inline" && range.to === from);
+  const marker = findInternalMarkdownMarkerRanges(markdown).find((range) => {
+    if (range.kind !== "inline") return false;
+    const hideFrom = range.hideFrom ?? range.from;
+    // 光标落在 `^blk_xxx` 上、或落在它后面的行尾空白里，都必须把输入挪到
+    // 标记之前：否则字符会进入隐藏区（看不见）或截断标记（泄漏成可见乱码）。
+    return from >= hideFrom && from <= range.to;
+  });
   return marker?.from ?? null;
 }
 

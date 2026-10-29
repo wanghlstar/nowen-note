@@ -20,7 +20,9 @@ function buildMarkerDecorations(markdown: string): DecorationSet {
         Decoration.line({ attributes: { class: "cm-nowen-internal-block-marker-line" } }),
       );
     } else {
-      builder.add(range.from, range.to, Decoration.replace({}));
+      // 只隐藏 `^blk_xxx` 本身：前后空白必须留在可见区，
+      // 否则用户敲的空格会被吞进隐藏装饰里看不见（见 markdownUserContent 注释）。
+      builder.add(range.hideFrom ?? range.from, range.hideTo ?? range.to, Decoration.replace({}));
     }
   }
   return builder.finish();

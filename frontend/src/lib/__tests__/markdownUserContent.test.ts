@@ -162,6 +162,39 @@ describe("resolveInternalMarkdownTypingPosition", () => {
       "T",
     )).toBeNull();
   });
+
+  it("keeps repeated spaces before the marker instead of swallowing them", () => {
+    // 复现：行尾连续空格敲了看不见、光标落进隐藏区后继续输入把标记截断泄漏
+    const source = `# Test ^${HEADING_ID}`;
+    const markerStart = source.indexOf(` ^${HEADING_ID}`);
+    const hideFrom = markerStart + 1;
+    // 第一个空格：光标在行尾（标记之后）→ 重定向到标记之前
+    expect(resolveInternalMarkdownTypingPosition(source, source.length, source.length, " ")).toBe(markerStart);
+    // 之后光标停在标记前的空白里（可见区），继续敲空格仍重定向到同一位置，
+    // 于是一个个空格都累积在可见区，不会被隐藏装饰吞掉
+    expect(resolveInternalMarkdownTypingPosition(source, hideFrom, hideFrom, " ")).toBe(markerStart);
+    expect(resolveInternalMarkdownTypingPosition(source, markerStart + 1, markerStart + 1, " ")).toBe(markerStart);
+  });
+
+  it("rescues input when the cursor lands inside the hidden marker", () => {
+    // 方向键可能把光标移进 `^blk_xxx` 内部；此时输入必须挪到标记之前，
+    // 否则字符会进入隐藏区并把标记截断成可见乱码（##^blk_... 一类）
+    const source = `# Test ^${HEADING_ID}`;
+    const markerStart = source.indexOf(` ^${HEADING_ID}`);
+    const insideMarker = markerStart + 3;
+    expect(resolveInternalMarkdownTypingPosition(source, insideMarker, insideMarker, "x")).toBe(markerStart);
+    // 光标在行尾空白之后同样要救回标记之前
+    expect(resolveInternalMarkdownTypingPosition(source, source.length, source.length, "x")).toBe(markerStart);
+  });
+
+  it("hides only the marker itself so surrounding spaces stay visible", () => {
+    const source = `# Test ^${HEADING_ID}`;
+    const [range] = findInternalMarkdownMarkerRanges(source);
+    expect(range.hideFrom).toBe(source.indexOf("^" + HEADING_ID));
+    expect(range.hideTo).toBe(range.hideFrom! + 1 + HEADING_ID.length);
+    // 投影（预览/AI）仍按含空白的区间剥离，行为不变
+    expect(projectMarkdownForUser(source)).toBe("# Test");
+  });
 });
 
 describe("resolveInternalMarkerSyncSelection", () => {
