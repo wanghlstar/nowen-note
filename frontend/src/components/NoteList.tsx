@@ -1496,7 +1496,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
       try {
         const [ownedResult, sharedResult] = await Promise.allSettled([
           knowledgeTreeApi.list(),
-          knowledgeTreeApi.listShared(),
+          isFeatureEnabled("sharing") ? knowledgeTreeApi.listShared() : Promise.resolve({ nodes: [] }),
         ]);
         if (ownedResult.status === "rejected") throw ownedResult.reason;
         const sharedNodes = sharedResult.status === "fulfilled" ? sharedResult.value.nodes : [];
@@ -2632,7 +2632,7 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
 
     const [ownedResult, sharedResult] = await Promise.allSettled([
       knowledgeTreeApi.list(),
-      knowledgeTreeApi.listShared(),
+      isFeatureEnabled("sharing") ? knowledgeTreeApi.listShared() : Promise.resolve({ nodes: [] }),
     ]);
     const nodes = [
       ...(ownedResult.status === "fulfilled" ? ownedResult.value.nodes : []),

@@ -342,9 +342,12 @@ export default function MobileKnowledgeTreePanel({
     setError(null);
     try {
       const load = async () => {
+        // Lite 部署关闭 sharing：不请求「共享给我」，否则会 403 并弹出加载失败
         const results = await Promise.allSettled([
           knowledgeTreeApi.list(),
-          knowledgeTreeApi.listShared(),
+          isFeatureEnabled("sharing")
+            ? knowledgeTreeApi.listShared()
+            : Promise.resolve({ nodes: [] }),
         ]);
         if (results[0].status === "rejected") throw results[0].reason;
         return [results[0].value, results[1]] as const;
@@ -1635,7 +1638,7 @@ export default function MobileKnowledgeTreePanel({
           ) : renderEmpty("暂无最近文档", "打开过或最近更新的文档会出现在这里。")
         ) : renderBrowseContent()}
 
-        {sharedLoadError && (
+        {isFeatureEnabled("sharing") && sharedLoadError && (
           <div className="mx-2 mt-2 flex items-center justify-between gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-600 dark:text-amber-400">
             <span className="min-w-0 flex-1 truncate" title={sharedLoadError}>共享内容加载失败</span>
             <button type="button" onClick={() => void reload()} className="shrink-0 underline underline-offset-2">重试</button>

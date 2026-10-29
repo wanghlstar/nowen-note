@@ -210,7 +210,11 @@ export default function LanDiscoveryPanel({
           >
             <div className="px-3 pb-2 space-y-1">
               {typeof discovery.scanSubnet === "function" && (
-                <div className="space-y-1 py-1">
+                <details className="py-0.5">
+                  <summary className="cursor-pointer select-none text-[10px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300">
+                    {t("server.lanScanAdvanced", { defaultValue: "手动扫描（组网 / 跨网段，高级）" })}
+                  </summary>
+                  <div className="space-y-1 pt-1">
                   <div className="flex items-center gap-1.5">
                     <input
                       value={subnet}
@@ -243,10 +247,11 @@ export default function LanDiscoveryPanel({
                   <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
                     {t("server.lanScanHint", {
                       defaultValue:
-                        "组网/跨网段时 mDNS 不通：填服务器所在网段与端口做单播扫描（仅私有网段，最多 /24）。",
+                        "已自动探测 mDNS 与之前用过的服务器；只有自动找不到时才需要在这里手动填网段+端口（仅私有网段，最多 /24）。",
                     })}
                   </p>
-                </div>
+                  </div>
+                </details>
               )}
 
               {available === false && (
@@ -271,7 +276,7 @@ export default function LanDiscoveryPanel({
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
                       {t("server.lanNotFound", {
                         defaultValue:
-                          "未在当前 Wi-Fi 内发现服务器。如果服务器在公网或跨网段，请直接手动填写地址。",
+                          "没有自动发现服务器（已尝试 mDNS 与之前用过的服务器）。组网/跨网段可展开「手动扫描」。",
                       })}
                     </p>
                     <button

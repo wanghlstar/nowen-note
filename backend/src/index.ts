@@ -107,7 +107,7 @@ import {
   isStaticAssetNotModified,
 } from "./lib/static-asset-response";
 import { featureDisabledBody, isFeatureEnabled, SERVER_PROFILE } from "./profile";
-import { listMdnsServices, localPrivateSubnets, parsePrivateCidr, scanSubnet } from "./services/lanDiscovery";
+import { discoverAuto, listKnownServerUrls, listMdnsServices, localPrivateSubnets, parsePrivateCidr, scanSubnet } from "./services/lanDiscovery";
 
 const app = new Hono();
 
@@ -376,11 +376,15 @@ app.get("/api/discovery/lan", async (c) => {
   const mdns = listMdnsServices();
 
   if (!subnet) {
-    const merged = mdns;
+    // 零输入模式：mDNS + 已知同步服务器直连探测 + 其所在 /24 扫描。
+    const knownUrls = listKnownServerUrls(getDb());
+    const result = await discoverAuto(knownUrls);
     return c.json({
-      services: merged,
-      mdns: merged.length > 0,
+      services: result.services,
+      scanning: result.scanning,
+      mdns: mdns.length > 0,
       subnets: localPrivateSubnets(),
+      knownServers: knownUrls.length,
     });
   }
 

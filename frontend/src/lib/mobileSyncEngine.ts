@@ -666,15 +666,20 @@ export class MobileSyncEngine {
       const plan = await this.request<{entityTypes?:unknown;treeLifecycle?:unknown;assetOrganization?:string}>(`/plan?${params}`);
       lifecycleSupported=plan.treeLifecycle==="personal-folder-v1";
       const types = plan.entityTypes;
-      if (types !== undefined && (!Array.isArray(types) || types.some((type) => !entitySet.split(",").includes(type)))) {
+      const requested = entitySet.split(",");
+      if (types !== undefined && (!Array.isArray(types) || types.some((type) => !requested.includes(type)))) {
         throw syncFailure("SERVER_ERROR","远端实体订阅响应无效");
       }
-      supported = Array.isArray(types) && types.length === entitySet.split(",").length && new Set(types).size === entitySet.split(",").length;
+      // Lite 部署按 profile 裁剪 P1 实体（task/task_reminder/diary/mindmap），
+      // 订阅响应是请求集合的 P0 子集；服务端只接受完整集合，因此仍视为协商成功，
+      // 否则 push/pull 永不执行，本机 outbox 永远 pending（"等待云端确认"）。
+      supported = Array.isArray(types) && new Set(types).size === types.length && (
+        types.length === requested.length
+        || (types.length === 10 && !types.includes("knowledge_tree_node"))
+        || (types.length >= 7 && types.includes("knowledge_tree_node"))
+      );
       this.assetSubscribed=supported && entitySet===NATIVE_ASSET_ENTITY_SET && plan.assetOrganization==="personal-v1";
       if (entitySet===NATIVE_ASSET_ENTITY_SET && !this.assetSubscribed) throw syncFailure("SERVER_ERROR","附件目录订阅响应缺少能力确认");
-      if (Array.isArray(types) && !supported && (types.length !== 10 || new Set(types).size !== 10 || types.includes("knowledge_tree_node"))) {
-        throw syncFailure("SERVER_ERROR","远端实体订阅响应不完整");
-      }
     } catch (error) {
       // Old servers may reject the new set. Fall back only before this profile
       // has ever bound a tree cursor; never silently downgrade an existing one.

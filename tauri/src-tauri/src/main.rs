@@ -98,8 +98,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
-                shutdown(window.state::<BackendState>());
+            // macOS 习惯：点红叉 / Cmd+W 只关闭窗口（隐藏），进程与后端继续运行；
+            // 只有 Cmd+Q（RunEvent::Exit）才真正退出并停止 sidecar。
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -112,8 +115,17 @@ pub fn run() {
         .expect("failed to build Nowen Note Lite application");
 
     app.run(|app_handle: &tauri::AppHandle, event| {
-        if let tauri::RunEvent::Exit = event {
-            shutdown(app_handle.state::<BackendState>());
+        match event {
+            tauri::RunEvent::Exit => shutdown(app_handle.state::<BackendState>()),
+            // 点 Dock 图标重新显示窗口
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => {
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            _ => {}
         }
     });
 }

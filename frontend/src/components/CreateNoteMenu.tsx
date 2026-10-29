@@ -25,6 +25,7 @@ import { pluginApi } from "@/lib/pluginApi";
 import { isMobileLocalMode } from "@/lib/mobileLocalMode";
 import { toast } from "@/lib/toast";
 import { useApp, useAppActions } from "@/store/AppContext";
+import { isFeatureEnabled } from "@/lib/featureRegistry";
 
 export type NoteType = "normal" | "markdown" | "plaintext" | "word";
 
@@ -49,7 +50,10 @@ export default function CreateNoteMenu({ open, parentId, onPick, onClose, anchor
   }, [open, anchorRef]);
 
   async function resolveTarget() {
-    const [owned, shared] = await Promise.allSettled([knowledgeTreeApi.list(), knowledgeTreeApi.listShared()]);
+    const [owned, shared] = await Promise.allSettled([
+      knowledgeTreeApi.list(),
+      isFeatureEnabled("sharing") ? knowledgeTreeApi.listShared() : Promise.resolve({ nodes: [] }),
+    ]);
     if (owned.status === "rejected") throw owned.reason;
     const nodes = [...owned.value.nodes, ...(shared.status === "fulfilled" ? shared.value.nodes : [])];
     const parent = parentId !== undefined
