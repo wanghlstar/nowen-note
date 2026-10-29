@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wifi, Radar, Loader2, ChevronDown, RefreshCw, Clock } from "lucide-react";
+import { Wifi, Radar, Loader2, ChevronDown, RefreshCw, Clock, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { parseServerUrl, type ServerAddressParts } from "@/lib/serverUrl";
 import { getLanDiscovery, type DiscoveredService } from "@/lib/lanDiscovery";
-import { listRecentServers, rememberServer, type RecentServer } from "@/lib/recentServers";
+import { listRecentServers, rememberServer, forgetServer, type RecentServer } from "@/lib/recentServers";
 
 /**
  * 局域网 nowen-note 服务器发现面板
@@ -140,6 +140,11 @@ export default function LanDiscoveryPanel({
     rememberServer(url);
     setRecents(listRecentServers());
     onSelect(parseServerUrl(url));
+  };
+
+  const handleForgetRecent = (url: string) => {
+    forgetServer(url);
+    setRecents(listRecentServers());
   };
 
   const handleScanSubnet = async () => {
@@ -336,17 +341,30 @@ export default function LanDiscoveryPanel({
                     {t("server.recentServers", { defaultValue: "最近使用" })}
                   </div>
                   {recents.map((item) => (
-                    <button
+                    <div
                       key={item.url}
-                      type="button"
-                      onClick={() => handleSelectRecent(item.url)}
-                      className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left hover:bg-white dark:hover:bg-zinc-700/60 transition-colors"
+                      className="group flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-zinc-700/60 transition-colors"
                     >
-                      <Clock className="w-3 h-3 text-zinc-400 flex-shrink-0" />
-                      <span className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
-                        {item.name ? `${item.name} · ${item.url}` : item.url}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectRecent(item.url)}
+                        className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                      >
+                        <Clock className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                        <span className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate font-mono">
+                          {item.name ? `${item.name} · ${item.url}` : item.url}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t("server.forgetRecent", { defaultValue: "删除这条记录" })}
+                        title={t("server.forgetRecent", { defaultValue: "删除这条记录" })}
+                        onClick={() => handleForgetRecent(item.url)}
+                        className="shrink-0 rounded p-0.5 text-zinc-400 opacity-0 transition-opacity hover:text-red-500 focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

@@ -55,3 +55,15 @@ export function rememberServer(url: string, name?: string): void {
     /* ignore quota errors */
   }
 }
+
+/** 删除一条「最近使用」记录（用户手动清理，避免越积越多且无法移除）。 */
+export function forgetServer(url: string): void {
+  const normalized = url.trim().replace(/\/+$/, "");
+  const store = storage();
+  if (!store || !normalized) return;
+  try {
+    store.setItem(KEY, JSON.stringify(listRecentServers().filter((item) => item.url !== normalized)));
+  } catch {
+    /* ignore quota errors */
+  }
+}
