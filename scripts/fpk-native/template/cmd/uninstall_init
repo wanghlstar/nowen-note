@@ -1,5 +1,60 @@
 #!/bin/bash
+# 卸载前：按用户在卸载向导里的选择保留数据目录与配置记录。
+#
+# 背景：数据目录原先只记录在包内 etc/data-dir，随包一起被飞牛清理，重装即回到空库。
+# 现在把「目录路径 + 数据库备份」放到包目录之外的 /var/lib/<appname>，
+# 下次安装时 install_init 自动识别并带入（向导留空即可）。
+APPNAME="${TRIM_APPNAME:-nowen-note}"
+CONF_DIR="${TRIM_PKGETC:-/var/apps/$APPNAME/etc}"
+CONF_FILE="$CONF_DIR/data-dir"
+DEFAULT_DIR="${TRIM_PKGVAR:-/var/apps/$APPNAME/var}"
+VAULT_DIR="${NOWEN_VAULT_DIR:-/var/lib/$APPNAME}"
+VAULT_RECORD="$VAULT_DIR/kept-at"
 
-### This script is called before the user uninstalls the application.
+# wizard_keep_data 缺省视为保留：兼容旧包升级、静默卸载等拿不到向导值的场景。
+KEEP="${wizard_keep_data:-true}"
+case "$KEEP" in
+    1|true|True|TRUE|yes|on|ON) KEEP=1 ;;
+    *) KEEP=0 ;;
+esac
 
+if [ "$KEEP" != "1" ]; then
+    # 明确不保留：留标记给 uninstall_callback 清掉历史备份，避免下次安装又恢复回来。
+    mkdir -p "$VAULT_DIR" 2>/dev/null
+    printf 'purge\n' > "$VAULT_DIR/.purge" 2>/dev/null
+    exit 0
+fi
+
+DATA_DIR=""
+if [ -f "$CONF_FILE" ]; then
+    DATA_DIR="$(cat "$CONF_FILE" 2>/dev/null)"
+fi
+[ -n "$DATA_DIR" ] || DATA_DIR="$DEFAULT_DIR"
+
+mkdir -p "$VAULT_DIR" 2>/dev/null
+rm -f "$VAULT_DIR/.purge" 2>/dev/null
+
+# 1) 记住数据目录，供下次安装自动带入
+printf '%s\n' "$DATA_DIR" > "$VAULT_DIR/data-dir" 2>/dev/null
+date -u +%Y-%m-%dT%H:%M:%SZ > "$VAULT_RECORD" 2>/dev/null
+
+# 2) 数据库可能被飞牛随包一起清理，先备份（仅库与密钥，附件体积大不复制）
+if [ -f "$DATA_DIR/nowen-note.db" ]; then
+    if cp -f "$DATA_DIR/nowen-note.db" "$VAULT_DIR/nowen-note.db.bak" 2>/dev/null; then
+        for ext in -wal -shm; do
+            [ -f "$DATA_DIR/nowen-note.db$ext" ] && cp -f "$DATA_DIR/nowen-note.db$ext" "$VAULT_DIR/nowen-note.db.bak$ext" 2>/dev/null
+        done
+        if [ -d "$DATA_DIR/keys" ]; then
+            rm -rf "$VAULT_DIR/keys" 2>/dev/null
+            cp -a "$DATA_DIR/keys" "$VAULT_DIR/keys" 2>/dev/null
+        fi
+        echo "已保留数据目录 $DATA_DIR（数据库备份在 $VAULT_DIR）" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    else
+        echo "备份数据库失败，仅保留数据目录记录 $DATA_DIR" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    fi
+else
+    echo "数据目录 $DATA_DIR 下没有数据库，仅保留目录记录" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+fi
+
+chmod 600 "$VAULT_DIR/nowen-note.db.bak" 2>/dev/null || true
 exit 0

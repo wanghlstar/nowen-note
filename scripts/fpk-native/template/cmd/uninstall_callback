@@ -1,5 +1,9 @@
 #!/bin/bash
+# 卸载后：用户选择「不保留数据」时清掉包外备份，避免下次安装又自动恢复。
+APPNAME="${TRIM_APPNAME:-nowen-note}"
+VAULT_DIR="${NOWEN_VAULT_DIR:-/var/lib/$APPNAME}"
 
-### This script is called after the user uninstalls the application.
-
+if [ -f "$VAULT_DIR/.purge" ]; then
+    rm -rf "$VAULT_DIR" 2>/dev/null
+fi
 exit 0

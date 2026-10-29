@@ -1,0 +1,14 @@
+[
+  {
+    "stepTitle": "卸载选项",
+    "items": [
+      {
+        "type": "switch",
+        "field": "keep_data",
+        "label": "保留数据目录与配置",
+        "initValue": true,
+        "helpText": "保留后：笔记数据库与密钥会备份到 /var/lib/nowen-note，原数据目录路径也会被记住，下次安装自动带入、不再询问，数据不丢失。关闭则按飞牛默认行为清理应用数据（备份会一并删除，不可恢复）。"
+      }
+    ]
+  }
+]

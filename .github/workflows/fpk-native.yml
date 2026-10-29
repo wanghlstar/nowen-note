@@ -66,6 +66,28 @@ jobs:
           tar -xJf /tmp/node.tar.xz -C /tmp/node-runtime --strip-components=1
           /tmp/node-runtime/bin/node --version
 
+      - name: Resolve fpk version
+        id: fpkver
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          REF="${GITHUB_REF#refs/tags/}"
+          if [[ "$REF" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-lite\.([0-9]+))?$ ]]; then
+            BASE="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            if [ -n "${BASH_REMATCH[5]}" ]; then
+              # 同上游版本多次发布 Lite 时追加构建号，飞牛才允许覆盖安装
+              echo "version=${BASE}.${BASH_REMATCH[5]}" >> "$GITHUB_OUTPUT"
+            else
+              echo "version=${BASE}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download fnpack
         run: |
           curl -fsSL "https://static2.fnnas.com/fnpack/fnpack-1.2.3-linux-amd64" -o /tmp/fnpack
@@ -76,7 +98,7 @@ jobs:
         env:
           FNPACK_BIN: /tmp/fnpack
           NODE_BIN: /tmp/node-runtime/bin/node
-          FPK_VERSION: ${{ inputs.version }}
+          FPK_VERSION: ${{ steps.fpkver.outputs.version }}
         run: node scripts/fpk-native/build-fpk-native.mjs
 
       - name: Upload fpk artifact

@@ -12,6 +12,8 @@ RUN_GROUP="${TRIM_GROUPNAME:-$RUN_USER}"
 CONF_DIR="${TRIM_PKGETC:-/var/apps/$APPNAME/etc}"
 CONF_FILE="$CONF_DIR/data-dir"
 DEFAULT_DIR="${TRIM_PKGVAR:-/var/apps/$APPNAME/var}"
+# 卸载时保留在包目录之外的备份（见 cmd/uninstall_init）
+VAULT_DIR="${NOWEN_VAULT_DIR:-/var/lib/$APPNAME}"
 
 mkdir -p "$CONF_DIR" 2>/dev/null
 
@@ -42,6 +44,15 @@ if [ -z "$DATA_DIR" ]; then
         [ -n "$SAVED" ] && DATA_DIR="$SAVED"
     fi
 fi
+if [ -z "$DATA_DIR" ] && [ -f "$VAULT_DIR/data-dir" ]; then
+    # 上次卸载选择了「保留数据」：自动带入原数据目录，无需再填向导。
+    VAULTED="$(cat "$VAULT_DIR/data-dir" 2>/dev/null)"
+    case "$VAULTED" in
+        /vol[0-9]*|/var/apps/*) DATA_DIR="$VAULTED" ;;
+        *) ;; # 记录不可信时忽略，继续走默认目录
+    esac
+    [ -n "$DATA_DIR" ] && echo "检测到上次保留的数据目录：$DATA_DIR" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+fi
 [ -n "$DATA_DIR" ] || DATA_DIR="$DEFAULT_DIR"
 
 if ! mkdir -p "$DATA_DIR"; then
@@ -59,6 +70,22 @@ if [ "$(id -u)" = "0" ] && id -u "$RUN_USER" >/dev/null 2>&1 && command -v su >/
 fi
 
 printf %s "$DATA_DIR" > "$CONF_FILE"
+
+# 数据目录被飞牛清掉过，但卸载时备份了数据库：恢复库与密钥。
+if [ ! -f "$DATA_DIR/nowen-note.db" ] && [ -f "$VAULT_DIR/nowen-note.db.bak" ]; then
+    echo "从卸载备份恢复数据库到 $DATA_DIR ..." > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    if cp -f "$VAULT_DIR/nowen-note.db.bak" "$DATA_DIR/nowen-note.db" 2>/dev/null; then
+        for ext in -wal -shm; do
+            [ -f "$VAULT_DIR/nowen-note.db.bak$ext" ] && cp -f "$VAULT_DIR/nowen-note.db.bak$ext" "$DATA_DIR/nowen-note.db$ext" 2>/dev/null
+        done
+        [ -d "$VAULT_DIR/keys" ] && cp -a "$VAULT_DIR/keys" "$DATA_DIR/keys" 2>/dev/null
+        rm -f "$DATA_DIR/nowen-note.pid"
+        chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true
+        echo "数据库已恢复（备份保留在 $VAULT_DIR）。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    else
+        echo "恢复数据库失败，请检查 $DATA_DIR 写入权限。" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    fi
+fi
 
 # 从 docker 版迁移：容器的数据落在共享目录且属主为 root。
 # 仅在数据目录尚无数据库时执行一次，源目录保持原样不删除。

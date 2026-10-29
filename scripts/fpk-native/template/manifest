@@ -11,3 +11,5 @@ distributor           = Nowen
 distributor_url       = https://github.com/cropflre/nowen-note
 desktop_uidir         = ui
 desktop_applaunchname = nowen-note.Application
+install_uifile        = wizard/install
+uninstall_uifile      = wizard/uninstall
