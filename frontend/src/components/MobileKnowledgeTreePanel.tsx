@@ -682,6 +682,31 @@ export default function MobileKnowledgeTreePanel({
     setView("browse");
     setQuery("");
     setParentId(parent?.id || null);
+    // 笔记类（普通 / Markdown / 纯文本）参考 Leanote：直接用默认标题创建并打开，
+    // 标题在编辑器里是"未命名"占位、聚焦即可改名，不需要先填名称点 ✓ 确认。
+    // 只有文件夹等真正需要名字的类型才走行内草稿。
+    if (kind !== "folder") {
+      void (async () => {
+        try {
+          const created = await knowledgeTreeApi.create({
+            parentId: parent?.id || null,
+            nodeType: kind === "plaintext" ? "note" : kind,
+            ...(kind === "plaintext" ? { contentFormat: "plaintext" as const } : {}),
+            title: defaultInlineCreateTitle(kind),
+          });
+          emitTreeChanged("node-created-quick-browse");
+          await reload();
+          actions.refreshNotebooks();
+          actions.refreshNotes();
+          rememberOpened(created.id);
+          activateNote(await api.getNote(created.resourceId), parent?.id || null, true);
+        } catch (createError: any) {
+          toast.error(createError?.message || "创建失败，请重试");
+        }
+      })();
+      return;
+    }
+
     setDraft({
       parentId: parent?.id || null,
       kind,

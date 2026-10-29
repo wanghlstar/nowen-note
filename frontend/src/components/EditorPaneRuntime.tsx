@@ -87,8 +87,9 @@ export default function EditorPaneRuntime() {
         "[data-mobile-editor-title] textarea, [data-markdown-mobile-title] textarea",
       );
       if (!title || title.disabled || title.readOnly) return false;
+      // 只聚焦、不全选：默认标题由 UntitledNoteTitleBridge 显示为占位符（空值），
+      // 用户可以直接打字命名，也可以 Tab/点进正文直接写，不必先"改名字再确认"。
       title.focus({ preventScroll: true });
-      title.select();
       return document.activeElement === title;
     };
 

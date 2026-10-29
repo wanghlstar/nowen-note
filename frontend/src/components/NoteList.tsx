@@ -77,7 +77,9 @@ const SORT_STORAGE_KEY = "nowen.noteList.sort";
 function loadSortPref(): { by: SortBy; dir: SortDir } {
   try {
     const raw = localStorage.getItem(SORT_STORAGE_KEY);
-    if (!raw) return { by: "manual", dir: "desc" };
+    // 默认按更新时间倒序（与 Leanote 一致）：manual 依赖 sortOrder，未拖拽过的
+    // 账号所有笔记 sortOrder 都是 0，顺序完全取决于兜底比较，新笔记容易沉底。
+    if (!raw) return { by: "updatedAt", dir: "desc" };
     const parsed = JSON.parse(raw);
     const by: SortBy =
       parsed.by === "updatedAt" || parsed.by === "createdAt" || parsed.by === "title" || parsed.by === "manual"
@@ -1856,7 +1858,10 @@ export default function NoteList({ directorySearchActive = false }: { directoryS
     if (sortPref.by === "manual") {
       return sortNotesPinnedFirst(
         state.notes,
-        (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0),
+        // 与后端一致：sortOrder ASC 之后按 updatedAt DESC 兜底，
+        // 否则 sortOrder 全为 0 时新笔记会停留在原数组末尾。
+        (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)
+          || String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
       );
     }
     const dir = sortPref.dir === "asc" ? 1 : -1;
