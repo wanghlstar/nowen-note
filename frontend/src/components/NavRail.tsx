@@ -29,7 +29,7 @@ import { openWorkspaceIssue, OPEN_NOTIFICATIONS_EVENT, parseIssueAppPath } from 
 import { resolveCurrentAppPathname } from "@/lib/appPathNavigation";
 import { pushAppPathState } from "@/lib/appPathNavigation";
 import { getCurrentMindMapAppRoute, pushMindMapAppPath } from "@/lib/mindMapDeepLink";
-import { isFeatureEnabled, isNavigationModeEnabled } from "@/lib/featureRegistry";
+import { getFeatureProfile, isFeatureEnabled, isNavigationModeEnabled } from "@/lib/featureRegistry";
 import { useRailMode } from "@/hooks/useRailMode";
 import { KNOWLEDGE_TREE_CLEAR_SEARCH_EVENT, type KnowledgeTreeClearSearchDetail } from "@/lib/knowledgeTreeCreateVisibility";
 import { useSidebarTextStyle } from "@/hooks/useSidebarTextStyle";
@@ -268,7 +268,11 @@ export default function NavRail({ variant = "desktop", notificationCount = 0 }: 
     if (isDesktopApp() && !canSwitchBackToLocal) {
       await clearDesktopLocalAuth().catch(() => ({ ok: false }));
       try {
-        localStorage.setItem("nowen-prefer-cloud", "1");
+        // Lite 永远本地优先：不写 prefer-cloud，登出后重新零登录回到本地模式，
+        // 需要连服务器时走 设置 → 同步 → 添加服务器。
+        if (getFeatureProfile() !== "lite") {
+          localStorage.setItem("nowen-prefer-cloud", "1");
+        }
       } catch {
         // ignore storage failures
       }

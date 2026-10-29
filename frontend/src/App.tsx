@@ -116,7 +116,7 @@ import {
   replaceMindMapAppPath,
   type MindMapAppRoute,
 } from "@/lib/mindMapDeepLink";
-import { isFeatureEnabled, useFeatureProfile } from "@/lib/featureRegistry";
+import { getFeatureProfile, isFeatureEnabled, useFeatureProfile } from "@/lib/featureRegistry";
 import {
   getCurrentSheetAppRoute,
   parseSheetAppPath,
@@ -1465,13 +1465,20 @@ function AuthGate() {
     //   用户在 NavRail 点击云端入口后会写 nowen-prefer-cloud=1，
     //   此时强制跳过零登录，直接进登录页（让用户输入 fnos 服务器地址）。
     //   返回本地模式时 LoginPage 会清除该标记 + reload，零登录恢复。
-    const preferCloud = (() => {
-      try {
-        return localStorage.getItem("nowen-prefer-cloud") === "1";
-      } catch {
-        return false;
-      }
-    })();
+    //
+    // Lite：取消云端基线，桌面端永远本地优先。API 固定打本地后端，
+    //   fnos 服务器只是"同步目标"（设置 → 同步 → 添加服务器），
+    //   否则断网 + token 过期就打不开笔记（云端直连无本地库可读）。
+    //   已切到云端基线的老用户升级后会被拉回本地模式，需重新添加一次服务器。
+    const preferCloud = getFeatureProfile() === "lite"
+      ? false
+      : (() => {
+        try {
+          return localStorage.getItem("nowen-prefer-cloud") === "1";
+        } catch {
+          return false;
+        }
+      })();
     if (
       !existingToken &&
       !preferCloud &&

@@ -5,6 +5,7 @@ import { loadRememberedCredentials } from "@/lib/rememberLogin";
 import type { User } from "@/types";
 import { clearAuthTokens, refreshAccessToken, storeAuthTokens } from "@/lib/authSession";
 import { completeMobileAccountLogin, isAndroidNativeRuntime, requestMobileAccountLogin } from "@/lib/mobileLocalMode";
+import { getFeatureProfile } from "@/lib/featureRegistry";
 import {
   type AccountLoginHistoryItem,
   CURRENT_ACCOUNT_HISTORY_ID_KEY,
@@ -44,8 +45,9 @@ async function prepareReauth(account: AccountLoginHistoryItem, message?: string)
   setServerUrl(account.serverUrl);
   if (isAndroidNativeRuntime()) requestMobileAccountLogin();
   clearAuthTokens();
-  if ((window as any).nowenDesktop?.isDesktop) {
+  if ((window as any).nowenDesktop?.isDesktop && getFeatureProfile() !== "lite") {
     // 防止刷新到登录页时 Electron full 模式重新注入本地账号，覆盖目标服务器。
+    // Lite 不切云端基线（见 App.tsx 零登录门禁），账号切换在 Lite 下无意义。
     localStorage.setItem("nowen-prefer-cloud", "1");
   }
   try { window.dispatchEvent(new CustomEvent("nowen:token-changed")); } catch { /* ignore */ }
