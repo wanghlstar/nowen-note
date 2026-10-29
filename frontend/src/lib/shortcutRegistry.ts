@@ -47,10 +47,24 @@ export function detectShortcutPlatform(input?: { platform?: string; userAgent?: 
   return "linux";
 }
 
+/**
+ * Tauri 桌面端 WebView 的 UA 不含 Electron/Tauri 标识（WKWebView 即 Safari UA），
+ * 只能按运行时注入判断，否则桌面 App 会被误判成 web surface 而降级成 Alt+N。
+ */
+function isDesktopRuntime(): boolean {
+  if (typeof window === "undefined") return false;
+  const scope = window as unknown as {
+    nowenDesktop?: { isDesktop?: boolean };
+    __TAURI__?: unknown;
+  };
+  return Boolean(scope.nowenDesktop?.isDesktop || scope.__TAURI__);
+}
+
 export function detectShortcutSurface(userAgent?: string): ShortcutSurface {
   const ua = (userAgent ?? (typeof navigator !== "undefined" ? navigator.userAgent : "")).toLowerCase();
   if (ua.includes("android") || ua.includes("iphone") || ua.includes("ipad")) return "android";
-  return ua.includes("electron") ? "desktop" : "web";
+  if (ua.includes("electron") || isDesktopRuntime()) return "desktop";
+  return "web";
 }
 
 function platformToken(token: string, platform: ShortcutPlatform): string {

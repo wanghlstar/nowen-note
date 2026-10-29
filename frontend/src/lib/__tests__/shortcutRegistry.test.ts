@@ -3,8 +3,10 @@ import {
   SHORTCUT_COMMANDS,
   appendShortcutToTooltip,
   detectShortcutPlatform,
+  detectShortcutSurface,
   findShortcutConflicts,
   formatShortcutForCommand,
+  getDefaultShortcutChords,
   getShortcutCommand,
   isShortcutAllowedInTarget,
   resolveShortcutCommandIdByTooltipLabel,
@@ -103,5 +105,38 @@ describe("shortcutRegistry", () => {
     expect(isShortcutAllowedInTarget("bold", input)).toBe(false);
     expect(isShortcutAllowedInTarget("bold", editor)).toBe(true);
     expect(isShortcutAllowedInTarget("toggle-note-list", input)).toBe(false);
+  });
+
+  it("treats the Tauri desktop runtime as the desktop surface", () => {
+    const scope = window as unknown as { nowenDesktop?: unknown; __TAURI__?: unknown };
+    const original = scope.nowenDesktop;
+    const originalTauri = scope.__TAURI__;
+    try {
+      scope.nowenDesktop = { isDesktop: true };
+      expect(detectShortcutSurface()).toBe("desktop");
+      scope.nowenDesktop = undefined;
+      scope.__TAURI__ = {};
+      expect(detectShortcutSurface()).toBe("desktop");
+    } finally {
+      scope.nowenDesktop = original;
+      scope.__TAURI__ = originalTauri;
+    }
+  });
+
+  it("keeps Alt+N only for the browser web surface", () => {
+    const scope = window as unknown as { nowenDesktop?: unknown; __TAURI__?: unknown };
+    const original = scope.nowenDesktop;
+    const originalTauri = scope.__TAURI__;
+    try {
+      scope.nowenDesktop = undefined;
+      scope.__TAURI__ = undefined;
+      expect(detectShortcutSurface()).toBe("web");
+      expect(getDefaultShortcutChords("new-note", "macos", "web")[0]).toEqual(["Alt", "N"]);
+      expect(getDefaultShortcutChords("new-note", "macos", "desktop")[0]).toEqual(["Mod", "N"]);
+      expect(formatShortcutForCommand("new-note", "macos", "desktop")).toBe("⌘N");
+    } finally {
+      scope.nowenDesktop = original;
+      scope.__TAURI__ = originalTauri;
+    }
   });
 });
