@@ -559,7 +559,11 @@ async function configureRuntime(): Promise<void> {
     const [{ App }, { Network }] = await Promise.all([import("@capacitor/app"),import("@capacitor/network")]);
     endpoints = createMobileServerEndpointRuntime(serverUrl, Network, () => engine.requestSync(0));
     removeListeners.push(() => endpoints?.dispose());
-    const appHandle = await App.addListener("appStateChange", ({ isActive }) => { if (isActive) void endpoints?.refresh(); });
+    const appHandle = await App.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) { void endpoints?.refresh(); return; }
+      // 切到后台=编辑告一段落：立刻把 outbox 推上去，不等 3 秒防抖。
+      engine.requestSync(0);
+    });
     removeListeners.push(() => appHandle.remove());
     const networkHandle = await Network.addListener("networkStatusChange", (status) => { void endpoints?.networkChanged(status); notifyMobileSyncStatusChanged(); });
     removeListeners.push(() => networkHandle.remove());
@@ -582,6 +586,14 @@ function scheduleConfigure(): void {
   lifecycle = lifecycle.then(configureRuntime,configureRuntime).catch((error) => {
     console.error("[mobile-local-first] 初始化失败，已保留原有访问路径",error);
   });
+}
+
+/**
+ * 立即同步一次（跳过防抖）。
+ * 用于"编辑告一段落"信号：离开当前笔记、关闭编辑器、用户点手动同步。
+ */
+export function requestMobileSyncNow(): void {
+  active?.engine?.requestSync(0);
 }
 
 /** 原生端启动入口。失败时保留既有远端路径，避免阻断登录或首屏。 */

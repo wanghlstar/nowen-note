@@ -148,7 +148,14 @@ export class MobileSyncEngine {
     this.debounce = null;
   }
 
-  requestSync(delayMs = 800): void {
+  /**
+   * 请求一次同步周期。
+   *
+   * 默认 3 秒防抖：本地写入（自动保存）只意味着"停手 3 秒后才同步"，
+   * 避免连续编辑时每 1~2 秒就跑一轮推送/拉取/附件传输，产生半同步状态。
+   * 明确的"编辑告一段落"信号（离开笔记、切后台、手动同步）用 requestSync(0) 立即同步。
+   */
+  requestSync(delayMs = 3000): void {
     if (this.stopped) return;
     if (this.debounce) clearTimeout(this.debounce);
     this.debounce = setTimeout(() => {

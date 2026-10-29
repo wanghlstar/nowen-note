@@ -103,6 +103,12 @@ export function parsePrivateCidr(input: string): { base: number[]; prefix: numbe
   return { base: octets, prefix };
 }
 
+export function excludeSelf(items: LanDiscoveredService[]): LanDiscoveredService[] {
+  if (items.length === 0) return items;
+  const self = localIPv4Addresses();
+  return items.filter((item) => !isSelfAddress(item, self));
+}
+
 export function localPrivateSubnets(): string[] {
   const result: string[] = [];
   for (const list of Object.values(os.networkInterfaces())) {
@@ -114,6 +120,24 @@ export function localPrivateSubnets(): string[] {
     }
   }
   return [...new Set(result)];
+}
+
+/** 本机全部 IPv4 地址（含回环）：局域网发现应剔除本机，否则会扫到自己。 */
+function localIPv4Addresses(): Set<string> {
+  const self = new Set<string>(["127.0.0.1"]);
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const info of list || []) {
+      if (info.family !== "IPv4") continue;
+      self.add(info.address);
+    }
+  }
+  return self;
+}
+
+function isSelfAddress(item: LanDiscoveredService, self: Set<string>): boolean {
+  if (item.ipv4 && self.has(item.ipv4)) return true;
+  const addresses = Array.isArray(item.addresses) ? item.addresses : [];
+  return addresses.length > 0 && addresses.every((address) => self.has(String(address)));
 }
 
 function hostList({ base, prefix }: { base: number[]; prefix: number }): string[] {
@@ -307,10 +331,12 @@ function runAutoScan(subnets: string[], ports: number[]) {
     }
   }
 
+  const self = localIPv4Addresses();
+  const scannable = jobs.filter((job) => !self.has(job.ip));
   let cursor = 0;
   const worker = async () => {
-    while (cursor < jobs.length) {
-      const job = jobs[cursor];
+    while (cursor < scannable.length) {
+      const job = scannable[cursor];
       cursor += 1;
       const hit = await probeHost(job.ip, job.port);
       if (hit) state.results.set(`${job.ip}:${job.port}`, hit);
@@ -318,7 +344,7 @@ function runAutoScan(subnets: string[], ports: number[]) {
   };
 
   void Promise.all(
-    Array.from({ length: Math.min(AUTO_SCAN_CONCURRENCY, Math.max(jobs.length, 1)) }, () => worker()),
+    Array.from({ length: Math.min(AUTO_SCAN_CONCURRENCY, Math.max(scannable.length, 1)) }, () => worker()),
   ).then(() => {
     state.done = true;
   });
@@ -353,7 +379,7 @@ function ensureAutoScan(knownUrls: string[]): { services: LanDiscoveredService[]
  * 结果缓存 20s，前端每 3s 轮询不会反复触发 5 秒级扫描。
  */
 export async function discoverAuto(knownUrls: string[]): Promise<{ services: LanDiscoveredService[]; scanning: boolean }> {
-  const mdns = listMdnsServices();
+  const mdns = excludeSelf(listMdnsServices());
   const auto = ensureAutoScan(knownUrls);
   if (autoCache && Date.now() - autoCache.at < AUTO_TTL_MS) {
     return { services: mergeServices(mdns, autoCache.services, auto.services), scanning: auto.scanning || !autoCache };
@@ -388,8 +414,8 @@ export async function discoverAuto(knownUrls: string[]): Promise<{ services: Lan
   // 已知服务器所在网段由后台扫描覆盖，这里只做直连探测。
   void scanTargets;
 
-  autoCache = { at: Date.now(), services: found };
-  return { services: mergeServices(mdns, found, auto.services), scanning: auto.scanning };
+  autoCache = { at: Date.now(), services: excludeSelf(found) };
+  return { services: mergeServices(mdns, excludeSelf(found), excludeSelf(auto.services)), scanning: auto.scanning };
 }
 
 function mergeServices(...groups: LanDiscoveredService[][]): LanDiscoveredService[] {

@@ -107,7 +107,7 @@ import {
   isStaticAssetNotModified,
 } from "./lib/static-asset-response";
 import { featureDisabledBody, isFeatureEnabled, SERVER_PROFILE } from "./profile";
-import { discoverAuto, listKnownServerUrls, listMdnsServices, localPrivateSubnets, parsePrivateCidr, scanSubnet } from "./services/lanDiscovery";
+import { discoverAuto, excludeSelf, listKnownServerUrls, listMdnsServices, localPrivateSubnets, parsePrivateCidr, scanSubnet } from "./services/lanDiscovery";
 
 const app = new Hono();
 
@@ -373,7 +373,7 @@ app.get("/api/health", (c) => c.json({
 // 组网 / VPN 场景 mDNS 通常不通，此时用 subnet + port 做单播探测。
 app.get("/api/discovery/lan", async (c) => {
   const subnet = (c.req.query("subnet") || "").trim();
-  const mdns = listMdnsServices();
+  const mdns = excludeSelf(listMdnsServices());
 
   if (!subnet) {
     // 零输入模式：mDNS + 已知同步服务器直连探测 + 其所在 /24 扫描。
@@ -399,7 +399,7 @@ app.get("/api/discovery/lan", async (c) => {
   }
   const portRaw = Number(c.req.query("port"));
   const port = Number.isInteger(portRaw) && portRaw > 0 && portRaw < 65536 ? portRaw : 3001;
-  const scanned = await scanSubnet(subnet, port);
+  const scanned = excludeSelf(await scanSubnet(subnet, port));
   const byKey = new Map<string, (typeof mdns)[number]>();
   for (const item of [...mdns, ...scanned]) {
     byKey.set(`${item.ipv4 || item.host}:${item.port}`, item);

@@ -9,7 +9,8 @@ export function installMobileSyncRealtime(engine: MobileSyncEngine): () => void 
   const removeOpen = realtime.on("open", wake);
   const onVisible = () => { if (document.visibilityState === "visible") wake(); };
   document.addEventListener("visibilitychange", onVisible);
-  const poll = setInterval(onVisible, 30_000);
+  // 兜底轮询：前台停留时最多 60 秒同步一次，避免依赖其他设备推送通知。
+  const poll = setInterval(onVisible, 60_000);
   if (isMobileSyncEnabled()) realtime.connect();
   return () => {
     clearInterval(poll);

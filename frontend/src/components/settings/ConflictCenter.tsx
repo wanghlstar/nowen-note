@@ -122,6 +122,21 @@ export function ConflictCenter({
     }
   };
 
+  /**
+   * 冲突解决后广播：编辑器必须丢弃本地缓冲并按新结果重载。
+   * 否则「采用云端版本」后，编辑器里残留的旧内容会被自动保存再次推送，
+   * 把刚采用的云端版本覆盖掉（移动端本地优先写入尤其明显）。
+   */
+  const notifyResolved = (
+    entityType: string,
+    entityId: string,
+    resolution: "keep-local" | "keep-remote" | "manual",
+  ) => {
+    window.dispatchEvent(new CustomEvent("nowen:sync-conflict-resolved", {
+      detail: { entityType, entityId, resolution },
+    }));
+  };
+
   const handleResolve = async (
     id: string,
     resolution: "keep-local" | "keep-remote",
@@ -144,6 +159,7 @@ export function ConflictCenter({
         }
       }
       await resolveConflict(id, { resolution, deviceId: deviceId ?? undefined });
+      if (target) notifyResolved(target.entityType, target.entityId, resolution);
       setSelected(null);
       await reload();
       onResolved?.();
@@ -169,6 +185,8 @@ export function ConflictCenter({
     setWarning(null);
     try {
       await resolveConflict(id,{resolution:"manual",mergedPayload,deviceId:deviceId ?? undefined});
+      const manualTarget = items.find((entry) => entry.id === id);
+      if (manualTarget) notifyResolved(manualTarget.entityType, manualTarget.entityId, "manual");
       setSelected(null);
       await reload();
       onResolved?.();
@@ -238,6 +256,7 @@ export function ConflictCenter({
             resolution,
             deviceId: deviceId ?? undefined,
           });
+          notifyResolved(item.entityType, item.entityId, resolution);
           resolvedCount += 1;
         } catch (reason) {
           const title = item.localTitle || item.remoteTitle || item.entityId;
@@ -305,6 +324,7 @@ export function ConflictCenter({
             mergedPayload: merged.payload,
             deviceId: deviceId ?? undefined,
           });
+          notifyResolved(item.entityType, item.entityId, "manual");
           mergedCount += 1;
         } catch (reason) {
           const message = reason instanceof Error ? reason.message : String(reason);

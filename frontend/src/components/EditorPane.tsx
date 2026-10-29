@@ -80,6 +80,7 @@ import {
 } from "@/lib/mindmapTransform";
 import { cn } from "@/lib/utils";
 import SyncStatusBadge from "@/components/SyncStatusBadge";
+import { requestMobileSyncNow } from "@/lib/mobileLocalFirstRuntime";
 import { isAndroidNativeRuntime } from "@/lib/mobileLocalMode";
 import { isFeatureEnabled } from "@/lib/featureRegistry";
 import {
@@ -1814,6 +1815,9 @@ function OrdinaryEditorPane({
   // �л��ʼ�ʱ��պ��
   useEffect(() => {
     setRemoteDelete(null);
+    // cleanup 即"离开这篇笔记"：编辑告一段落，立刻同步一次，
+    // 不必等本地写入的 3 秒防抖（移动端策略：写入懒同步，离开即同步）。
+    return () => { requestMobileSyncNow(); };
   }, [activeNote?.id]);
 
   // ���� �л��ʼ�ʱ�Զ���� HTML ��ʽ������Ԥ��ģʽ ����
@@ -2746,6 +2750,37 @@ function OrdinaryEditorPane({
     t,
     userPrefs.enableNoteTabs,
   ]);
+
+  /**
+   * 冲突解决后刷新当前笔记。
+   *
+   * 选择「采用云端版本 / 手动合并」时，本地库已被云端版本覆盖，但编辑器里仍缓存着
+   * 冲突前的旧内容。若不丢弃这段缓冲，自动保存会把旧内容重新推送到云端，
+   * 表现为"选了保存云端版本，云端版本却被改掉"。
+   */
+  useEffect(() => {
+    const onConflictResolved = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        entityType?: string;
+        entityId?: string;
+        resolution?: string;
+      }>).detail;
+      const entityId = detail?.entityId;
+      if (!detail || detail.entityType !== "note" || !entityId) return;
+      // keep-local 以本机为准，编辑器内容就是结果，无需重载。
+      if (detail.resolution === "keep-local") return;
+      if (activeNote?.id !== entityId) return;
+      editorHandleRef.current?.discardPending?.();
+      void loadNote({
+        noteId: entityId,
+        summary: { title: activeNote.title, notebookId: activeNote.notebookId },
+        request: () => api.getNote(entityId),
+        onSuccess: (note) => actions.setActiveNote(note),
+      });
+    };
+    window.addEventListener("nowen:sync-conflict-resolved", onConflictResolved);
+    return () => window.removeEventListener("nowen:sync-conflict-resolved", onConflictResolved);
+  }, [activeNote, actions, loadNote]);
 
   // BLOCK-LINKS-JUMP-01: 打开笔记回调（用于笔记引用跳转）
   const handleOpenNote = useCallback(

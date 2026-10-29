@@ -474,6 +474,23 @@ describe("冲突中心批量处理", () => {
     expect([...card.querySelectorAll("button")].find((b) => b.textContent === "保留本机版本")?.disabled).toBe(false);
   });
 
+  it("采用云端版本后广播冲突解决事件，供编辑器丢弃旧缓冲",async()=>{
+    const events:CustomEvent<{entityType:string;entityId:string;resolution:string}>[]=[];
+    const onEvent=(event:Event)=>events.push(event as CustomEvent<{entityType:string;entityId:string;resolution:string}>);
+    window.addEventListener("nowen:sync-conflict-resolved",onEvent);
+    fetchConflictsMock.mockResolvedValue({total:1,items:[conflicts[0]]});
+    const host=document.createElement("div");document.body.appendChild(host);root=createRoot(host);
+    await act(async()=>{root?.render(<ConflictCenter deviceId="device-1"/>);});
+    await waitFor(()=>expect(host.textContent).toContain("冲突（1）"));
+    const card=host.querySelector("li")!;
+    await act(async()=>{[...card.querySelectorAll("button")].find(button=>button.textContent==="保留云端版本")?.click();});
+    await waitFor(()=>expect(resolveConflictMock).toHaveBeenCalledTimes(1));
+    expect(resolveConflictMock.mock.calls[0]?.[1]).toMatchObject({resolution:"keep-remote"});
+    window.removeEventListener("nowen:sync-conflict-resolved",onEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toMatchObject({entityType:"note",entityId:"note-1",resolution:"keep-remote"});
+  });
+
   it("附件整理冲突逐项选择，隐藏 JSON 合并并跳过批量覆盖",async()=>{
     await (await import("@/i18n")).default.changeLanguage("zh-CN");
     const item={...conflicts[0],id:"asset-conflict",entityType:"attachment_organization",entityId:"folder:asset",diffFields:["name"]};
