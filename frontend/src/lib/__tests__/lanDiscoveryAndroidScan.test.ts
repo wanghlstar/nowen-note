@@ -3,18 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getLanDiscovery, type DiscoveredService } from "../lanDiscovery";
 
 const { httpMock, zeroconfWatch, zeroconfUnwatch } = vi.hoisted(() => ({
-  httpMock: vi.fn(),
-  zeroconfWatch: vi.fn(async () => "callback-id"),
-  zeroconfUnwatch: vi.fn(async () => undefined),
+  httpMock: vi.fn<[options: { url: string }], Promise<{ status: number }>>(),
+  zeroconfWatch: vi.fn<[request: unknown, callback: unknown], Promise<string>>(async () => "callback-id"),
+  zeroconfUnwatch: vi.fn<[request: unknown], Promise<void>>(async () => undefined),
 }));
 
 vi.mock("@capacitor/core", () => ({
   Capacitor: { isNativePlatform: () => true, getPlatform: () => "android" },
-  CapacitorHttp: { request: (...args: unknown[]) => httpMock(...args) },
+  CapacitorHttp: { request: (options: { url: string }) => httpMock(options) },
 }));
 
 vi.mock("@mhaberler/capacitor-zeroconf-nsd", () => ({
-  ZeroConf: { watch: (...args: unknown[]) => zeroconfWatch(...args), unwatch: (...args: unknown[]) => zeroconfUnwatch(...args) },
+  ZeroConf: {
+    watch: (request: unknown, callback: unknown) => zeroconfWatch(request, callback),
+    unwatch: (request: unknown) => zeroconfUnwatch(request),
+  },
 }));
 
 /** 只有一个服务器在 192.168.2.8:19010 上监听，其余全部拒绝连接。 */
