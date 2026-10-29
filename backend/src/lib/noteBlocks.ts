@@ -193,6 +193,22 @@ function normalizeGeneratedMarkdownMarkers(content: string): string {
   for (const line of lines) {
     if (fenceChar) {
       const closeRe = new RegExp(`^[ \\t]{0,3}${fenceChar}{${fenceLength},}[ \\t]*$`);
+      // 围栏行上附着标记（```^blk_xxx）不是合法围栏：先把标记挪到独立行，
+      // 再用干净文本判定是否闭合，否则整段后续内容都会被当成代码块。
+      const attachedInside = line.text.match(ATTACHED_GENERATED_MARKER_RE);
+      if (attachedInside) {
+        edits.push({
+          from: line.start,
+          to: line.end,
+          insert: `${attachedInside[1]}\n^${attachedInside[2]}`,
+        });
+        if (closeRe.test(attachedInside[1])) {
+          fenceChar = "";
+          fenceLength = 0;
+          expectsCodeMarker = true;
+        }
+        continue;
+      }
       if (closeRe.test(line.text)) {
         fenceChar = "";
         fenceLength = 0;
@@ -209,6 +225,14 @@ function normalizeGeneratedMarkdownMarkers(content: string): string {
 
     const opener = line.text.match(/^\s{0,3}(`{3,}|~{3,})/);
     if (opener) {
+      const attachedOpener = line.text.match(ATTACHED_GENERATED_MARKER_RE);
+      if (attachedOpener) {
+        edits.push({
+          from: line.start,
+          to: line.end,
+          insert: `${attachedOpener[1]}\n^${attachedOpener[2]}`,
+        });
+      }
       fenceChar = opener[1][0];
       fenceLength = opener[1].length;
       continue;
@@ -260,7 +284,11 @@ function parseMarkdown(noteId: string, content: string): {
       const fenceToken = fence[2];
       let j = i + 1;
       while (j < lines.length && !new RegExp(`^${isEncryptedBlockLanguage(fence[3].trim()) ? "[ \\t>]*" : "\\s*"}${fenceToken[0]}{${fenceToken.length},}\\s*$`).test(lines[j].text)) j++;
-      if (j < lines.length) j++;
+      // 围栏尚未闭合时，块尾就是文档末尾：此时插入标记会把 `^blk_xxx` 写进代码块
+      // 内部（围栏感知的隐藏逻辑不会隐藏它），用户随后输入的内容也全部落入代码块。
+      // 因此只给已闭合的代码块插入独立标记行，未闭合的等用户补上闭合围栏后再补。
+      const fenceTerminated = j < lines.length;
+      if (fenceTerminated) j++;
       let markerLine = j;
       let explicitBlockId: string | null = null;
       if (markerLine < lines.length) {
@@ -289,7 +317,7 @@ function parseMarkdown(noteId: string, content: string): {
         path: String(order - 1),
         startOffset: start,
         endOffset: end,
-        markerInsertOffset: (j > i ? lines[j - 1].end : line.end),
+        markerInsertOffset: fenceTerminated ? (j > i ? lines[j - 1].end : line.end) : undefined,
         markerStyle: "standalone",
       });
       i = Math.max(j, i + 1);
