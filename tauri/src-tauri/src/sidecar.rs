@@ -543,6 +543,10 @@ fn bootstrap_local_account(port: u16, data_dir: &std::path::Path) -> Result<Loca
     })
     .to_string();
 
+    // 数据目录由本应用创建并独占：旧版本建的库可能没有 desktop 机器账号（只有
+    // 种子 admin），此时不带采用头就会永远拿不到 token、每次 reload 都回登录页。
+    // 带上头让后端在"唯一用户"时直接采用该账号（密码重置为设备密钥），
+    // 用户的笔记仍在原账号下。多用户/禁用/二次验证账号不会被采用。
     let (status, text) = http_request(
         "POST",
         port,
@@ -551,6 +555,7 @@ fn bootstrap_local_account(port: u16, data_dir: &std::path::Path) -> Result<Loca
             ("Content-Type", "application/json".to_string()),
             ("X-Nowen-Desktop-Secret", secret.clone()),
             ("X-Nowen-Desktop-Allow-Create", allow_create.to_string()),
+            ("X-Nowen-Desktop-Adopt-Single-User", "1".to_string()),
         ],
         Some(body.as_bytes()),
     )?;
