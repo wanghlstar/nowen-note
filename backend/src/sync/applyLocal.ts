@@ -538,6 +538,63 @@ const LOCAL_APPLIERS: Record<
  * 整批包在一个事务 + 双层抑制里：
  * 事务保证崩溃时不留半写状态，抑制保证不产生回环。
  */
+
+/**
+ * 把批次里的笔记本调整成"父在前"：本地已存在的父节点视为就绪，批次内相互引用的
+ * 按依赖深度排序。其余实体类型保持原有顺序（稳定排序）。
+ */
+function orderNotebooksParentsFirst(
+  db: Database.Database,
+  items: RemoteEntityPayload[],
+): RemoteEntityPayload[] {
+  const notebooks = items.filter((item) => item.entityType === "notebook" && item.operation === "upsert");
+  if (notebooks.length < 2) return items;
+
+  const parentOf = new Map<string, string | null>();
+  for (const item of notebooks) {
+    const parentId = item.payload?.parentId;
+    parentOf.set(item.entityId, typeof parentId === "string" && parentId ? parentId : null);
+  }
+  const existsLocally = (id: string) => Boolean(
+    db.prepare("SELECT 1 FROM notebooks WHERE id = ? AND isDeleted = 0").get(id),
+  );
+
+  const orderedNotebooks: RemoteEntityPayload[] = [];
+  const emitted = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (item: RemoteEntityPayload) => {
+    if (emitted.has(item.entityId) || visiting.has(item.entityId)) return;
+    visiting.add(item.entityId);
+    const parentId = parentOf.get(item.entityId) ?? null;
+    if (parentId && parentOf.has(parentId)) {
+      const parent = notebooks.find((candidate) => candidate.entityId === parentId);
+      if (parent) visit(parent);
+    }
+    visiting.delete(item.entityId);
+    if (emitted.has(item.entityId)) return;
+    emitted.add(item.entityId);
+    orderedNotebooks.push(item);
+  };
+  // 先批次内无父依赖的，再处理有依赖的，保证能一次性排完。
+  for (const item of notebooks) {
+    const parentId = parentOf.get(item.entityId) ?? null;
+    if (!parentId || (!parentOf.has(parentId) && existsLocally(parentId))) visit(item);
+  }
+  for (const item of notebooks) visit(item);
+
+  if (orderedNotebooks.length !== notebooks.length) return items;
+  const notebookQueue = [...orderedNotebooks];
+  const merged: RemoteEntityPayload[] = [];
+  for (const item of items) {
+    if (item.entityType === "notebook" && item.operation === "upsert") {
+      merged.push(notebookQueue.shift() as RemoteEntityPayload);
+    } else {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
 export function applyRemoteChanges(
   db: Database.Database,
   items: RemoteEntityPayload[],
@@ -551,9 +608,13 @@ export function applyRemoteChanges(
   }
   const result: ApplyLocalResult = { applied: 0, skipped: 0, pendingConflicts: [] };
   const scopeKey = options.scopeKey || (options.workspaceId ? `workspace:${options.workspaceId}` : "personal");
+  // 服务端不保证父笔记本先返回：子节点先插入会触发 notebooks_parent_guard_insert
+  // （NOTEBOOK_PARENT_NOT_FOUND），整个对账批次随事务回滚，首次同步直接失败。
+  // 这里把笔记本按"父在前"重排（深度优先，环与缺失父节点交回原顺序由守卫处理）。
+  const ordered = orderNotebooksParentsFirst(db, items);
 
   const run = db.transaction(() => {
-    for (const item of items) {
+    for (const item of ordered) {
       // 本地有未推送的修改 → 不覆盖，交冲突流程。
       const pending = getPendingLocalChange(db,item.entityType,item.entityId,scopeKey);
       if (pending) {
