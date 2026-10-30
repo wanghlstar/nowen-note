@@ -34,7 +34,9 @@ describe("iOS WebKit startup contract", () => {
     expect(main).not.toContain(".finally(renderApplication)");
     expect(main).toContain("Promise.resolve()");
     expect(main).toContain('reportBootError("mobile-local-first"');
-    expect(main).toContain("ApplicationBootErrorBoundary");
+    // 顶层渲染边界从 main.tsx 抽到独立组件（启动后才抛错时它自己给出可恢复界面），
+    // 挂载契约不变：仍然由同一个边界包裹整棵树。
+    expect(main).toContain("AppBootErrorBoundary");
   });
 
   it("targets Safari and keeps modulepreload compatibility enabled", () => {

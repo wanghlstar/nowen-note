@@ -23,6 +23,7 @@ import ImageClipboardBridge from "./components/ImageClipboardBridge";
 import MarkdownMobileViewControlsBridge from "./components/MarkdownMobileViewControlsBridge";
 import DesktopUpdateCenter from "./components/DesktopUpdateCenter";
 import DockerUpdateCenter from "./components/DockerUpdateCenter";
+import AppBootErrorBoundary from "./components/AppBootErrorBoundary";
 import TwoFactorLoginChallengeCenter from "./components/TwoFactorLoginChallengeCenter";
 import AndroidShareImportCenter from "./components/AndroidShareImportCenter";
 import DeferredGlobalFeatureCentersMount from "./components/DeferredGlobalFeatureCentersMount";
@@ -97,25 +98,6 @@ function installOptionalRuntime(source: string, install: () => unknown): void {
   } catch (error) {
     console.error(`[boot] optional runtime failed: ${source}`, error);
     reportBootError(source, error, false);
-  }
-}
-
-class ApplicationBootErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: unknown) {
-    reportBootError("react-render", error, true);
-  }
-
-  render() {
-    return this.state.failed ? null : this.props.children;
   }
 }
 
@@ -231,7 +213,7 @@ function renderApplication() {
     const root = document.getElementById("root");
     if (!root) throw new Error("Missing #root mount element");
     ReactDOM.createRoot(root).render(
-      <ApplicationBootErrorBoundary>
+      <AppBootErrorBoundary>
       <React.StrictMode>
     <SiteSettingsProvider>
       <ConfirmProvider>
@@ -268,7 +250,7 @@ function renderApplication() {
       </ConfirmProvider>
     </SiteSettingsProvider>
       </React.StrictMode>
-      </ApplicationBootErrorBoundary>,
+      </AppBootErrorBoundary>,
     );
   } catch (error) {
     applicationRendered = false;
