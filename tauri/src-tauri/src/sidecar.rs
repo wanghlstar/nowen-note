@@ -534,8 +534,11 @@ fn parse_bootstrap_response(status: u16, text: &str) -> LocalAuthResult {
 fn bootstrap_local_account(port: u16, data_dir: &std::path::Path) -> Result<LocalAuthResult, String> {
     let secret_path = data_dir.join(".local_account_secret");
     let secret = read_or_create_secret(&secret_path, 32)?;
-    let db_path = data_dir.join("nowen-note.db");
-    let allow_create = if db_path.exists() { "0" } else { "1" };
+    // 数据目录由本应用创建并独占：与 Electron 不同，这里不存在"用户已有的
+    // 数据目录被误建账号"的风险，因此总是允许创建 desktop 机器账号。旧版本建的
+    // 库（只有种子 admin、没有 desktop 账号）也能自愈：新建的机器账号会在首次
+    // 登录时自动种子向导笔记，不会出现空 App。
+    let allow_create = "1";
 
     let body = serde_json::json!({
         "password": secret,

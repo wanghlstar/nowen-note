@@ -193,7 +193,11 @@
       "title": "这是体验环境",
       "desc": "您可以使用体验账号 {{username}} / {{password}} 登录，数据可能会被定期清理。",
       "fillButton": "一键填入体验账号"
-    }
+    },
+    "liteLocalFirstTitle": "弄文笔记 Lite",
+    "liteLocalFirstDesc": "笔记保存在这台设备上，断网也能读、能改；有网时自动同步到你添加的服务器。",
+    "liteEnterLocalNotes": "进入本地笔记",
+    "liteAddServerHint": "需要多端同步？进入后到 设置 → 同步 添加服务器，笔记会同步到本机。"
   },
   "sidebar": {
     "newNote": "新建笔记",
@@ -497,7 +501,7 @@
     "addColumn": "添加栏",
     "moreColumnActions": "分栏操作",
     "deleteColumnsBlock": "删除分栏",
-    "deleteColumn": "删除该栏",
+    "deleteColumn": "删除当前列",
     "placeholder": "开始写点什么...",
     "insertMenu": "插入",
     "moreMenu": "更多",
@@ -570,7 +574,6 @@
     "deleteRow": "删除当前行",
     "addColumnAfter": "在右侧添加列",
     "addColumnBefore": "在左侧添加列",
-    "deleteColumn": "删除当前列",
     "deleteTable": "删除表格",
     "mergeCells": "合并选中单元格（需先拖选）",
     "splitCell": "拆分合并的单元格",
@@ -3290,7 +3293,17 @@
   "richText": {
     "noEmoji": "无匹配表情",
     "calloutStyle": "切换提示块样式",
-    "calloutColors": { "gray": "默认", "blue": "信息", "cyan": "提示", "green": "成功", "yellow": "注意", "orange": "重要", "red": "危险", "pink": "错误", "purple": "引用" },
+    "calloutColors": {
+      "gray": "默认",
+      "blue": "信息",
+      "cyan": "提示",
+      "green": "成功",
+      "yellow": "注意",
+      "orange": "重要",
+      "red": "危险",
+      "pink": "错误",
+      "purple": "引用"
+    },
     "copyFailed": "复制失败，请检查剪贴板权限",
     "cutFailed": "剪切失败，原内容已保留",
     "pasteFailed": "粘贴失败，请检查剪贴板权限或重试",

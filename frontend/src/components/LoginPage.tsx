@@ -18,6 +18,7 @@ import LanDiscoveryPanel from "@/components/LanDiscoveryPanel";
 import { useKeyboardLayout } from "@/hooks/useCapacitor";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { getFeatureProfile } from "@/lib/featureRegistry";
 import { AccountLoginHistoryList } from "@/components/AccountLoginHistory";
 import { consumePendingAccountReauth, type AccountLoginHistoryItem } from "@/lib/accountLoginHistory";
 import {
@@ -682,6 +683,34 @@ export default function LoginPage({ onLogin, onAccountLogin, isClientMode = fals
     setTwoFactorBaseUrl("");
     setTwoFactorCode("");
   };
+
+  // Lite 取消"登录页直连远程"（云端基线）：桌面端零登录进入本地库，安卓进入设备
+  // 本地模式。需要连服务器时进应用后到 设置 → 同步 添加——同步引擎会把笔记拉到
+  // 本机，断网也能读，不会再出现"直连云端、本地没数据"的分裂体验。
+  // 拿不到本地入口处理器时退回原表单，避免把用户困死在空页面。
+  if (getFeatureProfile() === "lite" && onContinueLocal) {
+    return (
+      <div className="flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 selection:bg-indigo-500/30 transition-colors overflow-y-auto"
+        style={{ minHeight: "100dvh", maxHeight: "100dvh", paddingTop: "var(--safe-area-top)", paddingBottom: "var(--safe-area-bottom)" }}>
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent rounded-full blur-3xl" />
+          <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/5 via-transparent to-transparent rounded-full blur-3xl" />
+        </div>
+        <div className="relative w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-xl dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-2xl dark:shadow-black/20">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("auth.liteLocalFirstTitle")}</h1>
+          <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{t("auth.liteLocalFirstDesc")}</p>
+          <button
+            type="button"
+            onClick={onContinueLocal}
+            className="mt-6 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+          >
+            {t("auth.liteEnterLocalNotes")}
+          </button>
+          <p className="mt-3 text-[11px] leading-5 text-zinc-400 dark:text-zinc-500">{t("auth.liteAddServerHint")}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

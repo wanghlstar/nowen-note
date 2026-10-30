@@ -1764,6 +1764,26 @@ function AuthGate() {
     window.location.reload();
   };
 
+  // Lite 登录页的「进入本地笔记」：桌面端复用零登录（主进程签发的本地账号
+  // token），直接进入本地库；不经过任何云端直连，断网同样能读能写。
+  const handleEnterLocalNotes = useCallback(async () => {
+    const desktopApi = (window as any).nowenDesktop;
+    if (!desktopApi?.isDesktop || typeof desktopApi.getLocalAuth !== "function") return;
+    try {
+      const auth = await desktopApi.getLocalAuth();
+      if (!auth?.token) return;
+      storeAuthTokens({ token: auth.token, refreshToken: auth.refreshToken ?? null });
+      if (!getServerUrl() && window.location.origin.startsWith("http")) {
+        setServerUrl(window.location.origin);
+      }
+      saveCachedAuthUser(getAuthCacheScope(getServerUrl()), auth.token, auth.user);
+      setUser(auth.user);
+      setIsAuthenticated(true);
+    } catch {
+      /* 拿不到本地账号时停留在登录页，不阻断用户重试 */
+    }
+  }, []);
+
   // 加载中
   if (isAuthenticated === null) {
     return (
@@ -1806,7 +1826,11 @@ function AuthGate() {
         isClientMode={isClientMode}
         onDisconnect={isClientMode ? handleDisconnect : undefined}
         onContinueLocal={
-          isAndroidNativeRuntime() ? handleContinueLocal : undefined
+          isAndroidNativeRuntime()
+            ? handleContinueLocal
+            : (window as any).nowenDesktop?.isDesktop
+              ? handleEnterLocalNotes
+              : undefined
         }
       />
     );
