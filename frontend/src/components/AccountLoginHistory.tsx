@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type { User } from "@/types";
 import { clearAuthTokens } from "@/lib/authSession";
 import { isAndroidNativeRuntime, requestMobileAccountLogin } from "@/lib/mobileLocalMode";
+import { getFeatureProfile } from "@/lib/featureRegistry";
 
 function serverLabel(serverUrl: string): string {
   try {
@@ -365,7 +366,11 @@ export function AccountLoginHistoryDialog({ open, onClose }: { open: boolean; on
     try {
       if (isAndroidNativeRuntime()) requestMobileAccountLogin();
       clearAuthTokens();
-      localStorage.setItem("nowen-prefer-cloud", "1");
+      // Lite 永远本地优先：不写 prefer-cloud，否则会把前端切回云端基线
+      // （断网 + token 过期就打不开笔记）。需要连服务器走 设置 → 同步。
+      if (getFeatureProfile() !== "lite") {
+        localStorage.setItem("nowen-prefer-cloud", "1");
+      }
       window.dispatchEvent(new CustomEvent("nowen:token-changed"));
     } catch { /* ignore */ }
     window.location.reload();
