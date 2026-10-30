@@ -574,7 +574,12 @@ async function configureRuntime(): Promise<void> {
     const profile = (await db.query<{ enabled: number }>("SELECT enabled FROM sync_profiles WHERE id=?",[ids.profileId]))[0];
     setMobileSyncEnabled(profile?.enabled === 1);
     removeListeners.push(installMobileSyncRealtime(engine));
-    if (profile?.enabled === 1) engine.start();
+      if (profile?.enabled === 1) {
+        engine.start();
+        // 刚登录/切账号后的第一次配置就立即对账：否则要等懒同步的 3 秒节流、
+        // 甚至等下一次本地写入，云端已存在的笔记迟迟不出现（"添加服务器后没同步"）。
+        engine.requestSync(0);
+      }
   } catch (error) {
     for (const remove of removeListeners) await Promise.resolve(remove()).catch(() => undefined);
     await db.close().catch(() => undefined);

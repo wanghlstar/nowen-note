@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { invalidateNotebooks } from "@/lib/notebookInvalidation";
 import {
   AlertTriangle,
   Cloud,
@@ -122,6 +123,14 @@ export function SyncSettingsPanel() {
       } else {
         setNotice("登录成功。笔记仍优先保存在本机。");
       }
+      // 对账可能已经把云端笔记拉进本机库，但列表/目录不会自动重读：不主动刷新
+      // 就要等下一次本地写入（例如新建笔记）才看得到，表现为"添加服务器后没同步"。
+      invalidateNotebooks("unknown");
+      window.dispatchEvent(
+        new CustomEvent("nowen:knowledge-tree-changed", {
+          detail: { reason: "sync-server-authorized" },
+        }),
+      );
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
