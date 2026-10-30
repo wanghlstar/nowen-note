@@ -122,8 +122,24 @@ jobs:
         with:
           name: nowen-note-fpk-native
           path: dist
-      - uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          files: |
-            dist/*.fpk
+      - name: Attach fpk to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # 只由 Tauri Release 创建 release。三个 workflow 同时 create-or-update
+          # 会互相撞车（Validation Failed: already_exists），且先上传的资产会被
+          # 后续发布覆盖丢失（lite.8 的 fpk 就这样丢过一次）。
+          for i in $(seq 1 60); do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            echo "等待 Tauri Release 创建 $TAG ... ($i/60)"
+            sleep 20
+          done
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.fpk --clobber
+          else
+            echo "::warning::release 仍不存在（Tauri Release 可能失败），自行创建以免资产丢失"
+            gh release create "$TAG" dist/*.fpk --prerelease --title "Nowen Note Lite $TAG"
+          fi
