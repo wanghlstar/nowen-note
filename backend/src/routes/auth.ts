@@ -379,27 +379,6 @@ auth.post("/desktop/bootstrap-local", async (c) => {
   // An existing data directory without a desktop account may belong to a
   // renamed/older user. Only the Electron first-database startup may create it.
   if (c.req.header("X-Nowen-Desktop-Allow-Create") !== "1") {
-    // 应用自有的本地库可能由旧版本建库：只有种子/普通用户，没有 desktop 机器
-    // 账号。此时零登录永远拿不到 token，用户每次 reload 都被弹回登录页。主进程
-    // （Tauri Lite，数据目录归应用所有）可显式要求采用唯一用户：把该用户密码
-    // 重置为设备密钥后直接签发——笔记仍在原账号下，不会出现"进去之后是空的"。
-    // 未带该头时维持原契约，Electron 与多用户目录不受影响。
-    if (c.req.header("X-Nowen-Desktop-Adopt-Single-User") === "1") {
-      const adoptable = db.prepare(`
-        SELECT id FROM users
-        WHERE isDisabled = 0 AND mustChangePassword = 0 AND twoFactorSecret IS NULL
-        ORDER BY createdAt ASC
-      `).all() as Array<{ id: string }>;
-      if (adoptable.length === 1) {
-        const adoptedHash = await bcrypt.hash(password, 10);
-        db.prepare("UPDATE users SET passwordHash = ? WHERE id = ?")
-          .run(adoptedHash, adoptable[0].id);
-        resetLoginFailure(db, adoptable[0].id);
-        db.prepare("UPDATE users SET lastLoginAt = datetime('now') WHERE id = ?")
-          .run(adoptable[0].id);
-        return issueDesktopLocalAuth(c, adoptable[0].id);
-      }
-    }
     return c.json({ code: "LOCAL_ACCOUNT_NOT_FOUND" }, 409);
   }
 
