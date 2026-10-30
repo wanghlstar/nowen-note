@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BrainCircuit,
   CircleDot,
@@ -263,7 +263,13 @@ export default function NavRail({ variant = "desktop", notificationCount = 0 }: 
     window.location.reload();
   }, [canSwitchBackToLocal, t]);
 
+  // 登出是异步的（吊销 session + 清本地凭证后才 reload）。不设守卫时连点会
+  // 触发多次 reload：页面反复重启表现为闪屏，重启若撞上启动引导就会白屏。
+  const logoutInflightRef = useRef(false);
+
   const handleLogout = useCallback(async () => {
+    if (logoutInflightRef.current) return;
+    logoutInflightRef.current = true;
     if (isAndroidNativeRuntime()) requestMobileAccountLogin();
     if (isDesktopApp() && !canSwitchBackToLocal) {
       await clearDesktopLocalAuth().catch(() => ({ ok: false }));
