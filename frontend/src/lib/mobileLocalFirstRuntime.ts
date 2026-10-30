@@ -24,6 +24,7 @@ import { clearQueue, getQueue } from "./offlineQueue";
 import { setSyncLocalAdminAdapter, SYNC_CONFLICT_ENTITY_TYPES } from "./syncLocalApi";
 import { readNativeNoteSyncReceipt } from "./mobileNoteSyncReceipt";
 import type { NativeLocalRepository } from "./nativeLocalRepository";
+import { seedMobileLocalGuide } from "./mobileOnboardingGuide";
 import {
   MOBILE_LOCAL_ACCOUNT_ID,
   MOBILE_LOCAL_MODE_CHANGED_EVENT,
@@ -484,6 +485,9 @@ async function configureRuntime(): Promise<void> {
       setSyncLocalAdminAdapter(createDeviceOnlyAdminAdapter(repository));
       restoreBridge = installMobileLocalFirstBridge(repository,db,MOBILE_LOCAL_USER_ID);
       active = { identity, db, restoreBridge, removeListeners: [] };
+      // 设备本地模式没有后端可依赖，示例笔记要在这里补：Mac / NAS 由后端种子触发器
+      // 生成，安卓这边此前是空的，三端不一致。种子是体验内容，失败不影响使用。
+      void seedMobileLocalGuide();
     } catch (error) {
       restoreBridge();
       setLocalRepository(null);
