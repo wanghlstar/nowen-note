@@ -2,6 +2,29 @@
 <html lang="zh-CN" class="dark" spellcheck="false">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      资源基址修正：构建用相对 base（base: "./"）以便 file:// 直接加载 dist/index.html。
+      但 SPA 会把地址推进深路径（/notes/<id>），此时相对资源被解析成
+      /notes/assets/*.js 而全部 404 —— 登出后 reload、分享链接、手动刷新都会触发，
+      表现为"应用启动失败 / JavaScript resource failed to load"。
+      非 file:// 协议（http/https/tauri/capacitor）下把 base 指到同源根目录；
+      file:// 保持相对路径，否则会解析到磁盘根目录。
+    -->
+    <script>
+      (function () {
+        try {
+          if (window.location.protocol === "file:") return;
+          if (document.querySelector("base")) return;
+          var origin = window.location.origin;
+          if (!origin || origin === "null") return;
+          var base = document.createElement("base");
+          base.href = origin + "/";
+          document.head.appendChild(base);
+        } catch (error) {
+          /* 注入失败时维持原有相对路径行为 */
+        }
+      })();
+    </script>
     <!-- SEC-ELECTRON-01-E3.4: CSP — 保留严格默认策略，补齐 nowen-note 实际资源来源 -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
