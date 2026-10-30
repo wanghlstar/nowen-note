@@ -201,6 +201,17 @@ export function applyConflictResolution(
       return;
     }
     if (row.entityType === "knowledge_tree_node") {
+      // 服务器端没有这个节点（从未推送成功，或已被删除）时，"保留服务器版本"的
+      // 语义就是接受"服务器没有它"：本地删除该节点。此前这里直接抛
+      // "缺少服务器知识树结构"，前端又不展示错误，用户看到的就是"点了没反应"，
+      // 冲突永远解不掉。30 个种子向导节点冲突全是这种情况。
+      if (input.resolution === "keep-remote" && !remote) {
+        // 不删本地副本：删除父节点要求先同步子节点，逐个解决时顺序难以保证；
+        // 而且这份本地内容并没有错。直接结清冲突即可——本机会在下一个周期把它
+        // 作为新实体推送，服务端从此有了它，不再对不上。
+        resolveConflict(db, row.id);
+        return;
+      }
       const chosen = input.resolution === "keep-remote"
         ? remote
         : input.resolution === "manual"
