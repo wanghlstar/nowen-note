@@ -8,8 +8,11 @@
 //    loads the renderer.
 // 3. Inject a minimal `window.nowenDesktop` bridge shim so the existing
 //    desktop login path (App.tsx local auth) works unchanged. The prebuilt
-//    frontend does not bundle @tauri-apps/api, so the zero-login payload is
-//    embedded into the init script instead of being fetched via IPC.
+//    frontend does not bundle @tauri-apps/api, so `getLocalAuth` re-invokes
+//    the `get_local_auth` command through `window.__TAURI_INTERNALS__`
+//    (Tauri injects it before user init scripts) to mint a fresh session on
+//    every call; the bootstrapped payload embedded here is only the no-IPC
+//    fallback.
 // 4. Kill the backend on exit.
 
 mod sidecar;
