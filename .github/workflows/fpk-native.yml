@@ -138,5 +138,5 @@ jobs:
             gh release upload "$TAG" -R "$REPO" dist/*.fpk --clobber
           else
             gh release create "$TAG" -R "$REPO" dist/*.fpk --prerelease \
-              --title "Nowen Note Lite $TAG" --generate-repo-notes
+              --title "Nowen Note Lite $TAG" --generate-notes
           fi
