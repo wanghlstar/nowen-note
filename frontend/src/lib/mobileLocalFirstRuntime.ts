@@ -487,7 +487,7 @@ async function configureRuntime(): Promise<void> {
       active = { identity, db, restoreBridge, removeListeners: [] };
       // 设备本地模式没有后端可依赖，示例笔记要在这里补：Mac / NAS 由后端种子触发器
       // 生成，安卓这边此前是空的，三端不一致。种子是体验内容，失败不影响使用。
-      void seedMobileLocalGuide();
+      void seedMobileLocalGuide(repository);
     } catch (error) {
       restoreBridge();
       setLocalRepository(null);

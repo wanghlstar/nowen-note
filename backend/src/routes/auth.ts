@@ -392,6 +392,9 @@ auth.post("/desktop/bootstrap-local", async (c) => {
     INSERT INTO users (id, username, email, passwordHash, role, displayName)
     VALUES (?, 'desktop', 'desktop@nowen-note.local', ?, 'admin', 'Local Desktop User')
   `).run(userId, passwordHash);
+  // 首次登录也算一次真实登录：更新 lastLoginAt 让示例笔记种子触发器立即生效，
+  // 而不是等到下一次启动。
+  db.prepare("UPDATE users SET lastLoginAt = datetime('now') WHERE id = ?").run(userId);
   return issueDesktopLocalAuth(c, userId);
 });
 

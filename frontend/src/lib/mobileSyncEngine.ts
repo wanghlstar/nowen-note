@@ -14,6 +14,7 @@ import { validateEncryptedNoteWrite } from "./encryptedNotes/noteDocument";
 import { applyNativePersonalTree, assertNativePersonalTreeEntry, NATIVE_TREE_ENTITY_SET, NATIVE_TREE_PENDING_SUBSCRIPTION, nativeTreeSubscriptionKey, type NativeTreeEntry } from "./nativeKnowledgeTreeSync";
 import { nativeTreeMutationPayload, readNativePersonalTreeNode, sameNativeTreePosition, syncNativeNotebookMoveParents, writeNativePersonalTreeMoves } from "./nativePersonalTreeWrites";
 import { applyNativeTreeLifecycleProjection, nativeTreeLifecycleKey, nativeTreeLifecycleOverrides, readNativeTreeLifecycleIntents, writeNativePersonalTreeLifecycle } from "./nativePersonalTreeTrash";
+import { isMobileGuideEntityId } from "./mobileOnboardingGuide";
 
 type ScopeStatus = "active" | "replan_required" | "access_revoked";
 type EntityType = "notebook" | "note" | "tag" | "note_tag" | "favorite" | "attachment"
@@ -599,6 +600,7 @@ export class MobileSyncEngine {
     const notebookParents=new Map<string,string>();
     const tree: NativeTreeEntry[] = [];
     const assets: SnapshotEntry[] = [];
+    let adoptedGuide = false;
     do {
       const params = this.subscriptionParams(scope, { limit:"200" });
       if (cursor) params.set("cursor",cursor);
@@ -606,13 +608,30 @@ export class MobileSyncEngine {
       const page = await this.request<{ snapshotSequence:number;nextCursor:string|null;items:SnapshotEntry[] }>(`/snapshot?${params}`);
       assertMobileSyncItems(page.items,"snapshot",this.hasTreeSubscription(scope),this.assetSubscribed && !scope.workspaceId);
       if (!sequence) sequence = page.snapshotSequence;
-      for(const entry of page.items){
+      if (!adoptedGuide) {
+        const remoteGuideIds = page.items
+          .filter((entry) => isMobileGuideEntityId(entry.entityId))
+          .map((entry) => entry.entityId.replace(/^(?:note|notebook):/, ""));
+        if (remoteGuideIds.length > 0) {
+          adoptedGuide = true;
+          const placeholders = remoteGuideIds.map(() => "?").join(",");
+          const existing = await this.options.db.query(
+            `SELECT id FROM notebooks WHERE scopeKey='personal' AND id IN (${placeholders})
+             UNION ALL SELECT id FROM notes WHERE scopeKey='personal' AND id IN (${placeholders})`,
+            [...remoteGuideIds, ...remoteGuideIds],
+          );
+          // 本机已有远端指南（断点续跑）时不重复删除，否则会把刚拉下来的指南删掉。
+          if (existing.length === 0) await this.discardLocalOnboardingGuide();
+        }
+      }
+      const usableItems = page.items;
+      for(const entry of usableItems){
         const ids=seen.get(entry.entityType)||new Set<string>();ids.add(entry.entityId);seen.set(entry.entityType,ids);
         if(entry.entityType==="notebook"&&typeof entry.payload.parentId==="string")notebookParents.set(entry.entityId,entry.payload.parentId);
       }
-      tree.push(...page.items.filter((entry) => entry.entityType === "knowledge_tree_node"));
-      assets.push(...page.items.filter(entry=>entry.entityType==="attachment_organization"));
-      await this.applyEntries(scope,page.items.filter((entry) => entry.entityType !== "knowledge_tree_node" && entry.entityType !== "attachment_organization"),true);
+      tree.push(...usableItems.filter((entry) => entry.entityType === "knowledge_tree_node"));
+      assets.push(...usableItems.filter(entry=>entry.entityType==="attachment_organization"));
+      await this.applyEntries(scope,usableItems.filter((entry) => entry.entityType !== "knowledge_tree_node" && entry.entityType !== "attachment_organization"),true);
       cursor = page.nextCursor;
     } while (cursor);
     await this.restoreNotebookParents(scope,notebookParents);
@@ -652,6 +671,32 @@ export class MobileSyncEngine {
     });
     if(scope.workspaceId)await this.pruneWorkspaceSnapshot(scope,seen);
     await this.advance(scope,sequence,this.hasTreeSubscription(scope));
+  }
+
+  /**
+   * 服务器优先：丢弃本机自带的示例指南（含它的同步条目），改用服务端那份。
+   * 只删本机行，不产生同步删除记录。
+   */
+  private async discardLocalOnboardingGuide(): Promise<void> {
+    await this.options.db.transaction(async (tx) => {
+      await tx.run(`DELETE FROM note_tags WHERE noteId IN (
+        SELECT id FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-%')`,
+      [this.options.userId]);
+      await tx.run(`DELETE FROM favorites WHERE noteId IN (
+        SELECT id FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-%')`,
+      [this.options.userId]);
+      await tx.run(`DELETE FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-%'`,
+      [this.options.userId]);
+      await tx.run(`DELETE FROM notebooks WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-%'`,
+      [this.options.userId]);
+      await tx.run(`DELETE FROM native_knowledge_tree_nodes WHERE scopeKey='personal' AND id LIKE '%onboarding-v1-%'`);
+      await tx.run(`DELETE FROM sync_outbox WHERE profileId=? AND (entityId LIKE 'onboarding-v1-%'
+        OR entityId LIKE 'note:onboarding-v1-%' OR entityId LIKE 'notebook:onboarding-v1-%')`,
+      [this.options.profileId]);
+      await tx.run(`DELETE FROM sync_conflicts WHERE profileId=? AND (entityId LIKE 'onboarding-v1-%'
+        OR entityId LIKE 'note:onboarding-v1-%' OR entityId LIKE 'notebook:onboarding-v1-%')`,
+      [this.options.profileId]);
+    });
   }
 
   private hasTreeSubscription(scope: ScopeDescriptor): boolean {

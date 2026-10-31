@@ -78,7 +78,12 @@ export async function migrateMobileLocalAccount(options: MigrationOptions): Prom
   for (const [type, { map }] of Object.entries(TABLES)) {
     if (!map) continue;
     for (const row of rows[type as EntityType]) {
-      if (!mapping[map][String(row.id)]) mapping[map][String(row.id)] = newLocalId();
+      const sourceId = String(row.id);
+      if (!mapping[map][sourceId]) {
+        // 示例笔记保持 onboarding-v1- 前缀：首次连接时据此识别本机种子，
+        // 服务端已有指南就改用服务端那份。
+        mapping[map][sourceId] = sourceId.startsWith("onboarding-v1-") ? sourceId : newLocalId();
+      }
     }
   }
   await saveMap(options.targetDb, mapping);

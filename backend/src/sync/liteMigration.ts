@@ -31,6 +31,7 @@ import { pullAttachmentBlobs } from "./blob";
 import { runWithOutboxSuppressed } from "./context";
 import { runChangeFeedSuppressed } from "./suppression";
 import { applyRemoteChanges, type RemoteEntityPayload } from "./applyLocal";
+import { adoptRemoteOnboardingGuide } from "./onboardingAdoption.js";
 import { createProfile, findProfileByServer, switchActiveProfile } from "./profile";
 import { ensureDevice } from "./device";
 import { markBootstrapReady, runBootstrap } from "./bootstrap";
@@ -330,6 +331,12 @@ export async function runLiteMigration(
       const page = await client.snapshot(cursor, snapshotSequence, pageSize);
       if (page.items.length > 0) {
         downloaded += page.items.length;
+
+        // 服务器优先：服务端已有示例指南时，丢弃本机自带的种子指南。
+        // 必须在应用这一页之前完成，否则会多出一份同名指南。
+        if (adoptRemoteOnboardingGuide(db, userId, page.items)) {
+          logSyncInfo("lite-migration.onboarding-guide-adopted", { state: "applying" });
+        }
 
         // 按依赖顺序分组应用：同一页里可能同时有 notebook 与 note。
         const byType = new Map<SyncEntityType, RemoteEntityPayload[]>();

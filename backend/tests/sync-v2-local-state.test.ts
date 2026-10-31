@@ -7,7 +7,9 @@ import { MIGRATIONS } from "../src/db/migrations";
 import {
   countPendingMutations,
   enqueueMutation,
+  listPendingMutationBatch,
   listPendingMutations,
+  purgeOnboardingMutations,
   markMutationFailed,
   markMutationInflight,
   markMutationSynced,
@@ -36,6 +38,7 @@ import {
 } from "../src/sync/conflict";
 import { runWithOutboxSuppressed } from "../src/sync/context";
 import { getDb } from "../src/db/schema";
+import { readLocalState } from "../src/sync/bootstrap";
 
 /**
  * 复用项目自身的数据库连接（setup-db-isolation 已把 DB_PATH 指向临时目录），
@@ -659,4 +662,51 @@ test("同一实体可反复冲突，不会因唯一约束丢失后续冲突", ()
     });
   }
   assert.equal(countUnresolvedConflicts(db), 3);
+});
+
+test("示例指南（onboarding-v1-）按普通实体参与同步，可按前缀清理", () => {
+  const db = freshDb();
+  const userId = "onboarding-owner";
+  db.prepare("INSERT OR IGNORE INTO users (id, username, passwordHash) VALUES (?, ?, ?)")
+    .run(userId, "onboarding-owner", "hash");
+  db.prepare("INSERT INTO notebooks (id, userId, name) VALUES (?, ?, ?)")
+    .run("onboarding-v1-owner-zh", userId, "中文指南");
+  db.prepare("INSERT INTO notebooks (id, userId, name) VALUES (?, ?, ?)")
+    .run("nb-normal", userId, "普通");
+  db.prepare("INSERT INTO notes (id, userId, notebookId, title) VALUES (?, ?, ?, ?)")
+    .run("onboarding-v1-owner-zh-welcome", userId, "onboarding-v1-owner-zh", "欢迎");
+  db.prepare("INSERT INTO notes (id, userId, notebookId, title) VALUES (?, ?, ?, ?)")
+    .run("note-normal", userId, "nb-normal", "普通笔记");
+
+  const { profile, device } = seedProfile(db);
+  for (const [entityType, entityId] of [
+    ["notebook", "onboarding-v1-owner-zh"],
+    ["note", "onboarding-v1-owner-zh-welcome"],
+    ["note", "note-normal"],
+  ] as const) {
+    enqueueMutation(db, {
+      entityType,
+      entityId,
+      operation: "upsert",
+      deviceId: device.id,
+      profileId: profile.id,
+    });
+  }
+
+  assert.deepEqual(
+    readLocalState(db, userId, "notebook").map((item) => item.entityId).sort(),
+    ["nb-normal", "onboarding-v1-owner-zh"],
+  );
+  assert.deepEqual(
+    readLocalState(db, userId, "note").map((item) => item.entityId).sort(),
+    ["note-normal", "onboarding-v1-owner-zh-welcome"],
+  );
+  assert.equal(countPendingMutations(db), 3);
+  assert.deepEqual(
+    listPendingMutationBatch(db, 100, profile.id, "personal", true)
+      .map((row) => row.entityId).sort(),
+    ["note-normal", "onboarding-v1-owner-zh", "onboarding-v1-owner-zh-welcome"],
+  );
+  assert.equal(purgeOnboardingMutations(db, profile.id), 2);
+  assert.equal(countPendingMutations(db), 1);
 });

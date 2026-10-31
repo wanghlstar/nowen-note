@@ -14,7 +14,7 @@ import {
 } from "../src/sync/bootstrap";
 import { createProfile, getSyncState, switchActiveProfile } from "../src/sync/profile";
 import { ensureDevice } from "../src/sync/device";
-import { countPendingMutations, listPendingMutations } from "../src/sync/outbox";
+import { countPendingMutations, enqueueMutation, listPendingMutations } from "../src/sync/outbox";
 import { countUnresolvedConflicts, listUnresolvedConflicts } from "../src/sync/conflict";
 import { SyncError } from "../src/sync/errors";
 import type { SyncEntityType } from "../src/sync/types";
@@ -773,4 +773,101 @@ test("重置后触发器停止写 Outbox（基线不再可信）", async () => {
     0,
     "基线重置后必须重新对账，期间不该产生 mutation",
   );
+});
+
+test("服务端已有示例指南：丢弃本机种子、改用服务端那份", async () => {
+  resetAll();
+  const ids = seedProfile();
+
+  // 本机首次启动种下的指南（ID 带本机用户前缀）
+  const localGuideNb = "onboarding-v1-localowner-zh";
+  const localGuideNote = "onboarding-v1-localowner-zh-welcome";
+  makeNotebook("中文指南", localGuideNb);
+  makeNote(localGuideNb, "欢迎使用 Nowen Note", localGuideNote);
+  enqueueMutation(db(), {
+    entityType: "notebook",
+    entityId: localGuideNb,
+    operation: "upsert",
+    deviceId: ids.deviceId,
+    profileId: ids.profileId,
+  });
+  enqueueMutation(db(), {
+    entityType: "note",
+    entityId: localGuideNote,
+    operation: "upsert",
+    deviceId: ids.deviceId,
+    profileId: ids.profileId,
+  });
+
+  // 服务端账号自己的指南：另一套 ID，模拟先登录过 Web 的账号
+  const serverUserId = "server-owner";
+  db().prepare("INSERT OR IGNORE INTO users (id, username, passwordHash) VALUES (?, ?, 'x')")
+    .run(serverUserId, serverUserId);
+  const remoteNb = "onboarding-v1-serverowner-zh";
+  const remoteNote = "onboarding-v1-serverowner-zh-welcome";
+  db().prepare(`
+    INSERT INTO notebooks (id, userId, name, icon, sortOrder, createdAt, updatedAt)
+    VALUES (?, ?, '中文指南', '🇨🇳', 0, datetime('now'), datetime('now'))
+  `).run(remoteNb, serverUserId);
+  db().prepare(`
+    INSERT INTO notes (id, userId, notebookId, title, content, contentText, contentFormat,
+      version, sortOrder, createdAt, updatedAt)
+    VALUES (?, ?, ?, '欢迎使用 Nowen Note', '# 欢迎', '欢迎', 'markdown', 1, 0, datetime('now'), datetime('now'))
+  `).run(remoteNote, serverUserId, remoteNb);
+
+  const remoteItems = [
+    ...readLocalState(db(), serverUserId, "notebook"),
+    ...readLocalState(db(), serverUserId, "note"),
+  ];
+  db().prepare("DELETE FROM notes WHERE userId = ?").run(serverUserId);
+  db().prepare("DELETE FROM notebooks WHERE userId = ?").run(serverUserId);
+
+  const remote = new FakeRemote();
+  remote.planSequence = 5;
+  remote.snapshotPages.push({
+    snapshotSequence: 5,
+    hasMore: false,
+    nextCursor: null,
+    items: remoteItems.map((item) => ({
+      entityType: item.entityType,
+      entityId: item.entityId,
+      payload: item.payload,
+    })),
+  });
+
+  const progress = await run(remote, ids);
+
+  assert.equal(progress.status, "ready");
+  assert.equal(progress.conflicts, 0);
+  assert.deepEqual(
+    (db().prepare("SELECT id FROM notebooks WHERE userId = ?").all(USER_ID) as Array<{ id: string }>)
+      .map((row) => row.id),
+    [remoteNb],
+    "本机种子被丢弃，只保留服务端指南",
+  );
+  assert.deepEqual(
+    (db().prepare("SELECT id FROM notes WHERE userId = ?").all(USER_ID) as Array<{ id: string }>)
+      .map((row) => row.id),
+    [remoteNote],
+  );
+  assert.equal(countPendingMutations(db()), 0, "本机种子的同步条目一并清掉");
+});
+
+test("服务端没有示例指南：把本机指南推上去", async () => {
+  resetAll();
+  const ids = seedProfile();
+  const nb = "onboarding-v1-localowner-zh";
+  const note = "onboarding-v1-localowner-zh-welcome";
+  makeNotebook("中文指南", nb);
+  makeNote(nb, "欢迎使用 Nowen Note", note);
+
+  const remote = new FakeRemote();
+  const progress = await run(remote, ids);
+
+  assert.equal(progress.status, "ready");
+  const pushedIds = remote.pushCalls.flat().map((item) => item.entityId);
+  assert.ok(pushedIds.includes(nb), "本机指南的笔记本需要上传");
+  assert.ok(pushedIds.includes(note), "本机指南的笔记需要上传");
+  const order = remote.pushCalls.flat().map((item) => item.entityType);
+  assert.ok(order.indexOf("notebook") < order.indexOf("note"), "notebook 必须先于 note 推送");
 });

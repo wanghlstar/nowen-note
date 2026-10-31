@@ -227,10 +227,16 @@ export function reconcileSyncEngine(
  * 推断本地用户 ID。
  *
  * Desktop 是单用户场景：Embedded Backend 里只有 ensureLocalAccount 建的那个账号。
- * 取最早创建的用户即可，避免调用方到处传 userId。
+ * 必须优先取 desktop 账号——新库首次启动还会种子一个含演示数据的 admin，
+ * 它比 desktop 更早创建。若取"最早用户"，同步引擎会挂到 admin 上，知识树基线
+ * 就会拿 admin 的数据与远端对账，产生大量冲突。
  */
-function resolveLocalUserId(db: Database.Database): string | null {
+export function resolveLocalUserId(db: Database.Database): string | null {
   try {
+    const desktop = db.prepare(
+      "SELECT id FROM users WHERE username = 'desktop' LIMIT 1",
+    ).get() as { id?: string } | undefined;
+    if (desktop?.id) return desktop.id;
     const row = db.prepare(
       "SELECT id FROM users ORDER BY createdAt ASC LIMIT 1",
     ).get() as { id?: string } | undefined;

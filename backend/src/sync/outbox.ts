@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
 import { SYNC_PERSONAL_SCOPE_KEY, SYNC_TABLES } from "./constants";
+import { ONBOARDING_ID_PREFIX } from "../db/onboardingGuideTemplate.js";
 import { isOutboxSuppressed } from "./context";
 import type {
   SyncNegotiatedEntityType,
@@ -165,6 +166,37 @@ export function listPendingMutations(
     ORDER BY createdAt ASC, rowid ASC
     LIMIT ?
   `).all(profileId, limit) as SyncOutboxRow[];
+}
+
+const ONBOARDING_ENTITY_SQL = `(entityId LIKE '${ONBOARDING_ID_PREFIX}%'
+  OR entityId LIKE 'note:${ONBOARDING_ID_PREFIX}%'
+  OR entityId LIKE 'notebook:${ONBOARDING_ID_PREFIX}%')`;
+
+/**
+ * 丢弃本机种子指南（`onboarding-v1-` 前缀）的同步条目。
+ *
+ * 首次连接采纳服务端指南时，本机种子的行与条目一起丢弃，
+ * 避免把本机的插入/删除操作推到服务器。
+ */
+export function purgeOnboardingMutations(
+  db: Database.Database,
+  profileId?: string,
+  scopeKey?: string,
+): number {
+  const filters = [ONBOARDING_ENTITY_SQL];
+  const params: unknown[] = [];
+  if (profileId) {
+    filters.push("profileId = ?");
+    params.push(profileId);
+  }
+  if (scopeKey) {
+    filters.push("scopeKey = ?");
+    params.push(scopeKey);
+  }
+  const result = db.prepare(
+    `DELETE FROM ${SYNC_TABLES.outbox} WHERE ${filters.join(" AND ")}`,
+  ).run(...params);
+  return Number(result.changes || 0);
 }
 
 /** Push limits entities after coalescing, so an imported entity's finalization cannot be split off. */

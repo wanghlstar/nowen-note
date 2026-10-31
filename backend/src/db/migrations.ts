@@ -49,6 +49,7 @@ import { knowledgeTreePasswordMigration } from "./knowledgeTreePasswordMigration
 import { offlineSyncMigration } from "./offlineSyncMigration.js";
 import { newUserOnboardingMigration } from "./newUserOnboardingMigration.js";
 import { newUserOnboardingFirstLoginMigration } from "./newUserOnboardingFirstLoginMigration.js";
+import { onboardingGuideTemplateMigration } from "./onboardingGuideTemplateMigration.js";
 import { blockSchemaRepairMigration } from "./blockSchemaRepairMigration.js";
 import { taskDayPlansMigration } from "./taskDayPlansMigration.js";
 import { yjsOperationReceiptsMigration } from "./yjsOperationReceiptsMigration.js";
@@ -376,6 +377,7 @@ export const MIGRATIONS: Migration[] = [
   offlineSyncMigration,
   newUserOnboardingMigration,
   newUserOnboardingFirstLoginMigration,
+  onboardingGuideTemplateMigration,
   blockSchemaRepairMigration,
   taskDayPlansMigration,
   yjsOperationReceiptsMigration,

@@ -1,4 +1,5 @@
 import { withEncryptedBlocksSupport } from "../lib/encryptedNotes.js";
+import { adoptRemoteOnboardingGuide } from "./onboardingAdoption.js";
 /**
  * Bootstrap / Reconcile：首次开启同步时的基线建立（阶段 D）。
  *
@@ -547,6 +548,13 @@ export async function runBootstrap(
       }
       setStatus(db, profileId, "reconciling", { cursor: null });
       profile = readProfile(db, profileId);
+    }
+
+    // --- 服务器优先：示例指南 ---
+    // 服务端已有指南时，本机自带的种子指南要先让位，否则两端各一份。
+    // 必须在对账之前完成，否则树基线会把两份不同 ID 的同名目录当成结构冲突。
+    if (adoptRemoteOnboardingGuide(db, userId, remoteItems)) {
+      logSyncInfo("bootstrap.onboarding-guide-adopted", { profileId, deviceId });
     }
 
     // --- reconciling：按 Stable Entity ID 对账 ---
