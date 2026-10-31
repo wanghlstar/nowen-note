@@ -16,6 +16,10 @@ on:
         description: "FPK 版本号（X.Y.Z，留空取 package.json.version）"
         required: false
         default: ""
+      release_tag:
+        description: "把产物发布到哪个 tag 的 Release（留空取当前 ref；手动补发时可填 v1.5.3-lite.12）"
+        required: false
+        default: ""
   push:
     tags:
       - "v*"
@@ -126,7 +130,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
