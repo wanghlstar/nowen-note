@@ -33,13 +33,18 @@ describe("mobile device-local guide", () => {
     const { repository, notebooks, notes } = createRepository();
     await seedMobileLocalGuide(repository);
 
-    expect(notebooks).toHaveLength(1);
+    expect(notebooks).toHaveLength(4);
     expect(notebooks[0]).toMatchObject({
       id: "onboarding-v1-local-zh",
       name: "中文指南",
       icon: "🇨🇳",
     });
-    expect(notes).toHaveLength(8);
+    expect(notebooks.slice(1).map((notebook) => notebook.name)).toEqual([
+      "工作笔记",
+      "个人日记",
+      "技术学习",
+    ]);
+    expect(notes).toHaveLength(1);
     expect(notes.every((note) => String(note.id).startsWith("onboarding-v1-local-zh-"))).toBe(true);
     expect(notes.every((note) => note.notebookId === "onboarding-v1-local-zh")).toBe(true);
     expect(notes.every((note) => note.contentFormat === "markdown")).toBe(true);

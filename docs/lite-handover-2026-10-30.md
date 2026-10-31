@@ -91,9 +91,11 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
    - 已连接过的旧测试安装不会自动重跑对账；重新连接（或重置同步）后才会采纳新规则。
    - 注意：桌面端连接服务器时，服务器会在账号首次登录时种下它自己版本的指南；若服务器仍停留在旧版本（v68 旧模板），桌面端会采纳旧模板。发布时建议服务器与桌面一起升级。
 2. **根因纠正**：不只是向导 ID 对不上——同步引擎的 `resolveLocalUserId` 取"最早创建的用户"，新库的 `admin` 比 `desktop` 早，引擎于是挂到 admin 上，知识树基线拿 admin 的演示数据（工作笔记 / 个人日记 / 技术学习）与云端同名笔记配对 → 冲突并进入 `SERVER_ERROR`。空本地首次同步也能复现（实测 37 个冲突）。现在优先取 `username='desktop'`。
-3. **模板**：用用户裁剪后的「中文指南」1 本 + 8 篇 Markdown。后端新增 v136 迁移重建首次登录触发器（内容在 `backend/src/db/onboardingGuideTemplate.ts`，published migration 不改）；安卓 `mobileOnboardingGuide.ts` 用同一份内容。
+3. **模板**：`中文指南`（1 篇 `欢迎使用 Nowen Note`）+ `工作笔记` / `个人日记` / `技术学习` 三个空白笔记本。后端新增 v136 迁移重建首次登录触发器（内容在 `backend/src/db/onboardingGuideTemplate.ts`，published migration 不改）；安卓 `mobileOnboardingGuide.ts` 用同一份内容；`seed.ts` 不再预置演示笔记本/演示笔记。已有账号不会自动换模板：需要新库或重置种子。
 4. **安卓种子修复**：原来走知识树 API，device-only 模式下必然 `NATIVE_TREE_WRITE_UNAVAILABLE` → 静默失败（其实一直没有示例笔记）。现改为直接走本地 repository；凭据迁移时保留 `onboarding-v1-` 前缀，供首次连接识别本机种子。
 5. `bootstrap-local` 新建 desktop 时补 `lastLoginAt`，示例笔记首次启动即出现。
+6. **安卓「选择自己的服务器」死循环**：`LoginPage` 的 Lite 本地入口没有理会 `requestMobileAccountLogin()`，选完服务器重载后又回到「进入本地笔记」，来回循环。现在请求账号登录时改为渲染服务器登录表单（底部仍保留「进入本地笔记」返回入口）。
+7. **删除同步验证**：服务端种下的 4 本经同步落到本机后，在本机删除 `工作笔记` → `sync-now` → 云端 notebook `isDeleted=1`、知识树节点 `isDeleted=1`、pending=0、0 冲突（两个隔离后端实测）。若旧测试安装仍复现，先看诊断里的 pending/conflicts 与引擎状态。
 
 验证（两个隔离后端 + 真实 API）：本机种子 → 连接后云端账号首次登录即种下服务端指南 → 首次对账 `status=ready`、`conflicts=0`、本地只剩 1 本且 ID 为服务端那份、本机种子行与 outbox 条目清空；编辑指南笔记标题后 `sync-now`，云端标题与 version 同步为 2；软删除指南笔记后云端 `isTrashed=1`；pending=0。后端 tsc + 371 个 sync/onboarding 用例通过；前端 tsc + eslint 通过，全量 vitest 失败文件数与基线一致（mobileSyncRealtime / mobileSyncSwitch / mobileNativeTreeSubscription 已用 git stash 验证为改动前既有失败）。
 

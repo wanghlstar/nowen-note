@@ -19,6 +19,7 @@ import { useKeyboardLayout } from "@/hooks/useCapacitor";
 import { useKeyboardVisible } from "@/hooks/useKeyboardVisible";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { getFeatureProfile } from "@/lib/featureRegistry";
+import { isMobileAccountLoginRequested } from "@/lib/mobileLocalMode";
 import { AccountLoginHistoryList } from "@/components/AccountLoginHistory";
 import { consumePendingAccountReauth, type AccountLoginHistoryItem } from "@/lib/accountLoginHistory";
 import {
@@ -688,7 +689,9 @@ export default function LoginPage({ onLogin, onAccountLogin, isClientMode = fals
   // 本地模式。需要连服务器时进应用后到 设置 → 同步 添加——同步引擎会把笔记拉到
   // 本机，断网也能读，不会再出现"直连云端、本地没数据"的分裂体验。
   // 拿不到本地入口处理器时退回原表单，避免把用户困死在空页面。
-  if (getFeatureProfile() === "lite" && onContinueLocal) {
+  // 安卓在同步设置里选择「自己的服务器」时会 requestMobileAccountLogin() 并重载；
+  // 此时必须让出登录表单，否则又落回「进入本地笔记」，来回死循环。
+  if (getFeatureProfile() === "lite" && onContinueLocal && !isMobileAccountLoginRequested()) {
     return (
       <div className="flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 selection:bg-indigo-500/30 transition-colors overflow-y-auto"
         style={{ minHeight: "100dvh", maxHeight: "100dvh", paddingTop: "var(--safe-area-top)", paddingBottom: "var(--safe-area-bottom)" }}>

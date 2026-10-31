@@ -8,7 +8,7 @@ import {
 } from "../src/db/newUserOnboardingMigration.js";
 import { newUserOnboardingFirstLoginMigration } from "../src/db/newUserOnboardingFirstLoginMigration.js";
 import { onboardingGuideTemplateMigration } from "../src/db/onboardingGuideTemplateMigration.js";
-import { ONBOARDING_GUIDE_NOTES } from "../src/db/onboardingGuideTemplate.js";
+import { ONBOARDING_GUIDE_NOTES, ONBOARDING_STARTER_NOTEBOOKS } from "../src/db/onboardingGuideTemplate.js";
 
 function createDb(): Database.Database {
   const db = new Database(":memory:");
@@ -105,12 +105,17 @@ test("seeds the trimmed Chinese guide only on a new account's first confirmed lo
       icon: string;
       sortOrder: number;
     }>;
-    assert.equal(notebooks.length, 1);
+    assert.equal(notebooks.length, 1 + ONBOARDING_STARTER_NOTEBOOKS.length);
 
-    const chinese = notebooks[0];
-    assert.equal(chinese.name, "中文指南");
+    const chinese = notebooks.find((notebook) => notebook.name === "中文指南");
+    assert.ok(chinese, "must seed 中文指南");
     assert.equal(chinese.icon, "🇨🇳");
     assert.equal(chinese.parentId, null);
+    for (const starter of ONBOARDING_STARTER_NOTEBOOKS) {
+      const seeded = notebooks.find((notebook) => notebook.name === starter.name);
+      assert.ok(seeded, `must seed empty notebook ${starter.name}`);
+      assert.equal(seeded.parentId, null);
+    }
 
     const notes = db.prepare(`
       SELECT id, notebookId, title, content, contentText, contentFormat, isPinned, sortOrder
@@ -128,8 +133,8 @@ test("seeds the trimmed Chinese guide only on a new account's first confirmed lo
       sortOrder: number;
     }>;
 
-    assert.equal(notes.length, 8);
-    assert.equal(notes.filter((note) => note.notebookId === chinese.id).length, 8);
+    assert.equal(notes.length, 1);
+    assert.equal(notes.filter((note) => note.notebookId === chinese.id).length, 1);
     assert.ok(notes.every((note) => note.contentFormat === "markdown"));
     assert.ok(notes.every((note) => note.content.length > 100));
     assert.ok(notes.every((note) => note.contentText.length > 20));
@@ -146,6 +151,8 @@ test("seeds the trimmed Chinese guide only on a new account's first confirmed lo
 
     assert.equal(notes.some((note) => note.title === "项目启动会议纪要"), false);
     assert.equal(notes.some((note) => note.title === "周末计划"), false);
+    const starterIds = new Set(notebooks.filter((notebook) => notebook.name !== "中文指南").map((notebook) => notebook.id));
+    assert.equal(notes.some((note) => starterIds.has(note.notebookId)), false, "起始笔记本必须为空");
   } finally {
     db.close();
   }
@@ -160,11 +167,7 @@ test("deleting the guide does not recreate it on later logins", () => {
       .run(userId, "delete-guide-user", "hash");
     confirmLogin(db, userId);
 
-    const root = db.prepare(`
-      SELECT id FROM notebooks
-      WHERE userId = ? AND parentId IS NULL
-    `).get(userId) as { id: string };
-    db.prepare("DELETE FROM notebooks WHERE id = ?").run(root.id);
+    db.prepare("DELETE FROM notebooks WHERE userId = ?").run(userId);
 
     confirmLogin(db, userId);
     db.prepare("UPDATE users SET displayName = ? WHERE id = ?")
