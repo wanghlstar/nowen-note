@@ -107,6 +107,7 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 2. **安卓组网/VPN 下局域网发现仍失败**：WebRTC 只能拿本机网卡 IP，拿不到真实路由网段。需原生 Capacitor 插件读 `ConnectivityManager.getLinkProperties`。
 3. macOS 签名公证、Linux AppImage、Windows/Linux 真机验收未做。
 4. 前端 P1 静态 import 瘦身未做；`docs/lite-mode-*.md` 来源声明待补。
+5. **示例指南待补回教程**：1.5.3.13 起「中文指南」只有「欢迎使用 Nowen Note」一篇（三本空白笔记本照旧）。用户确认先这样，后续迭代把另外 7 篇教程补回来（5 分钟快速上手 / 富文本与 Markdown / 知识树、双链与标签 / 图片、附件与文件管理 / AI 知识问答 / 任务、协作与多端访问 / 数据安全、备份与自托管）。正文可从 `688d537e` 的 `onboardingGuideTemplate.ts` 与 `mobileOnboardingGuide.ts` 取回，两端内容需保持一致。
 
 ---
 

@@ -75,15 +75,22 @@ export async function migrateMobileLocalAccount(options: MigrationOptions): Prom
     const filter = type === "task_reminder" ? "" : " WHERE scopeKey='personal'";
     rows[type as EntityType] = await options.sourceDb.query<Row>(`SELECT * FROM ${table}${filter} ORDER BY createdAt`);
   }));
+  // 示例内容是设备本地的种子，不导入账号库：账号的指南由服务端提供
+  // （账号首次登录时种子）。导入会让账号库出现两份指南，并把本机种子推到服务器。
+  const seedNoteIds = new Set(
+    rows.note.filter((row) => String(row.id).startsWith("onboarding-v1-")).map((row) => String(row.id)),
+  );
+  const referencesSeedNote = (row: Row) => seedNoteIds.has(String(row.noteId));
+  rows.notebook = rows.notebook.filter((row) => !String(row.id).startsWith("onboarding-v1-"));
+  rows.note = rows.note.filter((row) => !seedNoteIds.has(String(row.id)));
+  rows.note_tag = rows.note_tag.filter((row) => !referencesSeedNote(row));
+  rows.favorite = rows.favorite.filter((row) => !referencesSeedNote(row));
+  rows.attachment = rows.attachment.filter((row) => !referencesSeedNote(row));
   for (const [type, { map }] of Object.entries(TABLES)) {
     if (!map) continue;
     for (const row of rows[type as EntityType]) {
       const sourceId = String(row.id);
-      if (!mapping[map][sourceId]) {
-        // 示例笔记保持 onboarding-v1- 前缀：首次连接时据此识别本机种子，
-        // 服务端已有指南就改用服务端那份。
-        mapping[map][sourceId] = sourceId.startsWith("onboarding-v1-") ? sourceId : newLocalId();
-      }
+      if (!mapping[map][sourceId]) mapping[map][sourceId] = newLocalId();
     }
   }
   await saveMap(options.targetDb, mapping);
@@ -235,5 +242,40 @@ export async function migrateMobileLocalAccount(options: MigrationOptions): Prom
     }
     mapping.status = attachmentsPending ? "running" : "complete";
     await saveMap(tx, mapping);
+  });
+}
+
+/**
+ * 账号库里如果已经有服务端的指南，就清掉旧版本迁移进来的本机种子
+ *（`onboarding-v1-local-*`），避免两份指南并存。
+ *
+ * 新版本的迁移已经不再导入本机种子；这里负责清理升级前已经导入的数据。
+ */
+export async function discardMigratedLocalSeed(
+  db: NativeDatabase,
+  userId: string,
+  profileId: string,
+): Promise<void> {
+  const claimed = await db.query<{ id: string }>(
+    `SELECT id FROM notebooks WHERE scopeKey='personal' AND userId=?
+       AND id LIKE 'onboarding-v1-%' AND id NOT LIKE 'onboarding-v1-local-%' LIMIT 1`,
+    [userId],
+  );
+  if (!claimed.length) return;
+  await db.transaction(async (tx) => {
+    await tx.run(`DELETE FROM note_tags WHERE noteId IN (
+      SELECT id FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-local-%')`,
+    [userId]);
+    await tx.run(`DELETE FROM favorites WHERE noteId IN (
+      SELECT id FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-local-%')`,
+    [userId]);
+    await tx.run(`DELETE FROM notes WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-local-%'`,
+    [userId]);
+    await tx.run(`DELETE FROM notebooks WHERE scopeKey='personal' AND userId=? AND id LIKE 'onboarding-v1-local-%'`,
+    [userId]);
+    await tx.run(`DELETE FROM native_knowledge_tree_nodes WHERE scopeKey='personal' AND id LIKE '%onboarding-v1-local-%'`);
+    await tx.run(`DELETE FROM sync_outbox WHERE profileId=? AND (entityId LIKE 'onboarding-v1-local-%'
+      OR entityId LIKE 'note:onboarding-v1-local-%' OR entityId LIKE 'notebook:onboarding-v1-local-%')`,
+    [profileId]);
   });
 }

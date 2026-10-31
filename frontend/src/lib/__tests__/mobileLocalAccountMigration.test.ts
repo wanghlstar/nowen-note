@@ -4,7 +4,7 @@ import type { SQLInputValue } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openNativeDatabase, type NativeDatabase } from "../nativeDatabase";
-import { migrateMobileLocalAccount } from "../mobileLocalAccountMigration";
+import { discardMigratedLocalSeed, migrateMobileLocalAccount } from "../mobileLocalAccountMigration";
 import type { NativeAttachmentStore } from "../nativeAttachmentStore";
 
 // node:sqlite is available on Node >=22.13; keep older frontend-only runners usable.
@@ -204,5 +204,74 @@ describe.skipIf(!DatabaseSync)("Android incremental device-only import with real
     expect((await marker()).attachments.a1).toBe(copyId);
     expect((await all("attachments")).some((row) => row.id === copyId)).toBe(true);
     expect((await all("notes")).find((row) => row.id === saved.notes.n1)?.content).toContain(copyId);
+  });
+});
+
+describe.skipIf(!DatabaseSync)("Android sample guide handling", () => {
+  it("does not import the device-local sample guide into the account", async () => {
+    await sourceDb.run(
+      "INSERT INTO notebooks (id,scopeKey,userId,name,createdAt,updatedAt) VALUES ('onboarding-v1-local-zh','personal','guest','中文指南',?,?)",
+      [stamp, stamp],
+    );
+    await sourceDb.run(
+      "INSERT INTO notes (id,scopeKey,userId,notebookId,title,content,createdAt,updatedAt) VALUES ('onboarding-v1-local-zh-welcome','personal','guest','onboarding-v1-local-zh','欢迎','x',?,?)",
+      [stamp, stamp],
+    );
+    await note("n1", "mine");
+
+    await migrate();
+
+    const notebooks = await all("notebooks");
+    expect(notebooks).toHaveLength(1);
+    expect(notebooks[0].name).toBe("Book");
+    expect((await all("notes")).map((row) => row.content)).toEqual(["mine"]);
+    const queue = (await all("sync_outbox")).map((row) => String(row.entityId));
+    expect(queue.some((id) => id.includes("onboarding-v1-local"))).toBe(false);
+  });
+
+  it("cleans a previously migrated seed when the account already has a server guide", async () => {
+    await targetDb.run(
+      "INSERT INTO notebooks (id,scopeKey,userId,name,createdAt,updatedAt) VALUES ('onboarding-v1-server-zh','personal','account','中文指南',?,?)",
+      [stamp, stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO notebooks (id,scopeKey,userId,name,createdAt,updatedAt) VALUES ('onboarding-v1-local-zh','personal','account','中文指南',?,?)",
+      [stamp, stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO notebooks (id,scopeKey,userId,name,createdAt,updatedAt) VALUES ('nb-normal','personal','account','普通',?,?)",
+      [stamp, stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO notes (id,scopeKey,userId,notebookId,title,createdAt,updatedAt) VALUES ('onboarding-v1-local-zh-welcome','personal','account','onboarding-v1-local-zh','欢迎',?,?)",
+      [stamp, stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO notes (id,scopeKey,userId,notebookId,title,createdAt,updatedAt) VALUES ('note-normal','personal','account','nb-normal','我的笔记',?,?)",
+      [stamp, stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO sync_outbox (id,mutationId,profileId,deviceId,scopeKey,entityType,entityId,operation,status,retryCount,createdAt) VALUES ('o1','m1','profile','device','personal','notebook','onboarding-v1-local-zh','upsert','pending',0,?)",
+      [stamp],
+    );
+    await targetDb.run(
+      "INSERT INTO sync_outbox (id,mutationId,profileId,deviceId,scopeKey,entityType,entityId,operation,status,retryCount,createdAt) VALUES ('o2','m2','profile','device','personal','note','onboarding-v1-local-zh-welcome','upsert','pending',0,?)",
+      [stamp],
+    );
+
+    await discardMigratedLocalSeed(targetDb, "account", "profile");
+
+    expect((await all("notebooks")).map((row) => row.id).sort()).toEqual(["nb-normal", "onboarding-v1-server-zh"]);
+    expect((await all("notes")).map((row) => row.id)).toEqual(["note-normal"]);
+    expect(await all("sync_outbox")).toHaveLength(0);
+  });
+
+  it("keeps the local seed when it is the only guide in the account", async () => {
+    await targetDb.run(
+      "INSERT INTO notebooks (id,scopeKey,userId,name,createdAt,updatedAt) VALUES ('onboarding-v1-local-zh','personal','account','中文指南',?,?)",
+      [stamp, stamp],
+    );
+    await discardMigratedLocalSeed(targetDb, "account", "profile");
+    expect((await all("notebooks")).map((row) => row.id)).toEqual(["onboarding-v1-local-zh"]);
   });
 });

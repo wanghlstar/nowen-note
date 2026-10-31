@@ -11,7 +11,7 @@ import {
   type OfflineAttachmentRecord,
 } from "./localStore";
 import { installMobileLocalFirstBridge } from "./mobileLocalFirstBridge";
-import { migrateMobileLocalAccount } from "./mobileLocalAccountMigration";
+import { discardMigratedLocalSeed, migrateMobileLocalAccount } from "./mobileLocalAccountMigration";
 import { notifyMobileSyncStatusChanged, setMobileSyncEnabled, MOBILE_SYNC_APPLIED_EVENT } from "./mobileSyncStatus";
 import { createMobileSyncEngine, type MobileSyncEngine } from "./mobileSyncEngine";
 import { createMobileServerEndpointRuntime } from "./mobileServerEndpointRuntime";
@@ -514,7 +514,12 @@ async function configureRuntime(): Promise<void> {
   let endpoints: ReturnType<typeof createMobileServerEndpointRuntime> | undefined;
   const removeListeners: RuntimeHandle["removeListeners"] = [];
   try {
-    await importIndexedDbCache(db,ids.accountId,userId);
+    try {
+      await importIndexedDbCache(db,ids.accountId,userId);
+    } catch (error) {
+      // 旧缓存导入是可选步骤：失败不能挡住本地库初始化（断网可读是底线）。
+      console.warn("[mobile-local-first] 旧缓存导入失败，跳过", error);
+    }
     const attachmentStore = await createNativeAttachmentStore(ids.accountId);
     await db.transaction(async (tx) => {
       await tx.run("UPDATE sync_profiles SET enabled=0 WHERE enabled=1 AND id<>?",[ids.profileId]);
@@ -529,21 +534,28 @@ async function configureRuntime(): Promise<void> {
         ids.profileId,ids.deviceId,"移动设备",Capacitor.getPlatform(),now(),now(),
       ]);
     });
-    const mobileLocalDb = await openNativeDatabase(MOBILE_LOCAL_ACCOUNT_ID);
+    // 本机数据导入、旧队列迁移都是可选步骤：任何一步失败都不能让账号库
+    // 放弃本地读取（否则断网时会退回远程、笔记全空）。
     try {
-      await migrateMobileLocalAccount({
-        sourceDb: mobileLocalDb,
-        sourceAttachments: await createNativeAttachmentStore(MOBILE_LOCAL_ACCOUNT_ID),
-        targetDb: db,
-        targetAttachments: attachmentStore,
-        targetUserId: userId,
-        profileId: ids.profileId,
-        deviceId: ids.deviceId,
-      });
-    } finally {
-      await mobileLocalDb.close().catch(() => undefined);
+      const mobileLocalDb = await openNativeDatabase(MOBILE_LOCAL_ACCOUNT_ID);
+      try {
+        await migrateMobileLocalAccount({
+          sourceDb: mobileLocalDb,
+          sourceAttachments: await createNativeAttachmentStore(MOBILE_LOCAL_ACCOUNT_ID),
+          targetDb: db,
+          targetAttachments: attachmentStore,
+          targetUserId: userId,
+          profileId: ids.profileId,
+          deviceId: ids.deviceId,
+        });
+      } finally {
+        await mobileLocalDb.close().catch(() => undefined);
+      }
+      await migrateLegacyOfflineQueue(db,ids.profileId,ids.deviceId);
+      await discardMigratedLocalSeed(db,userId,ids.profileId);
+    } catch (error) {
+      console.warn("[mobile-local-first] 本机数据导入失败，账号库继续使用", error);
     }
-    await migrateLegacyOfflineQueue(db,ids.profileId,ids.deviceId);
     // eslint-disable-next-line prefer-const -- The callback must also be safe before repository initialization.
     let repository!:NativeLocalRepository;
     const engine = createMobileSyncEngine({
@@ -559,25 +571,41 @@ async function configureRuntime(): Promise<void> {
       db,attachments:attachmentStore,accountId:ids.accountId,userId,
       getScopeKey: () => getCurrentWorkspace(),requestSync: () => engine.requestSync(),
     });
-    await repository.warmAttachmentUrls();
-    const [{ App }, { Network }] = await Promise.all([import("@capacitor/app"),import("@capacitor/network")]);
-    endpoints = createMobileServerEndpointRuntime(serverUrl, Network, () => engine.requestSync(0));
-    removeListeners.push(() => endpoints?.dispose());
-    const appHandle = await App.addListener("appStateChange", ({ isActive }) => {
-      if (isActive) { void endpoints?.refresh(); return; }
-      // 切到后台=编辑告一段落：立刻把 outbox 推上去，不等 3 秒防抖。
-      engine.requestSync(0);
+    await repository.warmAttachmentUrls().catch((error) => {
+      console.warn("[mobile-local-first] 附件地址预热失败", error);
     });
-    removeListeners.push(() => appHandle.remove());
-    const networkHandle = await Network.addListener("networkStatusChange", (status) => { void endpoints?.networkChanged(status); notifyMobileSyncStatusChanged(); });
-    removeListeners.push(() => networkHandle.remove());
+    // 先把本地库装给 UI：即使后面的网络监听/同步组件初始化失败，
+    // 断网时笔记、知识树也必须照常可读。
     setLocalRepository(repository);
-    setSyncLocalAdminAdapter(createNativeAdminAdapter(db,engine,repository,ids.profileId,ids.deviceId,serverUrl));
     const restoreBridge = installMobileLocalFirstBridge(repository,db,userId);
     active = {identity,db,engine,restoreBridge,removeListeners};
+    try {
+      const [{ App }, { Network }] = await Promise.all([import("@capacitor/app"),import("@capacitor/network")]);
+      endpoints = createMobileServerEndpointRuntime(serverUrl, Network, () => engine.requestSync(0));
+      removeListeners.push(() => endpoints?.dispose());
+      const appHandle = await App.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) { void endpoints?.refresh(); return; }
+        // 切到后台=编辑告一段落：立刻把 outbox 推上去，不等 3 秒防抖。
+        engine.requestSync(0);
+      });
+      removeListeners.push(() => appHandle.remove());
+      const networkHandle = await Network.addListener("networkStatusChange", (status) => { void endpoints?.networkChanged(status); notifyMobileSyncStatusChanged(); });
+      removeListeners.push(() => networkHandle.remove());
+    } catch (error) {
+      console.warn("[mobile-local-first] 网络监听初始化失败，本地库仍可使用", error);
+    }
+    try {
+      setSyncLocalAdminAdapter(createNativeAdminAdapter(db,engine,repository,ids.profileId,ids.deviceId,serverUrl));
+    } catch (error) {
+      console.warn("[mobile-local-first] 同步设置适配器初始化失败", error);
+    }
     const profile = (await db.query<{ enabled: number }>("SELECT enabled FROM sync_profiles WHERE id=?",[ids.profileId]))[0];
     setMobileSyncEnabled(profile?.enabled === 1);
-    removeListeners.push(installMobileSyncRealtime(engine));
+    try {
+      removeListeners.push(installMobileSyncRealtime(engine));
+    } catch (error) {
+      console.warn("[mobile-local-first] 实时同步监听初始化失败", error);
+    }
       if (profile?.enabled === 1) {
         engine.start();
         // 刚登录/切账号后的第一次配置就立即对账：否则要等懒同步的 3 秒节流、

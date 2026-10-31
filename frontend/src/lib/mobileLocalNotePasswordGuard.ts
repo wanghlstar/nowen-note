@@ -26,7 +26,24 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
     }));
   };
   window.addEventListener(KNOWLEDGE_TREE_PASSWORD_SESSION_CHANGED_EVENT, onSessionChanged);
-  const readTree = (workspaceId: string) => knowledgeTreeApi.listForWorkspace(workspaceId, true);
+  /**
+   * 知识树在登录态是「服务器优先 + 离线快照」。断网且快照缺失时不能无限等，
+   * 否则整张笔记列表会一直转圈。离线给更短的超时，线上保持宽松。
+   */
+  const readTree = async (workspaceId: string) => {
+    const timeoutMs = typeof navigator !== "undefined" && navigator.onLine === false ? 2500 : 15000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        knowledgeTreeApi.listForWorkspace(workspaceId, true),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("知识树读取超时")), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
   const resolveNoteFolders = async (note: LocalNote, resolve: ReturnType<typeof createNoteFolderPasswordResolver>) => {
     const folderIds = resolve(note);
     if (folderIds !== null) return folderIds;
@@ -73,7 +90,16 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
 
   const assertReadable = async (note: LocalNote): Promise<void> => {
     const revision = sessionRevision;
-    const tree = await readTree(note.workspaceId || "personal");
+    let tree: KnowledgeTreeResponse;
+    try {
+      tree = await readTree(note.workspaceId || "personal");
+    } catch (error) {
+      // 个人空间断网且没有知识树快照时，不能把用户自己的本地笔记锁死。
+      // 工作区仍保持严格：访问权未被确认前不展示。
+      if (note.workspaceId) throw error;
+      console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码校验", error);
+      return;
+    }
     const folderIds = await treeAccess(tree).folders(note);
     if (!folderIds) throw new Error("目录密码状态无法确认，请联网刷新目录后重试");
     if (!folderIds.length) { protectedReads.delete(note.id); return; }
@@ -89,7 +115,16 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
   const filterReadable = async <T extends LocalNote>(notes: T[], workspaceId = getCurrentWorkspace()): Promise<T[]> => {
     if (!notes.length) return notes;
     const revision = sessionRevision;
-    const tree = await readTree(workspaceId);
+    let tree: KnowledgeTreeResponse;
+    try {
+      tree = await readTree(workspaceId);
+    } catch (error) {
+      // 断网时知识树/密码快照可能取不到。个人空间不能让整张列表卡死或清空；
+      // 工作区继续严格：离线访问权未确认时不展示。
+      if (workspaceId && workspaceId !== "personal") throw error;
+      console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码过滤", error);
+      return notes;
+    }
     const access = treeAccess(tree);
     const requiredFolders = new Map<string, string[]>();
     const check = async (note: T) => {
