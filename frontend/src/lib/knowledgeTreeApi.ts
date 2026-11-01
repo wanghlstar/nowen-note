@@ -137,6 +137,8 @@ export const knowledgeTreeApi = {
   },
 
   listForWorkspace(workspaceId: string, includeDeleted = false, _options?: { remoteTimeoutMs?: number }) {
+    // 签名占位：超时只由移动端 bridge 的 serverFirstList 消费，直连后端时忽略。
+    void _options;
     return request<KnowledgeTreeResponse>(
       `/?${workspaceQuery(includeDeleted, workspaceId)}`,
       { headers: folderUnlockRequestHeaders() },
