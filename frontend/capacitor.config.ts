@@ -39,6 +39,17 @@ const config: CapacitorConfig = {
     allowMixedContent: true,
   },
   plugins: {
+    CapacitorSQLite: {
+      // 关键：插件原生 load() 默认 androidIsEncryption = true，会无条件创建
+      // MasterKey + EncryptedSharedPreferences("sqlite_encrypted_shared_prefs")。
+      // 一旦应用数据里存在上一份密钥加密的 prefs（重装/恢复备份/迁移旧包数据，
+      // keystore 密钥并不随数据备份），解密就抛 AEADBadTagException（message 为
+      // null），load() 把 implementation 置 null 并只打印
+      // "CapacitorSQLitePlugin: null"，本地库整体不可用，前端静默回落到远程路径。
+      // 我们的连接全部使用 "no-encryption"（nativeDatabase.ts createConnection），
+      // 插件层加密没有任何用途，显式关闭以消除该失败点。
+      androidIsEncryption: false,
+    },
     CapacitorHttp: {
       // Android WebView 的 fetch 会受 CORS 限制；原生 HTTP 可让移动端直连自托管服务。
       enabled: true,
