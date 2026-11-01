@@ -307,6 +307,7 @@ export function installMobileLocalKnowledgeTreeBridge(
       workspaceId: string | undefined,
       includeDeleted: boolean,
       remote: () => Promise<KnowledgeTreeResponse>,
+      options?: { remoteTimeoutMs?: number },
     ): Promise<KnowledgeTreeResponse> => {
       const key = snapshotKey(workspaceId, includeDeleted);
       const scope = syncScopeKey(workspaceId);
@@ -320,6 +321,9 @@ export function installMobileLocalKnowledgeTreeBridge(
       // 网络黑洞时不能让笔记读取一直等知识树：先回退到快照（仍带 ACL），
       // 再让调用方决定是否按离线处理。
       let remoteTimer: ReturnType<typeof setTimeout> | undefined;
+      // 笔记权限校验只需要一份可用的 ACL；等不到在线树时用快照即可。
+      // 首屏读取会显式传更短的预算，避免 4s 超时（甚至两轮）拖住列表。
+      const remoteTimeoutMs = Math.max(250, options?.remoteTimeoutMs ?? 4000);
       const remoteWithTimeout = async () => {
         try {
           return await Promise.race([
@@ -327,7 +331,7 @@ export function installMobileLocalKnowledgeTreeBridge(
             new Promise<never>((_, reject) => {
               remoteTimer = setTimeout(() => {
                 reject(Object.assign(new Error("知识树请求超时"), { name: "TimeoutError" }));
-              }, 4000);
+              }, remoteTimeoutMs);
             }),
           ]);
         } finally {
@@ -397,9 +401,10 @@ export function installMobileLocalKnowledgeTreeBridge(
       getCurrentWorkspace(), includeDeleted,
       () => originals.list(includeDeleted),
     );
-    target.listForWorkspace = (workspaceId: string, includeDeleted = false) => serverFirstList(
+    target.listForWorkspace = (workspaceId: string, includeDeleted = false, options?: { remoteTimeoutMs?: number }) => serverFirstList(
       workspaceId, includeDeleted,
       () => originals.listForWorkspace(workspaceId, includeDeleted),
+      options,
     );
     const createPersonal = async (workspaceId: string, input: Parameters<typeof originals.create>[0]) => {
       if (workspaceId !== "personal" || !db) {

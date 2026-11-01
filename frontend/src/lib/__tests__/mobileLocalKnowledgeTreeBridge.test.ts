@@ -187,6 +187,39 @@ describe("mobile local knowledge tree bridge", () => {
     }
   });
 
+  it("honors a caller-supplied remote timeout before falling back to the snapshot", async () => {
+    vi.useFakeTimers();
+    try {
+      const { repository } = createRepository();
+      const metadata = new Map<string, string>();
+      const db = {
+        run: vi.fn(async (_sql: string, values: unknown[]) => {
+          metadata.set(String(values[0]), String(values[1]));
+          return { changes: 1 };
+        }),
+        query: vi.fn(async (sql: string, values: unknown[]) => sql.includes("native_runtime_meta")
+          ? (metadata.has(String(values[0])) ? [{ value: metadata.get(String(values[0])) }] : [])
+          : []),
+      } as unknown as NativeDatabase;
+      const remoteNode = { id: "note:note-1", workspaceId: null, resourceType: "note", resourceId: "note-1" };
+      vi.spyOn(knowledgeTreeApi, "listForWorkspace")
+        .mockResolvedValueOnce({ nodes: [remoteNode] as never })
+        .mockReturnValueOnce(new Promise(() => undefined));
+
+      restoreBridge = installMobileLocalKnowledgeTreeBridge(repository, { deviceOnly: false }, db);
+      await knowledgeTreeApi.listForWorkspace("personal");
+      let settled = false;
+      const hanging = knowledgeTreeApi.listForWorkspace("personal", true, { remoteTimeoutMs: 800 });
+      void hanging.then(() => { settled = true; }, () => { settled = true; });
+      await vi.advanceTimersByTimeAsync(799);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(hanging).resolves.toEqual({ nodes: [remoteNode], offlineSnapshot: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps offline snapshots isolated by workspace and refuses locally revoked access", async () => {
     const { repository } = createRepository();
     const metadata = new Map<string, string>();

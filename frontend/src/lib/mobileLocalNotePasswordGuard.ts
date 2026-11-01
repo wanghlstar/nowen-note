@@ -34,11 +34,14 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
    */
   const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
   const readTree = async (workspaceId: string) => {
-    const timeoutMs = isOffline() ? 2500 : 5000;
+    const offline = isOffline();
+    const timeoutMs = offline ? 2500 : 5000;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
-        knowledgeTreeApi.listForWorkspace(workspaceId, true),
+        // 首屏列表只需要 ACL，不需要等满 4s 的在线树：服务端慢/不可达时
+        // 立即退回本机快照，避免“空列表一直等到下一轮刷新”。
+        knowledgeTreeApi.listForWorkspace(workspaceId, true, { remoteTimeoutMs: offline ? 250 : 900 }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error("知识树读取超时")), timeoutMs);
         }),

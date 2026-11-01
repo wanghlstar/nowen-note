@@ -136,7 +136,7 @@ export const knowledgeTreeApi = {
     }).then(withDisplaySort);
   },
 
-  listForWorkspace(workspaceId: string, includeDeleted = false) {
+  listForWorkspace(workspaceId: string, includeDeleted = false, _options?: { remoteTimeoutMs?: number }) {
     return request<KnowledgeTreeResponse>(
       `/?${workspaceQuery(includeDeleted, workspaceId)}`,
       { headers: folderUnlockRequestHeaders() },
