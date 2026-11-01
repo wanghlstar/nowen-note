@@ -104,3 +104,41 @@ test("tree conflicts preserve both structures and reuse the normal conflict cent
   assert.equal(payload.baseSortOrder, 2);
   assert.equal(payload.baseIsDeleted, remote.isDeleted);
 });
+
+test("local-only tree conflict accepts the missing server side without deleting local structure", async () => {
+  const { getDb } = await import("../src/db/schema.js");
+  const { getActiveProfile } = await import("../src/sync/profile.js");
+  const { ensureDevice } = await import("../src/sync/device.js");
+  const { recordConflict, getConflict } = await import("../src/sync/conflict.js");
+  const { applyConflictResolution } = await import("../src/sync/resolve.js");
+
+  const db = getDb();
+  const profile = getActiveProfile(db)!;
+  const device = ensureDevice(db, { profileId: profile.id, platform: "test" });
+  db.prepare("DELETE FROM sync_outbox").run();
+  const localOnly = db.prepare(`
+    SELECT id, userId, workspaceId, parentId, nodeType, resourceType, resourceId,
+           sortOrder, isDeleted, deletedAt, createdAt, updatedAt
+    FROM knowledge_tree_nodes WHERE id = 'mindmap:map'
+  `).get() as Record<string, unknown>;
+
+  const id = recordConflict(db, {
+    profileId: profile.id,
+    entityType: "knowledge_tree_node",
+    entityId: "mindmap:map",
+    localPayload: { ...localOnly, parentId: "notebook:right", sortOrder: 13 },
+    remotePayload: null,
+  });
+  applyConflictResolution(db, { conflictId: id, resolution: "keep-remote", deviceId: device.id, userId: "owner" });
+
+  assert.equal(getConflict(db, id)!.status, "resolved");
+  const current = db.prepare("SELECT parentId, sortOrder FROM knowledge_tree_nodes WHERE id = 'mindmap:map'")
+    .get() as { parentId: string; sortOrder: number };
+  assert.equal(current.parentId, "notebook:right");
+  assert.equal(current.sortOrder, 11, "保留云端但云端没有该节点时，本机结构保持原样");
+  assert.equal(
+    (db.prepare("SELECT COUNT(*) AS count FROM sync_outbox WHERE entityType = 'knowledge_tree_node'")
+      .get() as { count: number }).count,
+    0,
+  );
+});
