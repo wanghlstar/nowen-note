@@ -64,7 +64,7 @@ function isOfflineFailure(error: unknown): boolean {
   const code = "code" in error ? error.code : undefined;
   if (typeof code === "string" && /^(?:NETWORK|NETWORK_UNAVAILABLE|NETWORK_ERROR|NETWORK_REQUEST_FAILED|ECONNRE(?:FUSED|SET)|ENOTFOUND|ETIMEDOUT|TIMEOUT|ABORT_ERR)$/i.test(code)) return true;
   if (error.name === "AbortError" || error.name === "TimeoutError") return true;
-  return /failed to fetch|network request failed|load failed|network error|connection (?:refused|failed)|err_(?:connection|name|internet|timed)|timed? out|无法连接|网络(?:异常|不可用)/i.test(error.message);
+  return /failed to fetch|network request failed|load failed|network error|connection (?:refused|failed)|err_(?:connection|name|internet|timed)|timed? out|超时|网络请求失败|无法连接|网络(?:异常|不可用)/i.test(error.message);
 }
 
 function notebookNode(item: Notebook, deviceOnly: boolean): KnowledgeTreeNode {

@@ -242,6 +242,9 @@ describe("mobile local knowledge tree bridge", () => {
     remoteList.mockRejectedValue(Object.assign(new Error("网络不可用"), { code: "NETWORK_UNAVAILABLE" }));
     expect((await knowledgeTreeApi.list()).nodes).toHaveLength(3);
 
+    remoteList.mockRejectedValue(new Error("请求超时"));
+    expect((await knowledgeTreeApi.list()).nodes).toHaveLength(3);
+
     const denied = Object.assign(new Error("forbidden"), { status: 403 });
     remoteList.mockRejectedValue(denied);
     await expect(knowledgeTreeApi.list()).rejects.toBe(denied);
