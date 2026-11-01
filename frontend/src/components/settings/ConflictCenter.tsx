@@ -149,11 +149,20 @@ export function ConflictCenter({
       const target = items.find((item) => item.id === id);
       if (target && isTreeConflict(target.entityType)) {
         const detail = selected?.id === id ? selected : await fetchConflictDetail(id);
-        if (!canSafelyChooseTreeSide(detail)) {
+        // 「保留云端版本」在云端没有该节点时仍然有意义：结清冲突、接受云端缺失，
+        // 本机副本保留不动。其余组合仍要求双方结构齐全，避免覆盖未同步的依赖。
+        const safelyResolvable = resolution === "keep-remote"
+          ? treeConflictAvailability(detail) !== "neither"
+          : canSafelyChooseTreeSide(detail);
+        if (!safelyResolvable) {
           setSelected(detail);
           setDetailError({
             id,
-            message: "只有单边知识树结构，无法安全采用版本。请先检查对应业务资源和同步诊断。",
+            message: treeConflictAvailability(detail) === "neither"
+              ? "本机与云端均缺少完整知识树结构，暂时无法处理。请检查同步诊断。"
+              : treeConflictAvailability(detail) === "remote-only"
+                ? "本机缺少知识树结构，无法保留本机版本；可选择保留云端版本。"
+                : "云端缺少知识树结构，无法保留本机版本；可选择保留云端版本以结清冲突。",
           });
           return;
         }
@@ -505,8 +514,7 @@ export function ConflictCenter({
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={busy || (isTreeConflict(item.entityType) && (selected?.id !== item.id || !canSafelyChooseTreeSide(selected)))}
-                title={isTreeConflict(item.entityType) ? "先点击查看，只有本机和云端结构均完整才能选择" : undefined}
+                disabled={busy}
                 onClick={() => { void handleResolve(item.id, "keep-local"); }}
                 className="rounded border px-2 py-1 hover:bg-accent disabled:opacity-50"
               >
@@ -514,8 +522,7 @@ export function ConflictCenter({
               </button>
               <button
                 type="button"
-                disabled={busy || (isTreeConflict(item.entityType) && (selected?.id !== item.id || !canSafelyChooseTreeSide(selected)))}
-                title={isTreeConflict(item.entityType) ? "先点击查看，只有本机和云端结构均完整才能选择" : undefined}
+                disabled={busy}
                 onClick={() => { void handleResolve(item.id, "keep-remote"); }}
                 className="rounded border px-2 py-1 hover:bg-accent disabled:opacity-50"
               >

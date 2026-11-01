@@ -26,6 +26,7 @@ export const SYNC_CONFLICT_ENTITY_TYPES = [
   "diary",
   "mindmap",
   "attachment_organization",
+  "knowledge_tree_node",
 ] as const;
 
 export interface SyncProfileSummary {

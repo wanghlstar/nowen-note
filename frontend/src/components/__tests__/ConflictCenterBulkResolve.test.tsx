@@ -434,8 +434,6 @@ describe("冲突中心批量处理", () => {
     expect(cards[0].textContent).not.toContain("两侧内容一致");
     expect(cards[0].textContent).not.toContain("手动编辑并合并");
     const buttons = [...cards[0].querySelectorAll("button")];
-    expect(buttons.find((b) => b.textContent === "保留本机版本")?.disabled).toBe(true);
-    expect(buttons.find((b) => b.textContent === "保留云端版本")?.disabled).toBe(true);
     expect(buttons.find((b) => b.textContent?.includes("手动合并"))).toBeUndefined();
     await act(async () => { host.querySelector<HTMLInputElement>('[aria-label="全选冲突"]')?.click(); });
     const bulk = [...host.querySelectorAll("button")].find((b) => b.textContent === "一键采用本机");
@@ -445,6 +443,48 @@ describe("冲突中心批量处理", () => {
     const smart = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("智能合并选中项"));
     await act(async () => { smart?.click(); });
     expect(resolveConflictMock).not.toHaveBeenCalled();
+
+    // 单边节点不再把两个按钮一起禁用：保留本机会给出可见原因，
+    // 保留云端则由后端结清冲突（云端没有该节点也是一种合法选择）。
+    const keepLocal = buttons.find((b) => b.textContent === "保留本机版本")!;
+    expect(keepLocal.disabled).toBe(false);
+    await act(async () => { keepLocal.click(); });
+    await waitFor(() => expect(cards[0].textContent).toContain("云端缺少知识树结构，无法保留本机版本"));
+    expect(resolveConflictMock).not.toHaveBeenCalled();
+    const keepRemote = buttons.find((b) => b.textContent === "保留云端版本")!;
+    expect(keepRemote.disabled).toBe(false);
+    await act(async () => { keepRemote.click(); });
+    await waitFor(() => expect(resolveConflictMock).toHaveBeenCalledWith(
+      "tree-conflict-0",
+      { resolution: "keep-remote", deviceId: "tree-device" },
+    ));
+  });
+
+  it("知识树双方结构齐全时不展开详情也能直接选择版本", async () => {
+    const item = {
+      id: "tree-direct", entityType: "knowledge_tree_node", entityId: "note:n123",
+      localVersion: null, remoteVersion: null, diffFields: ["parentId"],
+      localTitle: null, remoteTitle: null, createdAt: "2026-10-10T03:00:00.000Z",
+    };
+    fetchConflictsMock.mockResolvedValue({ total: 1, items: [item] });
+    fetchConflictDetailMock.mockResolvedValue({
+      ...item, status: "unresolved", resolvedAt: null, base: null,
+      local: { resourceType: "note", resourceId: "n123", parentId: "folder-a", sortOrder: 0, isDeleted: 0 },
+      remote: { resourceType: "note", resourceId: "n123", parentId: "folder-b", sortOrder: 0, isDeleted: 0 },
+    });
+    const host = document.createElement("div");
+    document.body.appendChild(host); root = createRoot(host);
+    await act(async () => { root?.render(<ConflictCenter deviceId="tree-device" />); });
+    await waitFor(() => expect(host.textContent).toContain("冲突（1）"));
+    const card = host.querySelector("li")!;
+    const keepLocal = [...card.querySelectorAll("button")].find((b) => b.textContent === "保留本机版本")!;
+    expect(keepLocal.disabled).toBe(false);
+    await act(async () => { keepLocal.click(); });
+    await waitFor(() => expect(resolveConflictMock).toHaveBeenCalledWith(
+      "tree-direct",
+      { resolution: "keep-local", deviceId: "tree-device" },
+    ));
+    expect(fetchConflictDetailMock).toHaveBeenCalledWith("tree-direct");
   });
 
   it("知识树双方完整时显示结构字段，查看加载失败时在原卡片展示错误", async () => {
