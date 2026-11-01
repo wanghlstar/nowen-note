@@ -10,7 +10,8 @@
 
 产品形态已定型：**Lite = 本地优先 + 后台同步**，Mac/安卓/NAS 三端一致；登录页只保留「进入本地笔记」，服务器通过「设置 → 同步」添加。
 **P0「登出后无限闪屏」已修复并验证**（根因与修复见 §3）。
-lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1.5.3-lite.11`。
+最新 release：**v1.5.3-lite.14**（tag 指向 `58fc851d`），7 个资产齐全。
+lite.14 之后有 6 个代码提交（前后端测试全绿 + 编码/密码校验修复，另有本次文档更新），下一个 tag 应为 `v1.5.3-lite.15`。
 
 ---
 
@@ -21,7 +22,8 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 | 跑本地后端 | **必须**用 `tauri/src-tauri/binaries/node-aarch64-apple-darwin backend/dist/index.js`（系统 node24 ABI137 与 better-sqlite3 ABI127 不兼容） |
 | 隔离数据库 | `DB_PATH=/tmp/xxx/test.db`（**不要**用 `NOWEN_DATA_DIR`，它只影响 folder-sync，不影响 SQLite 路径——我曾因此写进用户开发库） |
 | 后端单测 | `cd backend && ../tauri/src-tauri/binaries/node-aarch64-apple-darwin --import tsx --import ./tests/setup-db-isolation.ts --test tests/<file>.test.ts` |
-| 前端测试 | `cd frontend && npx vitest run [file]`；基线 **22 failed / 695 passed**（预存在失败，改动前后必须一致） |
+| 后端全量测试 | `cd backend && node scripts/run-tests-serial.mjs`；基线 **376/376 文件全绿**（2026-11-01）。若依赖用 `--ignore-scripts` 安装过，先补 `node node_modules/ffmpeg-static/install.js`，否则媒体测试会因缺少 ffmpeg 二进制失败 |
+| 前端测试 | `cd frontend && npx vitest run`；基线 **720 文件 / 4105 用例全绿**（2026-11-01） |
 | 前端类型 | `cd frontend && npx tsc -b`（含测试文件，`vi.fn()` 需显式泛型） |
 | 构建 Mac 包 | `cd backend && npx tsc && cd ../tauri && VITE_LITE=1 npx tauri build` |
 | 打包 fpk（本地可验！） | `curl -fsSL https://static2.fnnas.com/fnpack/fnpack-1.2.3-darwin-arm64 -o /tmp/fnpack-mac && chmod +x /tmp/fnpack-mac`，然后 `FNPACK_BIN=/tmp/fnpack-mac FPK_VERSION=1.5.3.11 node scripts/fpk-native/build-fpk-native.mjs` |
@@ -36,16 +38,15 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 
 ## 2. 已发布 / 未发布
 
-- 最新 release：**v1.5.3-lite.10**，7 资产齐全（macOS arm64/x64 dmg、win exe/msi、linux deb、安卓 apk、fpk 130MB）。
-- **lite.10 之后有 8 个提交未发布**（`git log --oneline v1.5.3-lite.10..HEAD`）：
-  1. `f4f0e7f9` 连点退出账号导致闪屏/白屏（NavRail 加 `logoutInflightRef` 守卫）
-  2. `dd54aac3` CI 改由最快的 fpk-native 创建 release（不再被 macOS 构建堵住）
-  3. `b460ca51` 添加服务器后立即对账 + 刷新列表（桌面 `invalidateNotebooks()`；安卓 `engine.requestSync(0)`）
-  4. `4b3405e2` 启动后的渲染异常给出可恢复界面，不再整屏白（边界抽成 `AppBootErrorBoundary`）
-  5. `ecec0f07` 远端不存在时「保留服务器版本」不再报 400，冲突可结清
-  6. `4e08d169` 首次对账因子笔记本先返回失败（NOTEBOOK_PARENT_NOT_FOUND）→ `orderNotebooksParentsFirst`
-  7. `c53390d4` 安卓设备本地模式补示例笔记（`mobileOnboardingGuide.ts`，三端一致）
-  8. 修复登出后无限闪屏：零登录每次经 `get_local_auth` 重新签发 token（§3）
+- 最新 release：**v1.5.3-lite.14**（`58fc851d`），7 资产齐全（macOS arm64/x64 dmg、win exe/msi、linux deb、安卓 apk、fpk 130MB）。
+- **lite.14 之后有 6 个代码提交未发布**（另有本次文档更新；`git log --oneline v1.5.3-lite.14..HEAD`）：
+  1. `075808b78` 修复编辑器与样式中文的 GBK 双重编码损坏
+  2. `2dbdec7ef` 在线读取失败时不再降级放行笔记密码校验
+  3. `037a9f80e` 补齐服务端发现面板缺失的 6 个文案键
+  4. `282c469e8` 前端契约与同步用例对齐当前实现（全量 720/4105 全绿）
+  5. `57852d040` 还原 `index.css` 中剩余的 GBK 损坏注释
+  6. `c744ac541` 修正后端附件分享路由与过期契约用例（全量 376/376 全绿）
+- 更早的发布记录见 git tag；lite.10 之前的细节保留在历史会话中。
 
 ---
 
@@ -94,7 +95,7 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 3. **模板**：`中文指南`（1 篇 `欢迎使用 Nowen Note`）+ `工作笔记` / `个人日记` / `技术学习` 三个空白笔记本。后端新增 v136 迁移重建首次登录触发器（内容在 `backend/src/db/onboardingGuideTemplate.ts`，published migration 不改）；安卓 `mobileOnboardingGuide.ts` 用同一份内容；`seed.ts` 不再预置演示笔记本/演示笔记。已有账号不会自动换模板：需要新库或重置种子。
 4. **安卓种子修复**：原来走知识树 API，device-only 模式下必然 `NATIVE_TREE_WRITE_UNAVAILABLE` → 静默失败（其实一直没有示例笔记）。现改为直接走本地 repository；凭据迁移时保留 `onboarding-v1-` 前缀，供首次连接识别本机种子。
 5. `bootstrap-local` 新建 desktop 时补 `lastLoginAt`，示例笔记首次启动即出现。
-6. **安卓「选择自己的服务器」死循环**：`LoginPage` 的 Lite 本地入口没有理会 `requestMobileAccountLogin()`，选完服务器重载后又回到「进入本地笔记」，来回循环。现在请求账号登录时改为渲染服务器登录表单（底部仍保留「进入本地笔记」返回入口）。
+6. **安卓「添加服务器」改为就地登录**：此前「设置 → 同步 → 我的 Nowen Server」会调用 `requestMobileAccountLogin()` 并整页跳到远端登录页，与 Mac 的「添加服务器」不一致。现在 `MobileSyncSettings` 内直接填服务器地址 + 账号密码，支持 2FA；成功后写 token / server URL，面板只重载自己。`LoginPage` 的账号登录请求现在只服务账号入口（切换 / 添加账号）。本地库仍是权威源，登录后由 `mobileLocalFirstRuntime` 按账号重建本地库、幂等迁移设备本地笔记并启动同步；不切换远端直连模式。
 7. **删除同步验证**：服务端种下的 4 本经同步落到本机后，在本机删除 `工作笔记` → `sync-now` → 云端 notebook `isDeleted=1`、知识树节点 `isDeleted=1`、pending=0、0 冲突（两个隔离后端实测）。若旧测试安装仍复现，先看诊断里的 pending/conflicts 与引擎状态。
 
 验证（两个隔离后端 + 真实 API）：本机种子 → 连接后云端账号首次登录即种下服务端指南 → 首次对账 `status=ready`、`conflicts=0`、本地只剩 1 本且 ID 为服务端那份、本机种子行与 outbox 条目清空；编辑指南笔记标题后 `sync-now`，云端标题与 version 同步为 2；软删除指南笔记后云端 `isTrashed=1`；pending=0。后端 tsc + 371 个 sync/onboarding 用例通过；前端 tsc + eslint 通过，全量 vitest 失败文件数与基线一致（mobileSyncRealtime / mobileSyncSwitch / mobileNativeTreeSubscription 已用 git stash 验证为改动前既有失败）。
@@ -106,7 +107,7 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 1. **富文本编辑器代码块渲染抖动**：新建笔记（默认 tiptap-json）里输 ` ```sql ` + 回车 → 代码块出现 → 打 `select` → 代码块视觉消失、文字变普通样式。**数据是好的**（重开正常），只是编辑器那一帧渲染掉。与 Markdown 后端的 `^blk_` 标记问题是两条路，我之前的修复（`noteBlocks.ts` 未闭合围栏不插标记）对这条无效。
 2. **安卓组网/VPN 下局域网发现仍失败**：WebRTC 只能拿本机网卡 IP，拿不到真实路由网段。需原生 Capacitor 插件读 `ConnectivityManager.getLinkProperties`。
 3. macOS 签名公证、Linux AppImage、Windows/Linux 真机验收未做。
-4. 前端 P1 静态 import 瘦身未做；`docs/lite-mode-*.md` 来源声明待补。
+4. 前端 P1 静态 import 瘦身未做。
 5. **示例指南待补回教程**：1.5.3.13 起「中文指南」只有「欢迎使用 Nowen Note」一篇（三本空白笔记本照旧）。用户确认先这样，后续迭代把另外 7 篇教程补回来（5 分钟快速上手 / 富文本与 Markdown / 知识树、双链与标签 / 图片、附件与文件管理 / AI 知识问答 / 任务、协作与多端访问 / 数据安全、备份与自托管）。正文可从 `688d537e` 的 `onboardingGuideTemplate.ts` 与 `mobileOnboardingGuide.ts` 取回，两端内容需保持一致。
 
 ---
@@ -126,6 +127,6 @@ lite.10 之后共 8 个已提交未发布项（§2），下一个 tag 应为 `v1
 
 ## 7. 下一步
 
-1. §3 的 P0 已修复并验证，直接进发布：打 `v1.5.3-lite.11`（新发布逻辑：fpk-native 3 分钟建 release，其余上传，不再被 macOS 堵）。
+1. 打 `v1.5.3-lite.15` 发布 lite.14 之后的 7 个提交（6 个代码 + 文档；新发布逻辑：fpk-native 3 分钟建 release，其余上传，不再被 macOS 堵）。
 2. 发布后逐个数资产（fpk / apk / 两个 macOS dmg / exe / msi / deb = 7 个），**不要只看 workflow 绿勾**——lite.7/lite.8 都出过"全绿但产物缺失"。
 3. 真机再走一遍用户路径：清库 → 零登录 → 添加同步服务器 → 登出，确认回到本地笔记且不闪屏。

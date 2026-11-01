@@ -45,10 +45,13 @@ test("featureGuard 在完整模式下直通", async () => {
   assert.equal(res.status, 200);
 });
 
+// tsx 以 CJS 方式加载本文件时 import.meta.dirname 为空，改用 __dirname。
+const backendDir = path.resolve(__dirname, "..");
+const profileModulePath = path.resolve(backendDir, "src/profile.ts").replace(/\\/g, "\\\\");
+
 function runLiteSubprocess(script: string): void {
   // tsx 对 --eval 的命名导出处理有坑；.mts 临时文件必须落在 backend 目录内，
   // 否则 node 无法从 /tmp 解析 hono 等依赖。
-  const backendDir = path.resolve(import.meta.dirname, "..");
   const file = path.join(backendDir, `.tmp-profile-check-${process.pid}.mts`);
   fs.writeFileSync(file, script);
   try {
@@ -68,7 +71,7 @@ test("NOWEN_PROFILE=lite 子进程：P1 关闭、守卫 403、响应体为明确
   runLiteSubprocess(`
     import assert from "node:assert/strict";
     import { Hono } from "hono";
-    const { SERVER_PROFILE, isFeatureEnabled, featureGuard, featureDisabledBody } = await import("${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}");
+    const { SERVER_PROFILE, isFeatureEnabled, featureGuard, featureDisabledBody } = await import("${profileModulePath}");
     assert.equal(SERVER_PROFILE, "lite");
     assert.equal(isFeatureEnabled("tasks"), false);
     assert.equal(isFeatureEnabled("notes"), true);
@@ -85,7 +88,7 @@ test("NOWEN_PROFILE=lite 子进程：P1 关闭、守卫 403、响应体为明确
 test("lite 子进程：被禁模块禁用错误体包含 feature 键与错误码", () => {
   runLiteSubprocess(`
     import assert from "node:assert/strict";
-    const { featureDisabledBody } = await import("${path.resolve(import.meta.dirname, "../src/profile.ts").replace(/\\/g, "\\\\\\\\")}");
+    const { featureDisabledBody } = await import("${profileModulePath}");
     const body = featureDisabledBody("ai");
     assert.equal(body.error, "feature_disabled");
     assert.equal(body.feature, "ai");

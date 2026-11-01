@@ -17,7 +17,7 @@ function mobileHeaderSource() {
 
 function desktopToolbarSource() {
   const start = editorPaneSource.indexOf("onClick={toggleLock}");
-  const end = editorPaneSource.indexOf("{SHOW_EDITOR_MODE_TOGGLE && (", start);
+  const end = editorPaneSource.indexOf("{SHOW_EDITOR_MODE_TOGGLE &&", start);
   expect(start).toBeGreaterThanOrEqual(0);
   expect(end).toBeGreaterThan(start);
   return editorPaneSource.slice(start, end);
@@ -54,7 +54,7 @@ describe("EditorPane mobile header", () => {
 
     expect(header).not.toContain("onClick={toggleLock}");
     expect(header).toContain("nowen:open-search");
-    expect(moreMenu).toContain("toggleLock(); setShowMobileMenu(false)");
+    expect(moreMenu).toMatch(/toggleLock\(\);\s*setShowMobileMenu\(false\)/);
     expect(header).toContain("mobileTitlePinned");
   });
 
@@ -86,7 +86,7 @@ describe("EditorPane mobile header", () => {
     );
 
     expect(shareStart).toBeGreaterThanOrEqual(0);
-    expect(shareButton).toContain("title={t('editor.shareNote')}");
+    expect(shareButton).toMatch(/title=\{t\(["']editor\.shareNote["']\)\}/);
     expect(shareButton).not.toContain("deleteNote");
   });
 

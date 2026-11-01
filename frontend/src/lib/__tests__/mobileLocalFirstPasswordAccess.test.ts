@@ -469,6 +469,7 @@ describe("signed-in Android folder password access", () => {
   it("keeps ordinary notes readable offline using the server snapshot, but never authorizes protected bodies offline", async () => {
     const { remoteTree, authorize } = setup();
     await api.getNotes();
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     remoteTree.mockRejectedValue(new TypeError("Failed to fetch"));
     authorize.mockRejectedValue(new TypeError("Failed to fetch"));
     await expect(api.getNote("ordinary")).resolves.toEqual(notes[1]);

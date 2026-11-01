@@ -2616,6 +2616,12 @@
     "includeChildren": "Include child notebooks"
   },
   "server": {
+    "forgetRecent": "Remove this entry",
+    "lanScanAction": "Scan",
+    "lanScanAdvanced": "Manual scan (mesh / cross-subnet, advanced)",
+    "lanScanHint": "mDNS and previously used servers are discovered automatically. Only fill in a subnet and port when discovery fails (private subnets only, /24 max).",
+    "lanScanSubnetPlaceholder": "Subnet, e.g. 192.168.2.0/24",
+    "recentServers": "Recently used",
     "title": "Connect to Server",
     "subtitle": "Enter your Nowen Note server address to get started",
     "addressLabel": "Server Address",

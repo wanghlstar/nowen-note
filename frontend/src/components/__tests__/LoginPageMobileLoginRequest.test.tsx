@@ -71,9 +71,10 @@ describe("LoginPage lite local-first entry", () => {
     expect(onContinueLocal).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the server login form after the mobile sync settings asked for an account login", async () => {
-    // 回归：安卓「设置 → 同步 → 使用自己的服务器」会 requestMobileAccountLogin()
-    // 后重载；若这里仍渲染本地入口，就会在登录页和「进入本地笔记」之间死循环。
+  it("shows the server login form after an account entry asked for a login", async () => {
+    // 回归：安卓账号入口（切换 / 添加账号）会 requestMobileAccountLogin() 后重载；
+    // 若这里仍渲染本地入口，就会在登录页和「进入本地笔记」之间死循环。
+    // 同步设置内添加服务器已改为就地登录，不再经过这个请求。
     loginRequested.mockReturnValue(true);
     const onContinueLocal = vi.fn();
     await act(async () => root?.render(<LoginPage isClientMode onLogin={vi.fn()} onContinueLocal={onContinueLocal} />));

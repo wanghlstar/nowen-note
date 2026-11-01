@@ -30,6 +30,7 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
    * 知识树在登录态是「服务器优先 + 离线快照」。断网且快照缺失时不能无限等，
    * 否则整张笔记列表会一直转圈。离线给更短的超时，线上保持宽松。
    */
+  const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
   const readTree = async (workspaceId: string) => {
     const timeoutMs = typeof navigator !== "undefined" && navigator.onLine === false ? 2500 : 15000;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -95,8 +96,8 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
       tree = await readTree(note.workspaceId || "personal");
     } catch (error) {
       // 个人空间断网且没有知识树快照时，不能把用户自己的本地笔记锁死。
-      // 工作区仍保持严格：访问权未被确认前不展示。
-      if (note.workspaceId) throw error;
+      // 在线失败（服务端异常/超时）仍失败关闭；工作区始终严格。
+      if (note.workspaceId || !isOffline()) throw error;
       console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码校验", error);
       return;
     }
@@ -120,8 +121,8 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
       tree = await readTree(workspaceId);
     } catch (error) {
       // 断网时知识树/密码快照可能取不到。个人空间不能让整张列表卡死或清空；
-      // 工作区继续严格：离线访问权未确认时不展示。
-      if (workspaceId && workspaceId !== "personal") throw error;
+      // 在线失败与工作区继续严格：访问权未确认时不展示。
+      if ((workspaceId && workspaceId !== "personal") || !isOffline()) throw error;
       console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码过滤", error);
       return notes;
     }

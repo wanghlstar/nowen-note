@@ -35,7 +35,8 @@ function fixture() {
   return {
     db,
     root,
-    projectRoot,
+    // Service 会把根目录 realpath（macOS 的 /var → /private/var），测试路径必须用同一形态。
+    projectRoot: fs.realpathSync(projectRoot),
     service,
     close: () => {
       db.close();

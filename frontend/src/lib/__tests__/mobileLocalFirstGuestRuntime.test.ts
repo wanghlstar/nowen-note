@@ -65,7 +65,7 @@ vi.mock("@aparajita/capacitor-secure-storage", () => ({ SecureStorage: mocks.sec
 vi.mock("@capacitor/app", () => ({ App: { addListener: vi.fn(async () => ({ remove: vi.fn() })) } }));
 vi.mock("@capacitor/network", () => ({ Network: { addListener: mocks.networkListener } }));
 vi.mock("@/lib/mobileServerEndpointRuntime", () => ({ createMobileServerEndpointRuntime: () => mocks.endpoints }));
-vi.mock("@/lib/mobileLocalAccountMigration", () => ({ migrateMobileLocalAccount: vi.fn(async () => undefined) }));
+vi.mock("@/lib/mobileLocalAccountMigration", () => ({ migrateMobileLocalAccount: vi.fn(async () => undefined), discardMigratedLocalSeed: vi.fn(async () => undefined) }));
 vi.mock("@/lib/localStore", () => ({
   getAllNotebooks: vi.fn(async () => []),
   getAllNotes: vi.fn(async () => []),

@@ -50,6 +50,6 @@ describe("issue #749 editor UX", () => {
     expect(tree).toContain('data-knowledge-tree-root-drop=""');
     expect(tree).toContain("knowledgeTreeApi.move(sourceId, { parentId: null })");
     expect(editor).toContain('data-note-format-switch=""');
-    expect(editor).toContain("convertActiveNoteFormat({ noteId: activeNote.id, targetFormat })");
+    expect(editor).toMatch(/convertActiveNoteFormat\(\{\s*noteId: activeNote\.id,\s*targetFormat,?\s*\}\)/);
   });
 });

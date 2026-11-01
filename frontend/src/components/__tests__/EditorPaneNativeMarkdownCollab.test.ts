@@ -48,9 +48,7 @@ describe("EditorPane native Markdown collaboration", () => {
 
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(editorPaneSource.slice(start, end)).toContain(
-      "key={collabYDoc ? `md-native-y-${activeNote.id}` : `md-native-${activeNote.id}`}",
-    );
+    expect(editorPaneSource.slice(start, end)).toMatch(/key=\{\s*collabYDoc\s*\?\s*`md-native-y-\$\{activeNote\.id\}`\s*:\s*`md-native-\$\{activeNote\.id\}`\s*\}/);
     expect(editorPaneSource.slice(start, end)).toContain("yDoc={collabYDoc}");
   });
   it("renders clipped HTML in preview on the first frame and while switching notes", () => {

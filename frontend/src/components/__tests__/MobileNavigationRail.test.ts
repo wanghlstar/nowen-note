@@ -16,7 +16,7 @@ describe("mobile navigation rail contract", () => {
 
   it("uses a full-width mobile drawer and shows the shortcut rail by default", () => {
     expect(appSource).toContain("w-screen max-w-none");
-    expect(appSource).toMatch(/!mobileRailHidden && <NavRail variant="mobile"(?:\s|\/)/);
+    expect(appSource).toMatch(/!mobileRailHidden &&\s*\(\s*<NavRail\s+variant="mobile"/);
     expect(preferenceSource).toContain("return stored === null ? false");
     expect(preferenceSource).toContain("return false");
     expect(preferenceSource).toContain('nowen-mobile-rail-hidden');
@@ -25,9 +25,9 @@ describe("mobile navigation rail contract", () => {
   it("uses the title icon to collapse the controls below it", () => {
     expect(railSource).toContain('const effectiveMode = variant === "mobile" ? "label" : railMode');
     expect(sidebarSource).toContain("setMobileControlsCollapsed(!mobileControlsCollapsed)");
-    expect(sidebarSource).toContain('mobileControlsCollapsed ? <PanelTopOpen size={16} /> : <PanelTopClose size={16} />');
+    expect(sidebarSource).toMatch(/mobileControlsCollapsed \? \(\s*<PanelTopOpen size=\{16\} \/>\s*\) : \(\s*<PanelTopClose size=\{16\} \/>\s*\)/);
     expect(sidebarSource.indexOf("setMobileControlsCollapsed(!mobileControlsCollapsed)")).toBeLessThan(
-      sidebarSource.indexOf('siteConfig.title || "nowen-note"'),
+      sidebarSource.indexOf("<WorkspaceSwitcher />"),
     );
     expect(sidebarSource).toContain('variant !== "mobile" || !mobileControlsCollapsed');
     expect(controlsSource).toContain("let collapsed = true");
@@ -63,7 +63,7 @@ describe("mobile navigation rail contract", () => {
     expect(sidebarSource).toContain("const [mobileRailHidden, setMobileRailHidden] = useMobileRailHidden()");
     expect(sidebarSource).toContain("{mobileRailHidden && (");
     expect(sidebarSource).toContain('data-mobile-sidebar-settings=""');
-    expect(sidebarSource).toContain('window.dispatchEvent(new CustomEvent("nowen:open-settings"))');
+    expect(sidebarSource).toMatch(/window\.dispatchEvent\(\s*new CustomEvent\("nowen:open-settings"\),?\s*\)/);
     expect(appSource).toContain('window.addEventListener("nowen:open-settings", onOpen)');
     expect(appSource).toContain('<SettingsModal onClose={() => setSettingsOpen(false)} />');
   });

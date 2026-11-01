@@ -197,14 +197,14 @@ export function normalizeFormatHeadingLevel(level: number): 1 | 2 | 3 | 4 | 5 | 
 import { redo, undo } from "@codemirror/commands";
 
 // ---------------------------------------------------------------------------
-// �������ͣ����� editors/types.ts �� NoteEditorProps����֤�� TiptapEditor ����
+// 公共类型：沿用 editors/types.ts 的 NoteEditorProps，保证与 TiptapEditor 对齐
 // ---------------------------------------------------------------------------
 
-/** Ϊ���ݾɵ� `import { HeadingItem } from "@/components/MarkdownEditor"` ���ñ������� */
+/** 为兼容旧的 `import { HeadingItem } from "@/components/MarkdownEditor"` 引用保留别名 */
 export type HeadingItem = NoteEditorHeading;
 
 interface MarkdownEditorProps extends NoteEditorProps {
-  /** AI ������ڣ��ⲿ�ɸ��ǣ���������ʹ�����õ� AIWritingAssistant ���ڸ��� */
+  /** AI 助手入口：外部可覆盖；若不传则使用内置的 AIWritingAssistant 行内浮层 */
   onAIAssistant?: () => void;
 }
 
@@ -239,7 +239,7 @@ function markdownSearchPhrases(language?: string) {
 }
 
 // ---------------------------------------------------------------------------
-// ��������С��ť + �ָ���
+// 工具栏：小按钮 + 分隔符
 // ---------------------------------------------------------------------------
 
 interface ToolbarButtonProps {
@@ -275,18 +275,18 @@ function ToolbarDivider({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// ���ⶨ��
+// 主题定义
 // ---------------------------------------------------------------------------
 
 /**
- * �Զ��������ʽ��
- *   - ����Ŵ�Ӵ�
- *   - ǿ��
- *   - �����»���
- *   - �����ȿ�����
+ * 自定义高亮样式：
+ *   - 标题放大加粗
+ *   - 强调
+ *   - 链接下划线
+ *   - 代码块等宽字体
  *
- * ��ɫ���ⲻд�����̳е�ǰ���� CSS ������--tx-primary / accent-primary �ȣ���
- * ������� EditorView.theme �ӹ��Ӿ�ϸ�ڣ����ֺ���Ŀ������һ�¡�
+ * 颜色刻意不写死，继承当前主题 CSS 变量（--tx-primary / accent-primary 等），
+ * 由下面的 EditorView.theme 接管视觉细节，保持和项目整体风格一致。
  */
 const nowenMdHighlight = HighlightStyle.define([
   { tag: t.heading1, fontSize: "1.6em", fontWeight: "700", lineHeight: "1.4" },
@@ -306,7 +306,7 @@ const nowenMdHighlight = HighlightStyle.define([
   { tag: t.list, color: "var(--color-accent-primary, #3b82f6)" },
 ]);
 
-/** �༭�� DOM �������⣨���� / �ߴ� / ��ɫ�� */
+/** 编辑器 DOM 基础主题（字体 / 尺寸 / 颜色） */
 const searchPanelTheme = EditorView.theme({
   ".cm-panels": {
     color: "var(--color-text-primary, #111827)",
@@ -583,7 +583,7 @@ const baseTheme = EditorView.theme({
 });
 
 // ---------------------------------------------------------------------------
-// �����л������� <html class="dark"> �仯���� oneDark �Ϳ����⣨��ɫ��֮���л�
+// 主题切换：监听 <html class="dark"> 变化，在 oneDark 和空主题（亮色）之间切换
 // ---------------------------------------------------------------------------
 
 function isDarkMode(): boolean {
@@ -592,7 +592,7 @@ function isDarkMode(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// �����ȡ������ lezer-markdown �� syntax tree��ȡ�� ATXHeading1..6
+// 大纲提取：遍历 lezer-markdown 的 syntax tree，取出 ATXHeading1..6
 // ---------------------------------------------------------------------------
 
 function extractHeadings(view: EditorView): NoteEditorHeading[] {
@@ -607,9 +607,9 @@ function extractHeadings(view: EditorView): NoteEditorHeading[] {
       const setext = node.name.match(/^SetextHeading(\d)$/);
       if (!m && !setext) return;
       const level = parseInt((m ? m[1] : setext![1]) as string, 10);
-      if (level < 1 || level > 3) return; // �� Tiptap ����һ�£�ֻȡ h1..h3
+      if (level < 1 || level > 3) return; // 与 Tiptap 保持一致：只取 h1..h3
       const rawLine = doc.lineAt(node.from).text;
-      // ȥ������ "### " ���� setext �»���
+      // 去掉行首 "### " 或者 setext 下划线
       const text = rawLine
         .replace(/^\s{0,3}#{1,6}\s+/, "")
         .replace(/\s+#{1,6}\s*$/, "")
@@ -628,14 +628,14 @@ function extractHeadings(view: EditorView): NoteEditorHeading[] {
 }
 
 // ---------------------------------------------------------------------------
-// ����ͳ�ƣ��� TiptapEditor һ�£�chars / charsNoSpace / words��
+// 字数统计（与 TiptapEditor 一致：chars / charsNoSpace / words）
 // ---------------------------------------------------------------------------
 
 function computeStats(text: string) {
   const plain = markdownToPlainText(text);
   const chars = plain.length;
   const charsNoSpace = plain.replace(/\s+/g, "").length;
-  // Ӣ�İ��հ��дʣ����İ��ַ��У��� Tiptap ��Ϊ���룩
+  // 英文按空白切词，中文按字符切（与 Tiptap 行为对齐）
   const englishWords = (plain.match(/[A-Za-z0-9_']+/g) || []).length;
   const cjkChars = (plain.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
   const words = englishWords + cjkChars;
@@ -655,7 +655,7 @@ function buildMarkdownVideoSnippet(result: MediaUploadResult): string {
 }
 
 // ---------------------------------------------------------------------------
-// ���
+// 组件
 // ---------------------------------------------------------------------------
 
 export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function MarkdownEditor({
@@ -722,13 +722,13 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   const isTitleComposingRef = useRef(false);
   const lastEmittedTitleRef = useRef(note.title);
 
-  /** Phase 3: �Ƿ����� CRDT Эͬģʽ��y-codemirror.next �й��ĵ��� */
+  /** Phase 3: 是否启用 CRDT 协同模式（y-codemirror.next 托管文档） */
   const collabEnabled = !!(yDoc && awareness);
   const collabEnabledRef = useRef(collabEnabled);
   collabEnabledRef.current = collabEnabled;
   const collabUndoManagerRef = useRef<Y.UndoManager | null>(null);
 
-  // �� ref ׷���� note / callbacks�������� CM6 listener ���õ����ڱհ�
+  // 用 ref 追最新 note / callbacks，避免在 CM6 listener 里拿到过期闭包
   const noteRef = useRef(note);
   noteRef.current = note;
   useEffect(() => listenMediaUploadLifecycle((detail) => {
@@ -782,26 +782,26 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   }, []);
 
   /**
-   * ���༭�����һ���ɷ��� onUpdate �� markdown �ַ�����
+   * 本编辑器最近一次派发给 onUpdate 的 markdown 字符串。
    *
-   * ������ TiptapEditor ���ͬ�� ref һ�£�EditorPane ����ɹ����� content
-   * ��� activeNote������ñ������ note.content �仯�������ؽ��ĵ��� effect��
-   * ��������ֵ����"�Լ����ɳ�ȥ���Ƿ�"����ȥ dispatch changes ���ǣ�
-   * ��û�����壬���������ڼ���������û���������ס�ѡ����ʧ����
+   * 作用与 TiptapEditor 里的同名 ref 一致：EditorPane 保存成功后会把 content
+   * 回填到 activeNote，这会让本组件的 note.content 变化并触发重建文档的 effect。
+   * 如果回填的值就是"自己刚派出去的那份"，再去 dispatch changes 覆盖，
+   * 既没有意义，还会打断正在继续输入的用户（光标跳首、选区丢失）。
    *
-   * �������� �� no-op��������Դ��Tiptap �༭�����桢�汾�ָ����������У�������
-   * ·������֤�л��༭�����ܿ����Բ���������ݡ�
+   * 命中守卫 → no-op；其他来源（Tiptap 编辑器保存、版本恢复）不会命中，走正常
+   * 路径，保证切换编辑器后能看到对侧的最新内容。
    */
   const lastEmittedContentRef = useRef<string | null>(null);
 
-  // �����л��õ� Compartment
+  // 主题切换用的 Compartment
   const themeCompartmentRef = useRef(new Compartment());
   const attachmentNoteCompartmentRef = useRef(new Compartment());
   const historyCompartmentRef = useRef(new Compartment());
   const editableCompartmentRef = useRef(new Compartment());
   const searchPhraseCompartmentRef = useRef(new Compartment());
 
-  // ���һ�δ��� pointer ʱ���������"ѡ�����ݴ������� Android ϵͳ���Ʋ˵�"�߼�
+  // 最近一次触屏 pointer 时间戳，用于"选区气泡触屏避让 Android 系统复制菜单"逻辑
   const lastTouchAtRef = useRef<number>(0);
   useEffect(() => {
     const onPointer = (e: PointerEvent) => {
@@ -826,21 +826,21 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   });
   const [attachmentLibraryOpen, setAttachmentLibraryOpen] = useState(false);
   const attachmentLibrarySelectionRef = useRef<{ from: number; to: number } | null>(null);
-  // �༭���Ƿ�۽� ���� ���������ƶ��˸����������Ƿ���ʾ
+  // 编辑器是否聚焦 —— 用来控制移动端浮动工具栏是否显示
 
-  // �ƶ����������Ƿ���������ԭ�� + ���̵���ʱ���ض������������ߵײ�������������
+  // 移动端软键盘是否弹起；用于在原生 + 键盘弹起时隐藏顶部工具栏（走底部浮动工具栏）
 
 
-  // ---------- ѡ�����ݲ˵������ʵ�����----------
+  // ---------- 选区气泡菜单（划词弹出）----------
   /**
-   * ���� Tiptap �� BubbleMenu���û�ѡ�зǿ��ı�ʱ����ѡ���Ϸ���������������
-   * ���Ӵ� / б�� / ɾ���� / ���ڴ��� / AI ���֣���
+   * 对齐 Tiptap 的 BubbleMenu：用户选中非空文本时，在选区上方弹出浮动工具栏
+   * （加粗 / 斜体 / 删除线 / 行内代码 / AI 助手）。
    *
-   * ʵ��Ҫ�㣺
-   *   - �� CM6 updateListener ����� `selectionSet`������ `sel.empty` �л��ɼ�
-   *   - ������ `view.coordsAtPos(from/to)` ȡ��β���˵�����ѡ���Ϸ�����
-   *   - ���� `view.hasFocus` ʱ������������ⲿ������ʱ��������Բ���
-   *   - �ÿ� (isGuest) ģʽ������ʾ��ʽ����ť�������� AI ���
+   * 实现要点：
+   *   - 在 CM6 updateListener 里监听 `selectionSet`，根据 `sel.empty` 切换可见
+   *   - 坐标用 `view.coordsAtPos(from/to)` 取首尾，菜单放在选区上方居中
+   *   - 仅在 `view.hasFocus` 时弹出，避免点外部工具栏时抢焦点后仍残留
+   *   - 访客 (isGuest) 模式下仍显示格式化按钮，但隐藏 AI 入口
    */
   const [selectedTextAction, setSelectedTextAction] = useState<TextAction | null>(null);
   const [bubble, setBubble] = useState<{ open: boolean; top: number; left: number }>({
@@ -849,13 +849,13 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     left: 0,
   });
 
-  // ---------- AI ���֣����ڸ��� ----------
+  // ---------- AI 助手：行内浮层 ----------
   const [aiOpen, setAiOpen] = useState(false);
   const [aiSelectedText, setAiSelectedText] = useState("");
   const [aiFullText, setAiFullText] = useState("");
   const [aiPosition, setAiPosition] = useState<{ top: number; left: number }>({ top: 100, left: 100 });
 
-  /** �� AI ���㣺���ⲿ�ṩ onAIAssistant ��ת���ⲿ */
+  /** 打开 AI 浮层：若外部提供 onAIAssistant 则转给外部 */
   const openAIAssistant = useCallback(() => {
     if (isGuest) return;
     if (onAIAssistant) {
@@ -870,7 +870,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     const full = doc.toString();
     setAiSelectedText(selected || full.slice(0, 500));
     setAiFullText(full);
-    // ���꣺����ѡ����㣬�䵽��Ļ��
+    // 坐标：优先选区起点，落到屏幕内
     const coords = view.coordsAtPos(sel.from);
     if (coords) {
       // Shared assistant owns viewport clamping (including mobile keyboards).
@@ -879,7 +879,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     setAiOpen(true);
   }, [isGuest, onAIAssistant]);
 
-  /** AI ���������ݲ��뵽��ǰѡ��β�� */
+  /** AI 将生成内容插入到当前选区尾部 */
   const handleAIInsert = useCallback((text: string) => {
     const view = viewRef.current;
     if (!view) return;
@@ -890,7 +890,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     queueMicrotask(() => view.focus());
   }, []);
 
-  /** AI �����������滻��ǰѡ�� */
+  /** AI 将生成内容替换当前选区 */
   const handleAIReplace = useCallback((text: string) => {
     const view = viewRef.current;
     if (!view) return;
@@ -1021,7 +1021,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     [tr, isGuest, editable, note.isTrashed, openAIAssistant, openAttachmentLibrary, openVoiceRecorder],
   );
 
-  // ---------- ͼƬ�ϴ����㹤����/б��/��ק/ճ���� ----------
+  // ---------- 图片上传（点工具栏/斜杠/拖拽/粘贴） ----------
 
   /** 上传图片附件，插入带真实图片扩展名的完整 URL。 */
   const insertImageFromFile = useCallback((file: File) => {
@@ -1051,7 +1051,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         reader.readAsDataURL(file);
       });
     } else {
-      // û�� note �����ģ������ϲ�Ӧ���������˻� base64
+      // 没有 note 上下文（理论上不应发生）：退回 base64
       const reader = new FileReader();
       reader.onload = () => {
         const src = reader.result;
@@ -1114,7 +1114,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       .catch((err: any) => {
         console.error("Video upload failed:", err);
         const msg = String(err?.message || "");
-        if (/���|max\s+\d+\s*MB/i.test(msg)) {
+        if (/最大|max\s+\d+\s*MB/i.test(msg)) {
           toast.error(tr("tiptap.attachmentTooLarge") || "File too large");
         } else {
           toast.error(tr("tiptap.attachmentUploadFailed") || "Attachment upload failed");
@@ -1141,12 +1141,12 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   }, [editable, insertVideoFromFile, tr]);
 
   /**
-   * �����ʽ�����ϴ� �� �� Markdown ��ǰ��괦���룺
-   *   - ͼƬ���� insertImageFromFile һ�������� `![alt](url)`
-   *   - ��ͼƬ������ `[?? �ļ��� (��С)](url)` ���� �� markdown ���ӣ��﷨��������
-   *     ��Ⱦ������������������� Content-Disposition �������ء�
+   * 任意格式附件上传 → 在 Markdown 当前光标处插入：
+   *   - 图片：与 insertImageFromFile 一样，插入 `![alt](url)`
+   *   - 非图片：插入 `[?? 文件名 (大小)](url)` —— 纯 markdown 链接，语法兼容所有
+   *     渲染器；点击后浏览器按后端 Content-Disposition 触发下载。
    *
-   * �ϴ���·�� TiptapEditor ��ȫһ�£�api.attachments.upload���������ͬһ������
+   * 上传链路和 TiptapEditor 完全一致（api.attachments.upload），服务端同一个表。
    */
   const insertAttachmentFromFile = useCallback((file: File) => {
     const view = viewRef.current;
@@ -1165,7 +1165,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         if (res.category === "image") {
           insertImage(v, res.url, file.name.replace(/\.[^.]+$/, ""));
         } else {
-          // �����ļ������ ] �ƻ� markdown ���ӣ�����Сת��
+          // 避免文件名里的 ] 破坏 markdown 链接：做最小转义
           const label = (res.filename || "attachment")
             .replace(/\]/g, "\\]")
             .replace(/\|/g, "\\|");
@@ -1177,7 +1177,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       .catch((err: any) => {
         console.error("Attachment upload failed:", err);
         const msg = String(err?.message || "");
-        if (/���|max\s+\d+\s*MB/i.test(msg)) {
+        if (/最大|max\s+\d+\s*MB/i.test(msg)) {
           toast.error(tr("tiptap.attachmentTooLarge") || "File too large");
         } else {
           toast.error(tr("tiptap.attachmentUploadFailed") || "Attachment upload failed");
@@ -1190,7 +1190,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     if (!view || !editable) return;
     const input = document.createElement("input");
     input.type = "file";
-    // ���� accept�������ʽ
+    // 不设 accept：任意格式
     input.onchange = () => {
       const file = input.files?.[0];
       if (file) insertAttachmentFromFile(file);
@@ -1199,7 +1199,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   }, [editable, insertAttachmentFromFile]);
 
 
-  // ---------- �����߼� ----------
+  // ---------- 保存逻辑 ----------
 
   const emitSave = useCallback(() => {
     const view = viewRef.current;
@@ -1211,9 +1211,9 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       : titleRef.current?.value || noteRef.current.title;
     lastEmittedContentRef.current = md;
     lastEmittedTitleRef.current = title;
-    // P0-#2 �޸���CRDT ģʽ�� content ��ȫ�ɷ���� Y.Doc �йܳ־û���
-    // �������ٷ� content ���� yjs �� debounce ��д����"���߸���ǰ��"�ľ�̬��
-    // ������ meta��title��������˫д��ͻ��
+    // P0-#2 修复：CRDT 模式下 content 完全由服务端 Y.Doc 托管持久化，
+    // 若这里再发 content 会与 yjs 的 debounce 回写产生"后者覆盖前者"的竞态。
+    // 仅发送 meta（title），避免双写冲突。
     if (collabEnabledRef.current && !/nowen-encrypted/i.test(md)) {
       if (title !== noteRef.current.title) {
         onUpdateRef.current({ title, _noteId: noteRef.current.id });
@@ -1240,7 +1240,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     try {
       toast.success(tr("tiptap.saved") || "Saved");
     } catch {
-      /* toast ������Ҳû��ϵ */
+      /* toast 不可用也没关系 */
     }
   }, [emitSave, tr]);
 
@@ -1259,9 +1259,9 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   }, []);
 
   /**
-   * �Ը������¶����ʽ API��
-   *   - flushSave(): �л��༭�� / �л��ʼ�ʱ������ pending �� debounce ����д��ȥ��
-   *                 ��ֹ���֡�������� **���� toast**�������л�˲��ˢ����
+   * 对父组件暴露命令式 API：
+   *   - flushSave(): 切换编辑器 / 切换笔记时立即把 pending 的 debounce 更新写出去，
+   *                 防止丢字。这里故意 **不弹 toast**，避免切换瞬间刷屏。
    */
   useImperativeHandle(
     ref,
@@ -1290,17 +1290,17 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         onUpdateRef.current({ title, _noteId: noteRef.current.id });
       },
       discardPending: () => {
-        // �л��༭��ʱ���÷������� PUT����� debounce �����������
+        // 切换编辑器时调用方已自行 PUT，清掉 debounce 避免后续覆盖
         if (debounceTimer.current) {
           clearTimeout(debounceTimer.current);
           debounceTimer.current = null;
         }
       },
       /**
-       * ͬ����ȡ CM6 ��ǰ�ĵ����ݣ�����"�л� MD��RTE"ʱ�����ֱ�ӻ���
-       * activeNote.content������ RTE mount ʱ������ֵ��CRDT ģʽ�� yDoc ����
-       * Ȩ����Դ��������� markdown �ַ���Ҳ�� yDoc ��������һ�£��Կ���Ϊ
-       * RTE ��ʼ���Ŀɿ����ա�
+       * 同步读取 CM6 当前文档内容，用于"切换 MD→RTE"时父组件直接回填
+       * activeNote.content，避免 RTE mount 时读到旧值。CRDT 模式下 yDoc 才是
+       * 权威来源，但这里的 markdown 字符串也与 yDoc 保持最终一致，仍可作为
+       * RTE 初始化的可靠快照。
        */
       getSnapshot: () => {
         const view = viewRef.current;
@@ -1346,27 +1346,27 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     [emitSave],
   );
 
-  // ---------- ���ι��أ����� EditorView ----------
+  // ---------- 初次挂载：创建 EditorView ----------
 
   useEffect(() => {
     if (!hostRef.current) return;
-    if (viewRef.current) return; // �����ظ�����
+    if (viewRef.current) return; // 防御重复挂载
 
-    // Phase 3��CRDT ģʽ�£���ʼ doc ���� yDoc.getText("content")������Ϊ���ַ���������� sync �����䣩
-    // ע�⣺��ʱ yDoc ���ܻ�û synced��doc ���ǿյġ���yCollab ��չ���� applyUpdate ���Զ���ӳ�� CM��
+    // Phase 3：CRDT 模式下，初始 doc 来自 yDoc.getText("content")（可能为空字符串，服务端 sync 后会填充）
+    // 注意：此时 yDoc 可能还没 synced，doc 里是空的——yCollab 扩展会在 applyUpdate 后自动反映到 CM。
     //
-    // ��ȫ׼��CRDT ��֧��**��**�� normalizeToMarkdown(note.content) ���ף���������
-    // "�ͻ��˱������� �� CM diff �� yText �� �ͻ��˷� update��ͬʱ�����Ҳ seed �� yText ��
-    // sync ���� applyUpdate" ��˫�����Ӿ�̬������� yText �������ظ�/���ҡ�
+    // 安全准则：CRDT 分支下**不**用 normalizeToMarkdown(note.content) 兜底，否则会产生
+    // "客户端本地种子 → CM diff 回 yText → 客户端发 update；同时服务端也 seed 到 yText →
+    // sync 回来 applyUpdate" 的双向种子竞态，结果是 yText 中内容重复/错乱。
     //
-    // RTE��MD �л�������Ǩ���� EditorPane.toggleEditorMode ��ǰ����ɣ�
-    // �л�ǰ�Ȱ� Tiptap JSON �淶��Ϊ markdown д�ط���� notes.content��
-    // CRDT ������ʱ����� inferMarkdownSeed �� markdown ��֧��һ���԰ѽṹ�� MD
-    // ע�� yText��y:sync �������ܿ�����ȷ���ݡ�
+    // RTE→MD 切换的内容迁移在 EditorPane.toggleEditorMode 里前置完成：
+    // 切换前先把 Tiptap JSON 规范化为 markdown 写回服务端 notes.content，
+    // CRDT 冷启动时服务端 inferMarkdownSeed 走 markdown 分支，一次性把结构化 MD
+    // 注入 yText，y:sync 回来就能看到正确内容。
     let initialDoc: string;
     if (collabEnabled && yDoc) {
       initialDoc = yDoc.getText("content").toString();
-      // yText ���վ����գ��� y:sync
+      // yText 还空就留空，等 y:sync
       if (!initialDoc) initialDoc = "";
     } else {
       initialDoc = normalizeToMarkdown(note.content, note.contentText);
@@ -1423,10 +1423,10 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     });
 
     /**
-     * ѡ�����ݲ˵� listener��
-     *   - ֻҪѡ���߽�򽹵㷢���仯�����¼���λ��
-     *   - ��ѡ�� / ʧ�� / �뿪�ӿ� �� �ر�
-     *   - �ǿ�ѡ�� �� �ŵ�ѡ�������Ϸ� 8px��ˮƽ���У������ӿڱ߽�ʱ�� clamp
+     * 选区气泡菜单 listener：
+     *   - 只要选区边界或焦点发生变化就重新计算位置
+     *   - 空选区 / 失焦 / 离开视口 → 关闭
+     *   - 非空选区 → 放到选区顶部上方 8px，水平居中；靠近视口边界时做 clamp
      */
     const bubbleListener = EditorView.updateListener.of((update) => {
       if (!update.selectionSet && !update.docChanged && !update.focusChanged && !update.geometryChanged) {
@@ -1444,11 +1444,11 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         setBubble((b) => (b.open ? { ...b, open: false } : b));
         return;
       }
-      // ˮƽλ�ã�ѡ���е�
+      // 水平位置：选区中点
       const cx = (startCoords.left + endCoords.right) / 2;
-      // ��ֱ���ò��ԣ��� Tiptap һ�£���
-      //   ���/����  �� ѡ���Ϸ�
-      //   ���ڴ��� �� ѡ���·������� Android ϵͳԭ�����Ʋ˵���
+      // 垂直避让策略（与 Tiptap 一致）：
+      //   鼠标/桌面  → 选区上方
+      //   近期触屏 → 选区下方（错开 Android 系统原生复制菜单）
       const isNativeAndroidSurface = document.documentElement.getAttribute("data-native") === "android";
       const isTouch = isNativeAndroidSurface || Date.now() - lastTouchAtRef.current < 800;
       const bubbleH = 40;
@@ -1470,13 +1470,13 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     });
 
     /**
-     * �۽�״̬ͬ�� listener��Ԥ���ⲿ�ӿڣ�
-     * v2026-05-18��ԭΪ�ƶ��˸���������ʹ�á��ָ�Ϊ��һ����
-     * sticky ��������������Ҫ���������� listener ���������Ҫ
-     * ʱ�ظ����롣���� state ����Զ���ᴥ�� re-render��
+     * 聚焦状态同步 listener（预留外部接口）
+     * v2026-05-18：原为移动端浮动工具栏使用。现改为单一顶部
+     * sticky 主工具栏后不再需要，但保留空 listener 避免后续需要
+     * 时重复接入。不设 state 则永远不会触发 re-render。
      */
     const focusListener = EditorView.updateListener.of((_update) => {
-      // ��ʵ�֣�Ԥ����չ�㡣
+      // 空实现：预留扩展点。
     });
 
 
@@ -1486,18 +1486,18 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       doc: initialDoc,
       extensions: [
         attachmentNoteCompartmentRef.current.of(markdownLivePreviewNoteId.of(isGuest ? null : note.id)),
-        // Phase 3: CRDT Эͬ��չ�������ã�
-        // yCollab ������ڿ�ǰ��λ�ã������ȴ��� doc ���
-        // P3-#14����ʽ���� UndoManager �ó������Ȱ�����ϲ���350ms window��
+        // Phase 3: CRDT 协同扩展（若启用）
+        // yCollab 必须放在靠前的位置，让它先处理 doc 变更
+        // P3-#14：显式配置 UndoManager 让撤销粒度按词语合并（350ms window）
         ...(collabEnabled && yDoc && awareness
           ? [yCollab(yDoc.getText("content"), awareness, {
             undoManager: (collabUndoManagerRef.current = new Y.UndoManager(yDoc.getText("content"), { captureTimeout: 350 })),
           })]
           : []),
 
-        // �����༭����
+        // 基础编辑能力
         lineNumbers({
-          // Ĭ�������кţ������� gutter������δ��װ��
+          // 默认隐藏行号，但保留 gutter，便于未来装饰
           formatNumber: () => "",
         }),
         highlightActiveLineGutter(),
@@ -1517,9 +1517,9 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         EditorView.lineWrapping,
         ...internalMarkdownMarkerExtensions,
         EditorView.contentAttributes.of({ spellcheck: "false" }),
-        placeholder(tr("tiptap.placeholder") || "��ʼд��ʲô..."),
+        placeholder(tr("tiptap.placeholder") || "开始写点什么..."),
 
-        // MD �﷨ + �����Ƕ�׸���
+        // MD 语法 + 代码块嵌套高亮
         markdown({
           base: markdownLanguage,
           codeLanguages: languages,
@@ -1527,14 +1527,14 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         }),
         syntaxHighlighting(nowenMdHighlight),
 
-        // ���� + �ɱ༭���أ��� Compartment ��̬�л���
+        // 主题 + 可编辑开关（用 Compartment 动态切换）
         baseTheme,
         themeCompartmentRef.current.of(isDarkMode() ? oneDark : []),
         editableCompartmentRef.current.of(EditorView.editable.of(editable)),
         searchPhraseCompartmentRef.current.of(markdownSearchPhrases(i18n.resolvedLanguage || i18n.language)),
         searchPanelTheme,
 
-        // ��ݼ�������Ĭ�� keymap ע�ᣬ��֤ Mod-s ���� chrome �̣�
+        // 快捷键（先于默认 keymap 注册，保证 Mod-s 不被 chrome 吞）
         saveKeymap,
         keymap.of([
           ...closeBracketsKeymap,
@@ -1546,15 +1546,15 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           indentWithTab,
         ]),
 
-        // �������
+        // 变更监听
         updateListener,
         bubbleListener,
         focusListener,
 
-        // б�ܲ˵� plugin
+        // 斜杠菜单 plugin
         createSlashPlugin((s) => setSlashState(s)),
 
-        // ͼƬ / ���� ճ�� & ��ק���� TiptapEditor ��Ϊ����
+        // 图片 / 附件 粘贴 & 拖拽：与 TiptapEditor 行为对齐
         EditorView.domEventHandlers({
           click(event, view) {
             if (!editable) return false;
@@ -1590,7 +1590,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
                 }
               }
             }
-            // 2) ����ͼƬ����ͼճ����
+            // 2) 从图片或截图粘贴 →
             if (items) {
               for (const item of items) {
                 if (item.type.startsWith("image/")) {
@@ -1603,7 +1603,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
                 }
               }
             }
-            // 3) ��ͼƬ�ļ�����Դ���������Ƶ��ļ����� ����
+            // 3) 拖入图片/视频文件 → 处理
             const files = Array.from(event.clipboardData?.files || []);
             if (files.length > 0) {
               event.preventDefault();
@@ -1703,7 +1703,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     });
     viewRef.current = view;
 
-    // ��ʼͳ�� + ���
+    // 初始统计 + 大纲
     setWordStats(computeStats(initialDoc));
     setPreviewMarkdown(initialDoc);
     onHeadingsChangeRef.current?.(extractHeadings(view));
@@ -1720,7 +1720,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- �л��ʼ� / �ⲿ�ָ��汾��ͬ���ĵ����� ----------
+  // ---------- 切换笔记 / 外部恢复版本：同步文档内容 ----------
 
   const lastSyncedNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1734,14 +1734,14 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     // A delayed pre-save preview must not replace the server-confirmed document.
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
 
-    // �л�ʱ�������� debounce������Ѿɱʼ�����д���±ʼ�
+    // 切换时先清理旧 debounce，避免把旧笔记内容写入新笔记
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
     }
 
-    // Phase 3: CRDT ģʽ���ĵ��� yCollab �йܣ���Ҫ�ֶ� dispatch setContent��
-    // ������������ update ����Զ��״̬��ֻ����ͳ��/���ˢ�¡�
+    // Phase 3: CRDT 模式下文档由 yCollab 托管，不要手动 dispatch setContent，
+    // 否则会产生本地 update 覆盖远端状态。只保留统计/大纲刷新。
     const isSwitchingNote = lastSyncedNoteIdRef.current !== note.id;
 
     if (collabEnabledRef.current) {
@@ -1763,20 +1763,20 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       return;
     }
 
-    // �л��ʼ�ʱ������д�������±ʼǵ� content �϶�Ҫ����Ӧ�ã�
+    // 切换笔记时重置自写守卫（新笔记的 content 肯定要真正应用）
     if (isSwitchingNote) {
       lastEmittedContentRef.current = null;
       lastSyncedNoteIdRef.current = note.id;
       setViewMode(defaultViewMode);
     }
 
-    // ��д�Զ����������� EditorPane ����ɹ���� content ��� activeNote��
-    // �������ľ���"�Լ���һ���ɳ�ȥ���Ƿ� markdown"������Ҫ dispatch �����ĵ�
-    // �����ϼ������� / ���ѡ������
+    // 自写自读守卫：父级 EditorPane 保存成功会把 content 回填到 activeNote，
+    // 如果回填的就是"自己上一次派出去的那份 markdown"，不需要 dispatch 覆盖文档
+    // （会打断继续输入 / 清除选区）。
     //
-    // ע�⣺�Ƚ϶����� note.content������ normalize ��� markdown������Ϊ���༭��
-    // �ɷ�����ʱ�õľ������ markdown �ַ������Բ� Tiptap ������� JSON��
-    // ���������������� markdown����Ȼ���������������й��������õ��������ݡ�
+    // 注意：比较对象是 note.content（不是 normalize 后的 markdown），因为本编辑器
+    // 派发保存时用的就是裸的 markdown 字符串；对侧 Tiptap 保存的是 JSON，
+    // 不会等于我们这里的 markdown，天然不会命中守卫，切过来就能拿到最新内容。
     if (
       lastEmittedContentRef.current !== null &&
       note.content === lastEmittedContentRef.current
@@ -1839,12 +1839,12 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           ...(protectedSelection ? { selection: protectedSelection } : {}),
         });
       }
-      // ������һ΢������������� Tiptap ��ȼ��߼���
+      // 事务下一微任务里解锁（与 Tiptap 侧等价逻辑）
       queueMicrotask(() => {
         isSettingContent.current = false;
       });
-      // �ⲿ�������ؽ� doc ֮�󣬵�ǰ���е� content �Ѳ��ٵ����Լ�֮ǰ�ɳ�ȥ��ֵ��
-      // ��� lastEmitted ��������Ϊ"��д"��
+      // 外部驱动的重建 doc 之后，当前持有的 content 已不再等于自己之前派出去的值，
+      // 清掉 lastEmitted 避免误判为"自写"。
       lastEmittedContentRef.current = null;
     }
 
@@ -1855,18 +1855,18 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     if (titleRef.current && !isTitleComposingRef.current) {
       titleRef.current.value = note.title;
     }
-    // ���� content ������ version���� TiptapEditor ����һ�µ����塣
-    // ���� EditorPane ����� content������ effect ���Ƶ��������
-    // ����� lastEmittedContentRef �����������"�Լ�д���ֱ� setContent ����"��
+    // 依赖 content 不依赖 version：与 TiptapEditor 保持一致的语义。
+    // 现在 EditorPane 会回填 content，所以 effect 会更频繁触发，
+    // 上面的 lastEmittedContentRef 守卫负责避免"自己写完又被 setContent 回来"。
   }, [note.id, note.content, note.contentText, defaultViewMode]);
 
-  // ---------- ���ⵥ��ͬ�� ----------
+  // ---------- 标题单独同步 ----------
   //
-  // Ϊʲô������������� input �Ƿ��ܿصģ�`defaultValue={note.title}`����
-  // ������� effect ֻ�� [note.id, note.content] �仯ʱ�Ż��ܡ�
-  // ���ⲿֻ�Ķ� title�����ͣ���"AI ���ɱ���"��ť����˷����±��� �� setActiveNote����
-  // content û�䣬�� effect ��������DOM ��ı�����Զ���־�ֵ�����û�����Ϊ
-  //��AI ���ɱ���û��Ч���������һ��ר�� effect ���� note.title ���ɡ�
+  // 为什么单拎出来：标题 input 是非受控的（`defaultValue={note.title}`），
+  // 上面的主 effect 只在 [note.id, note.content] 变化时才会跑。
+  // 当外部只改动 title（典型：点"AI 生成标题"按钮，后端返回新标题 → setActiveNote），
+  // content 没变，主 effect 不触发，DOM 里的标题永远保持旧值——用户会以为
+  //「AI 生成标题没生效」。这里加一个专用 effect 监听 note.title 即可。
   useEffect(() => {
     const el = titleRef.current;
     if (!el) return;
@@ -1890,7 +1890,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     el.style.height = `${el.scrollHeight}px`;
   }, [note.id, note.title]);
 
-  // ---------- editable ����ͬ�� ----------
+  // ---------- editable 开关同步 ----------
 
   useEffect(() => {
     const view = viewRef.current;
@@ -1902,7 +1902,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     });
   }, [editable]);
 
-  // ---------- ������� <html class="dark"> �л� ----------
+  // ---------- 主题跟随 <html class="dark"> 切换 ----------
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -1931,7 +1931,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     return () => observer.disconnect();
   }, []);
 
-  // ---------- ��¶ scrollTo ��������������ת�� ----------
+  // ---------- 暴露 scrollTo 给父组件（大纲跳转） ----------
 
   const scrollSourceTo = useCallback((pos: number, focus = true) => {
     const view = viewRef.current;
@@ -1972,22 +1972,22 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
   }, [onEditorReady, scrollPreviewTo, scrollSourceTo]);
 
   /**
-   * ����˸�ʽ�˵��ţ�macOS ԭ���˵� / ��ݼ� �� CodeMirror��
+   * 桌面端格式菜单桥（macOS 原生菜单 / 快捷键 → CodeMirror）
    * ----------------------------------------------------------------
-   * �� TiptapEditor ����ͬһ�� "nowen:format" �¼���Լ���� useDesktopMenuBridge
-   * ���յ� Electron ������ "menu:format" IPC ʱ�ɷ�����
+   * 与 TiptapEditor 共用同一个 "nowen:format" 事件契约（由 useDesktopMenuBridge
+   * 在收到 Electron 主进程 "menu:format" IPC 时派发）。
    *
-   * Markdown ? ����ӳ�䣺
-   *   bold      �� toggleWrap("**")
-   *   italic    �� toggleWrap("*")
-   *   strike    �� toggleWrap("~~")
-   *   code      �� toggleInlineCode
-   *   underline �� toggleWrap("<u>", "</u>")   // MD û��ԭ���»��ߣ��� HTML ��ǩ��
-   *                                             ��Ⱦ�ࣨԤ�� / contentFormat����֧��
-   *   heading lv�� toggleHeading(v, lv)
-   *   paragraph �� toggleHeading(v, 0)          // ������ toggleHeading ������룺0 = ȥ����
+   * Markdown ? 语义映射：
+   *   bold      → toggleWrap("**")
+   *   italic    → toggleWrap("*")
+   *   strike    → toggleWrap("~~")
+   *   code      → toggleInlineCode
+   *   underline → toggleWrap("<u>", "</u>")   // MD 没有原生下划线，用 HTML 标签；
+   *                                             渲染侧（预览 / contentFormat）已支持
+   *   heading lv→ toggleHeading(v, lv)
+   *   paragraph → toggleHeading(v, 0)          // 与现有 toggleHeading 语义对齐：0 = 去标题
    *
-   * ������view δ���� / !editable ʱ���ԣ������������� view �� dispatch��
+   * 守卫：view 未就绪 / !editable 时忽略，避免在已销毁 view 上 dispatch。
    */
   useEffect(() => {
     if (!editable) return;
@@ -2003,7 +2003,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           case "italic": toggleWrap(view, "*"); break;
           case "strike": toggleWrap(view, "~~"); break;
           case "code": toggleInlineCode(view); break;
-          // MD ��ԭ���»����﷨���� HTML ���ס�toggleWrap �ĵ� 3 �����ڷǶԳư�����
+          // MD 无原生下划线语法，用 HTML 兜底。toggleWrap 的第 3 参用于非对称包裹。
           case "underline": toggleWrap(view, "<u>", "</u>"); break;
         }
         view.focus();
@@ -2016,10 +2016,10 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         return;
       }
       if (detail.node === "paragraph") {
-        // "ת����" = ��ȥ���� #{1,6} \s+���������κ���ǰ׺��
-        // toggleLinePrefix("", [/^#{1,6}\s+/]) ǡ��ʵ��������壺
-        //   - ƥ�䵽����ǰ׺ �� �滻Ϊ ""��ɾ������
-        //   - ����������    �� ���� "" ǰ׺��no-op����
+        // "转正文" = 剥去行首 #{1,6} \s+，不添加任何新前缀。
+        // toggleLinePrefix("", [/^#{1,6}\s+/]) 恰好实现这个语义：
+        //   - 匹配到标题前缀 → 替换为 ""（删除）；
+        //   - 本就是正文    → 新增 "" 前缀（no-op）。
         toggleLinePrefix(view, "", [/^#{1,6}\s+/]);
         view.focus();
       }
@@ -2028,7 +2028,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     return () => window.removeEventListener("nowen:format", handler as EventListener);
   }, [editable]);
 
-  // ---------- ����仯�������� ----------
+  // ---------- 标题变化触发保存 ----------
 
   const handleTitleBlur = useCallback(() => {
     if (shouldSkipTitleChange({
@@ -2122,11 +2122,11 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     } });
   }, [editable, isGuest, note.id, note.isTrashed]);
 
-  // ---------- ��ǩ�仯 ----------
+  // ---------- 标签变化 ----------
 
   const noteTags = useMemo(() => note.tags || [], [note.tags]);
 
-  // ---------- ���������ͳһ�� viewRef ȡ view ----------
+  // ---------- 工具栏命令：统一从 viewRef 取 view ----------
 
   const withView = useCallback((fn: (v: EditorView) => void) => {
     const v = viewRef.current;
@@ -2211,7 +2211,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
     return subscribeBlockNavigation((request) => { if (request.noteId === note.id) void jump(request.blockId); });
   }, [note.id]);
 
-  // ---------- ��Ⱦ ----------
+  // ---------- 渲染 ----------
 
   return (
     <div
@@ -2286,7 +2286,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           <ToolbarButton
             className="max-md:hidden"
             onClick={() => withView((v) => undo(v))}
-            title={tr("tiptap.undo") || "����"}
+            title={tr("tiptap.undo") || "撤销"}
           >
             <Undo size={iconSize} />
           </ToolbarButton>
@@ -2345,38 +2345,38 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           <ToolbarButton
             className="max-md:hidden"
             onClick={() => withView((v) => toggleHeading(v, 1))}
-            title={tr("tiptap.heading1") || "һ������"}
+            title={tr("tiptap.heading1") || "一级标题"}
           >
             <Heading1 size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             className="max-md:hidden"
             onClick={() => withView((v) => toggleHeading(v, 2))}
-            title={tr("tiptap.heading2") || "��������"}
+            title={tr("tiptap.heading2") || "二级标题"}
           >
             <Heading2 size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleHeading(v, 3))}
-            title={tr("tiptap.heading3") || "��������"}
+            title={tr("tiptap.heading3") || "三级标题"}
           >
             <Heading3 size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleHeading(v, 4))}
-            title={tr("tiptap.heading4") || "�ļ�����"}
+            title={tr("tiptap.heading4") || "标题 4"}
           >
             <Heading4 size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleHeading(v, 5))}
-            title={tr("tiptap.heading5") || "�������"}
+            title={tr("tiptap.heading5") || "标题 5"}
           >
             <Heading5 size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleHeading(v, 6))}
-            title={tr("tiptap.heading6") || "�������"}
+            title={tr("tiptap.heading6") || "标题 6"}
           >
             <Heading6 size={iconSize} />
           </ToolbarButton>
@@ -2386,25 +2386,25 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           <ToolbarButton
             className="max-md:hidden"
             onClick={() => withView((v) => toggleWrap(v, "**"))}
-            title={tr("tiptap.bold") || "�Ӵ�"}
+            title={tr("tiptap.bold") || "加粗"}
           >
             <Bold size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleWrap(v, "*"))}
-            title={tr("tiptap.italic") || "б��"}
+            title={tr("tiptap.italic") || "斜体"}
           >
             <Italic size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleWrap(v, "~~"))}
-            title={tr("tiptap.strikethrough") || "ɾ����"}
+            title={tr("tiptap.strikethrough") || "删除线"}
           >
             <Strikethrough size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleInlineCode(v))}
-            title={tr("tiptap.inlineCode") || "���ڴ���"}
+            title={tr("tiptap.inlineCode") || "行内代码"}
           >
             <CodeIcon size={iconSize} />
           </ToolbarButton>
@@ -2414,19 +2414,19 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           <ToolbarButton
             className="max-md:hidden"
             onClick={() => withView((v) => toggleBulletList(v))}
-            title={tr("tiptap.bulletList") || "�����б�"}
+            title={tr("tiptap.bulletList") || "无序列表"}
           >
             <List size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleOrderedList(v))}
-            title={tr("tiptap.orderedList") || "�����б�"}
+            title={tr("tiptap.orderedList") || "有序列表"}
           >
             <ListOrdered size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleTaskList(v))}
-            title={tr("tiptap.taskList") || "�����б�"}
+            title={tr("tiptap.taskList") || "任务列表"}
           >
             <CheckSquare size={iconSize} />
           </ToolbarButton>
@@ -2435,29 +2435,29 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
 
           <ToolbarButton
             onClick={() => withView((v) => toggleBlockquote(v))}
-            title={tr("tiptap.blockquote") || "����"}
+            title={tr("tiptap.blockquote") || "引用"}
           >
             <Quote size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleCodeBlock(v))}
-            title={tr("tiptap.codeBlock") || "�����"}
+            title={tr("tiptap.codeBlock") || "代码块"}
           >
             <FileCode size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => insertHorizontalRule(v))}
-            title={tr("tiptap.horizontalRule") || "�ָ���"}
+            title={tr("tiptap.horizontalRule") || "分割线"}
           >
             <Minus size={iconSize} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => insertLink(v))}
-            title={tr("tiptap.insertLink") || "��������"}
+            title={tr("tiptap.insertLink") || "插入链接"}
           >
             <LinkIcon size={iconSize} />
           </ToolbarButton>
-          <ToolbarButton className="max-md:hidden" onClick={triggerImagePicker} title={tr("tiptap.insertImage") || "����ͼƬ"}>
+          <ToolbarButton className="max-md:hidden" onClick={triggerImagePicker} title={tr("tiptap.insertImage") || "插入图片"}>
             <ImagePlus size={iconSize} />
           </ToolbarButton>
           <ToolbarButton className="max-md:hidden" onClick={triggerVideoPicker} title={tr("tiptap.uploadLocalVideo") || "插入本地视频"}>
@@ -2474,7 +2474,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => insertTable(v))}
-            title={tr("tiptap.insertTable") || "�������"}
+            title={tr("tiptap.insertTable") || "插入表格"}
           >
             <Table2 size={iconSize} />
           </ToolbarButton>
@@ -2556,7 +2556,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         </>
       )}
 
-      {/* ������ */}
+      {/* 标题栏 */}
       <div
         data-markdown-mobile-title=""
         className={cn("px-4 md:px-8 pb-1", compactMobileEditing ? "pt-2" : "pt-3")}
@@ -2565,7 +2565,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           ref={titleRef}
           rows={1}
           defaultValue={note.title}
-          placeholder={tr("tiptap.titlePlaceholder") || "�ޱ���"}
+          placeholder={tr("tiptap.titlePlaceholder") || "无标题"}
           onBlur={handleTitleBlur}
           onCompositionStart={handleTitleCompositionStart}
           onCompositionEnd={handleTitleCompositionEnd}
@@ -2591,10 +2591,10 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         )}
       </div>
 
-      {/* �༭������
-          paddingBottom ֻ�Լ��̸߶ȣ������걻���뷨��ס��
-          v2026-05-18 ���Ƴ��ƶ��������������ɶ��� sticky ��������ͳһ
-          �е���ʽ����� */}
+      {/* 编辑器主体
+          paddingBottom 只吃键盘高度，避免光标被输入法挡住。
+          v2026-05-18 起移除移动浮动工具栏，由顶部 sticky 主工具栏统一
+          承担格式化命令。 */}
       {/* editor content area - source/preview/split */}
       <div className={cn(
         "flex-1 min-h-0",
@@ -2644,7 +2644,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         )}
       </div>
 
-      {/* ״̬��������ͳ�ƣ��� TiptapEditor ���룩 */}
+      {/* 状态栏：字数统计（与 TiptapEditor 对齐） */}
       <div
         data-markdown-mobile-status=""
         className={cn(
@@ -2658,7 +2658,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
         <span className="ml-auto opacity-60">Markdown</span>
       </div>
 
-      {/* б�ܲ˵����� */}
+      {/* 斜杠菜单浮层 */}
       <MarkdownSlashMenu
         state={slashState}
         items={slashItems}
@@ -2676,10 +2676,10 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       />
 
       {/*
-        �������ݲ˵������� Tiptap �� BubbleMenu��
-        - ֻ���зǿ�ѡ�� + �༭���۽�ʱ����
-        - �� fixed ��λ + �ӿ����꣬���ⱻ��������ü�
-        - onMouseDown ��ֹĬ����Ϊ����ֹ�㰴ťʱ CM ʧ������ѡ����ʧ
+        划词气泡菜单（对齐 Tiptap 的 BubbleMenu）
+        - 只在有非空选区 + 编辑器聚焦时出现
+        - 用 fixed 定位 + 视口坐标，避免被溢出容器裁剪
+        - onMouseDown 阻止默认行为，防止点按钮时 CM 失焦导致选区丢失
       */}
       {editable && bubble.open && (
         <div
@@ -2722,25 +2722,25 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
           )}
           <ToolbarButton
             onClick={() => withView((v) => toggleWrap(v, "**"))}
-            title={tr("tiptap.bold") || "�Ӵ�"}
+            title={tr("tiptap.bold") || "加粗"}
           >
             <Bold size={14} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleWrap(v, "*"))}
-            title={tr("tiptap.italic") || "б��"}
+            title={tr("tiptap.italic") || "斜体"}
           >
             <Italic size={14} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleWrap(v, "~~"))}
-            title={tr("tiptap.strikethrough") || "ɾ����"}
+            title={tr("tiptap.strikethrough") || "删除线"}
           >
             <Strikethrough size={14} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => withView((v) => toggleInlineCode(v))}
-            title={tr("tiptap.inlineCode") || "���ڴ���"}
+            title={tr("tiptap.inlineCode") || "行内代码"}
           >
             <CodeIcon size={14} />
           </ToolbarButton>
@@ -2755,7 +2755,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
               </ToolbarButton>
               <ToolbarButton
                 onClick={openAIAssistant}
-                title={tr("tiptap.aiAssistant") || "AI ����"}
+                title={tr("tiptap.aiAssistant") || "AI 助手"}
               >
                 <Sparkles size={14} className="text-violet-500" />
               </ToolbarButton>
@@ -2765,7 +2765,7 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       )}
 
 
-      {/* AI д���������ڸ��㣨���Ƿÿ� & δ���� onAIAssistant ����ʱ���ã� */}
+      {/* AI 写作助手行内浮层（仅非访客 & 未传入 onAIAssistant 覆盖时可用） */}
       {!isGuest && aiOpen && isFeatureEnabled("ai") && (
         <AIWritingAssistant
           selectedText={aiSelectedText}
@@ -2778,19 +2778,19 @@ export default forwardRef<NoteEditorHandle, MarkdownEditorProps>(function Markdo
       )}
 
       {/*
-        �ƶ��˸����������������������Ϸ���
-      {/* �ƶ��˹�������Ǩ�Ƶ��� Toolbar ֮�󣬲ο��·������Ⱦ�� */}
+        移动端浮动工具栏（吸附键盘正上方）
+      {/* 移动端工具栏已迁移到主 Toolbar 之后，参考下方组件渲染处 */}
     </div>
   );
 });
 
 // ---------------------------------------------------------------------------
-// ������������ֹ Vite HMR ʱ���� view
+// 开发辅助：防止 Vite HMR 时残留 view
 // ---------------------------------------------------------------------------
-// ��ռλ��δ������Ҫ���� import.meta.hot �ص������� viewRef��
+// （占位，未来若需要可在 import.meta.hot 回调里清理 viewRef）
 
 // ---------------------------------------------------------------------------
-// ���ߣ�����ɶ����ֽڴ�С���� TiptapEditor һ�£��������һ�ݱ������� import��
+// 工具：人类可读的字节大小（与 TiptapEditor 一致；这里独立一份避免跨组件 import）
 // ---------------------------------------------------------------------------
 function formatBytesMd(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "";

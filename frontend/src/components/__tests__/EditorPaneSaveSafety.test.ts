@@ -65,11 +65,14 @@ describe("EditorPane save safety", () => {
       "const flushToLocal = () => {",
       "const onPageHide = () => flushToLocal();",
     );
-    const saveFailureFallback = sourceBetween(
-      editorPaneSource,
-      "const snap = editorHandleRef.current?.getSnapshot?.();",
-      "console.warn(\"[EditorPane] enqueue offline fallback failed:\"",
+    const fallbackWarn = editorPaneSource.indexOf(
+      '"[EditorPane] enqueue offline fallback failed:"',
     );
+    const enqueueStart = editorPaneSource.lastIndexOf(
+      "enqueueOfflineMutation({",
+      fallbackWarn,
+    );
+    const saveFailureFallback = editorPaneSource.slice(enqueueStart, fallbackWarn);
 
     expect(pageHideFallback).toContain("contentFormat: note.contentFormat");
     expect(saveFailureFallback).toContain("contentFormat: currentNote.contentFormat");
@@ -107,7 +110,7 @@ describe("EditorPane save safety", () => {
     const aiTitle = sourceBetween(
       editorPaneSource,
       "const handleAITitle = useCallback(async () => {",
-      "// AI �Ƽ���ǩ",
+      "const handleAITags = useCallback",
     );
 
     expect(aiTitle).not.toContain("getNoteSlim");
@@ -135,7 +138,7 @@ describe("EditorPane save safety", () => {
   it("skips unchanged title-only editor updates before entering saving state", () => {
     const handleUpdatePrefix = sourceBetween(
       editorPaneSource,
-      "const handleUpdate = useCallback(async",
+      "const handleUpdate = useCallback(",
       "actions.setSyncStatus(\"saving\");",
     );
 
@@ -185,7 +188,7 @@ describe("EditorPane save safety", () => {
     const checkRemote = sourceBetween(
       editorPaneSource,
       "async function checkActiveNoteRemoteVersion",
-      "const { presenceUsers",
+      "const applied = (event: Event)",
     );
 
     expect(applyRemote).not.toContain("if (collabYDocRef.current) return;");

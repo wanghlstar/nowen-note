@@ -2623,6 +2623,12 @@
     "copyMarkdown": "复制 Markdown"
   },
   "server": {
+    "forgetRecent": "删除这条记录",
+    "lanScanAction": "扫描",
+    "lanScanAdvanced": "手动扫描（组网 / 跨网段，高级）",
+    "lanScanHint": "已自动探测 mDNS 与之前用过的服务器；只有自动找不到时才需要在这里手动填网段+端口（仅私有网段，最多 /24）。",
+    "lanScanSubnetPlaceholder": "网段，如 192.168.2.0/24",
+    "recentServers": "最近使用",
     "title": "连接服务器",
     "subtitle": "输入 Nowen Note 服务器地址以开始使用",
     "addressLabel": "服务器地址",

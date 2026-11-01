@@ -417,10 +417,10 @@ function OrdinaryEditorPane({
     [actions, loadNote, t],
   );
 
-  // �бʼ�ʱ��ƫ��Ӧ��"�򿪼�����"��
-  // ����ֻ�� activeNote.id �仯ʱ��һ�Σ������� prefs.lockOnOpen���������û���
-  // �������ѿ��شӿ��е��أ������̰ѵ�ǰ�ʼǵĻỰ��Ҳ�����������"�Ҹջ��ڿ���
-  // �ܱ����ʼǱ�͵͵������"����ֱ�ۡ����صı仯ֻӰ��"�´δ��±ʼ�ʱ"�ĳ�ֵ��
+  // 切笔记时按偏好应用"打开即锁定"。
+  // 必须只在 activeNote.id 变化时跑一次，不依赖 prefs.lockOnOpen——否则用户在
+  // 设置面板把开关从开切到关，会立刻把当前笔记的会话锁也撤销，体感是"我刚还在看的
+  // 受保护笔记被偷偷解锁了"，不直观。开关的变化只影响"下次打开新笔记时"的初值。
   useEffect(() => {
     const id = activeNote?.id ?? null;
     // React StrictMode may replay this effect; only process a given opening once.
@@ -527,61 +527,61 @@ function OrdinaryEditorPane({
   const [modeSwitching, setModeSwitching] = useState(false);
 
   /**
-   * ���һ�� handleUpdate ������ PUT Promise��
+   * 最近一次 handleUpdate 触发的 PUT Promise。
    *
-   * ��;���༭��ģʽ�л�ʱ�� RTE �� debounce �պ��� 500ms ǰ fire ���� PUT ����;�У�
-   * ��ʹ�л�ʱ `discardPending()` ���˱��� timer Ҳ�޷���ֹ������ڷɵ�����
-   * �����ǽ�����Ҫ��һ�δ�ͬ version ��"�淶�� PUT"�����߲�������ɣ�
-   *   - �ȵ��� bump version=N+1�����ߴ��� version=N �� 409
-   *   - 409 reconcile �������� version �ط�"����"�����ܰ� notes.content д��
-   *     �� Tiptap JSON��ȡ���ڵ�����򣩣������л��ɹ�������
+   * 用途：编辑器模式切换时若 RTE 的 debounce 刚好在 500ms 前 fire 了且 PUT 还在途中，
+   * 即使切换时 `discardPending()` 清了本地 timer 也无法阻止这个正在飞的请求。
+   * 而我们接下来要发一次带同 version 的"规范化 PUT"，二者并发会造成：
+   *   - 先到者 bump version=N+1；后到者带旧 version=N → 409
+   *   - 409 reconcile 会用最新 version 重放"后到者"，可能把 notes.content 写回
+   *     旧 Tiptap JSON（取决于到达次序），导致切换成果被覆盖
    *
-   * �����toggleEditorMode ����ʱ await �� promise���� in-flight �� handleUpdate
-   * ���꣨handleUpdate ���Ѿ����� 409/���� version����֮�����ǵĹ淶�� PUT �õ�
-   * ����"������û�� in-flight"�İ汾�ţ����԰�ȫ������
+   * 解决：toggleEditorMode 进入时 await 该 promise，让 in-flight 的 handleUpdate
+   * 跑完（handleUpdate 里已经处理 409/回填 version），之后我们的规范化 PUT 拿到
+   * 就是"最新且没有 in-flight"的版本号，可以安全并发。
    */
   const saveInflightRef = useRef<Promise<void> | null>(null);
 
   /**
-   * �л� MD ? Tiptap��
+   * 切换 MD ⇄ Tiptap：
    *
-   * ����Э��� `docs/editor-mode-switch.md`�����ɲ��裺
-   *   1) ���������ȥ�� / Эͬδ sync ʱ�ܾ�
-   *   2) ��¼ preSwitchNote ���գ�ʧ�ܻع��ã�
-   *   3) await saveInflightRef����ֹ�� handleUpdate ���� PUT��
-   *   4) ȡ��ǰ�༭�� snapshot
-   *   5) flush / discardPending��������
-   *   6) MD��RTE���� yDoc ���� activeNote
-   *   7) RTE��MD��normalizeToMarkdown + �淶�� PUT�����ֹ��� / syncToYjs��
-   *   8) ʧ�ܻع� preSwitchNote���ɹ����ύ�����ã�persistEditorMode / clearForcedModeFromUrl / setEditorMode��
-   *   9) MD��RTE��releaseYjsRoom
+   * 完整协议见 `docs/editor-mode-switch.md`。主干步骤：
+   *   1) 入口守卫：去重 / 协同未 sync 时拒绝
+   *   2) 记录 preSwitchNote 快照（失败回滚用）
+   *   3) await saveInflightRef（防止与 handleUpdate 并发 PUT）
+   *   4) 取当前编辑器 snapshot
+   *   5) flush / discardPending（按方向）
+   *   6) MD→RTE：从 yDoc 回填 activeNote
+   *   7) RTE→MD：normalizeToMarkdown + 规范化 PUT（带乐观锁 / syncToYjs）
+   *   8) 失败回滚 preSwitchNote，成功则提交副作用（persistEditorMode / clearForcedModeFromUrl / setEditorMode）
+   *   9) MD→RTE：releaseYjsRoom
    */
   const toggleEditorMode = useCallback(async () => {
     if (modeSwitchInflightRef.current) return;
 
-    // �� ��ڣ�CRDT δ sync ʱ�ı��� + �������ڣ�D4/UX6+UX7��
+    // ① 入口：CRDT 未 sync 时的保护 + 救命出口（D4/UX6+UX7）
     // ------------------------------------------------------------------
-    // collabReady=true ��ʾ�ѷ��� y:join �� synced=false ��������˻�û������
-    // state �㲥��������ʱ yDoc.getText("content") �����ǿմ��� IDB �¾ɻ��档
-    // MD��RTE ��ݴ˻��� activeNote �� �û�������뱻����Ϊ�ա�
+    // collabReady=true 表示已发起 y:join 但 synced=false 代表服务端还没把完整
+    // state 广播回来，此时 yDoc.getText("content") 可能是空串或 IDB 陈旧缓存。
+    // MD→RTE 会据此回填 activeNote → 用户最近输入被覆盖为空。
     //
-    // ���� collabSynced �� provider/WS �쳣��Զ���� false����ֹ�л�����û�
-    // ������ MD ģʽ�������û��������� 10+ ���ӣ�����˸�Ϊ"���ε��ǿ���л�"��
-    //   1st click��toast ���� + ��¼ʱ�������ֹ�л�
-    //   3s �� 2nd click����Ϊ�û�����л������У��û��е����ܶ��ֵķ��գ�
-    //   > 3s��ʱ������ڣ�������һ�ξ�������
-    // i18n �İ����ֲ��䣬���ھ����İ���׷��"�ٴε����ǿ���л�"��
+    // 但若 collabSynced 因 provider/WS 异常永远卡在 false，禁止切换会把用户
+    // 堵死在 MD 模式（曾有用户反馈等了 10+ 分钟）。因此改为"二次点击强制切换"：
+    //   1st click：toast 警告 + 记录时间戳，阻止切换
+    //   3s 内 2nd click：视为用户坚持切换，放行（用户承担可能丢字的风险）
+    //   > 3s：时间戳过期，重新走一次警告流程
+    // i18n 文案保持不变，仅在警告文案里追加"再次点击可强制切换"。
     if (collabReadyRef.current && !collabSyncedRef.current) {
       const now = Date.now();
       const last = lastUnsyncedClickAtRef.current;
       if (last && now - last < 3000) {
-        // 2nd click in window �� ���У�ͬʱ���ʱ�����������
+        // 2nd click in window → 放行，同时清掉时间戳避免误复用
         console.warn(
           "[EditorPane] toggleEditorMode: user forced mode switch while CRDT not synced; " +
             "content may be incomplete if yDoc is stale",
         );
         lastUnsyncedClickAtRef.current = 0;
-        // �䵽������������
+        // 落到下面正常流程
       } else {
         lastUnsyncedClickAtRef.current = now;
         try {
@@ -595,14 +595,14 @@ function OrdinaryEditorPane({
         return;
       }
     } else {
-      // ��ͬ����δ����Эͬ �� �������ʱ���
+      // 已同步或未启用协同 → 清掉遗留时间戳
       lastUnsyncedClickAtRef.current = 0;
     }
 
     modeSwitchInflightRef.current = true;
     setModeSwitching(true);
 
-    // �� �л�ǰ���գ�ʧ��ʱ�ع���D5��
+    // ② 切换前快照，失败时回滚（D5）
     const preSwitchNote = activeNoteRef.current
       ? { ...activeNoteRef.current }
       : null;
@@ -611,18 +611,18 @@ function OrdinaryEditorPane({
     const next: EditorMode = nextEditorMode(fromMode);
 
     try {
-      // �� �ȴ� handleUpdate ����; PUT��D6�������� 2��
-      //    ���ȵĺ�����淶�� PUT(v=N) �� debounce PUT(v=N) ������409 reconcile ʱ
-      //    �ȵ��� bump v �󣬺����طŰѾ����ݸ��ǻ�����
+      // ③ 等待 handleUpdate 的在途 PUT（D6，不变量 2）
+      //    不等的后果：规范化 PUT(v=N) 与 debounce PUT(v=N) 并发，409 reconcile 时
+      //    先到者 bump v 后，后到者重放把旧内容覆盖回来。
       if (saveInflightRef.current) {
         try {
           await saveInflightRef.current;
         } catch {
-          /* handleUpdate �ڲ��Ѵ���������ֻ�Ǵ��л� */
+          /* handleUpdate 内部已处理，这里只是串行化 */
         }
       }
 
-      // �� ȡ��ǰ�༭�����ݿ��գ�ͬ�������������� flushSave ���첽 PUT��
+      // ④ 取当前编辑器内容快照（同步读，避免依赖 flushSave 的异步 PUT）
       let snapshot: { content: string; contentText: string } | null = null;
       try {
         snapshot = editorHandleRef.current?.getSnapshot?.() ?? null;
@@ -630,9 +630,9 @@ function OrdinaryEditorPane({
         console.warn("[EditorPane] getSnapshot before switch failed:", err);
       }
 
-      // �� ������ѡ�� flush ����
-      //    - MD��RTE��flushSave ���� �ڲ� PUT ���� markdown�������� notes.content һ�£��޸�����
-      //    - RTE��MD��discardPending ���� ���� Tiptap JSON PUT ��淶�� PUT ��̬
+      // ⑤ 按方向选择 flush 策略
+      //    - MD→RTE：flushSave —— 内部 PUT 的是 markdown，与最终 notes.content 一致，无副作用
+      //    - RTE→MD：discardPending —— 避免 Tiptap JSON PUT 与规范化 PUT 竞态
       try {
         if (fromMode === "md") {
           editorHandleRef.current?.flushSave();
@@ -643,15 +643,15 @@ function OrdinaryEditorPane({
         console.warn("[EditorPane] flush/discard before switch failed:", err);
       }
 
-      // �� MD��RTE��CRDT Ư�ƶ��� ���� �� yDoc ������ markdown ���� activeNote
-      //    MD ������������ yText �activeNote.content ֻ�ڴ򿪱ʼ�ʱ����һ�Σ�
-      //    �����TiptapEditor mount ʱ parseContent ���þ� note.content ��ʼ����
+      // ⑥ MD→RTE：CRDT 漂移兜底 —— 从 yDoc 读最新 markdown 回填 activeNote
+      //    MD 下真正内容在 yText 里，activeNote.content 只在打开笔记时赋过一次；
+      //    不回填，TiptapEditor mount 时 parseContent 会用旧 note.content 初始化。
       if (fromMode === "md") {
         syncActiveNoteFromYDoc();
       }
 
-      // �� RTE��MD��normalizeToMarkdown + �淶�� PUT
-      //    ʧ��ʱ rollback + return�������� 4��
+      // ⑦ RTE→MD：normalizeToMarkdown + 规范化 PUT
+      //    失败时 rollback + return（不变量 4）
       if (fromMode === "tiptap") {
         const ok = await normalizeAndPersistOnSwitchRteToMd(
           snapshot,
@@ -660,13 +660,13 @@ function OrdinaryEditorPane({
         if (!ok) return;
       }
 
-      // �� �������ύ
-      //    ���и����÷��� setEditorMode ���棨avoid React18 "setState during render"��
+      // ⑧ 副作用提交
+      //    所有副作用放在 setEditorMode 外面（avoid React18 "setState during render"）
       persistEditorMode(next);
       clearForcedModeFromUrl();
       setEditorMode(next);
 
-      // ��״̬���������ɱ༭���� saving/error �İ���Ӧ��Խ���±༭��
+      // 清状态栏残留：旧编辑器的 saving/error 文案不应跨越到新编辑器
       if (savedTimerRef.current) {
         clearTimeout(savedTimerRef.current);
         savedTimerRef.current = null;
@@ -680,17 +680,17 @@ function OrdinaryEditorPane({
             : t("editor.modeSwitch.successToTiptap"),
         );
       } catch {
-        /* toast ������Ҳû��ϵ */
+        /* toast 失败也没关系 */
       }
 
-      // �� MD��RTE���ͷŷ���� y room�������� 3��
-      //    ʧ�ܽ���¼��־����syncToYjs ���ƻ����´��л� MD ǰ����״̬��
+      // ⑨ MD→RTE：释放服务端 y room（不变量 3）
+      //    失败仅记录日志——syncToYjs 机制会在下次切回 MD 前修正状态。
       if (next === "tiptap" && preSwitchNote) {
         try {
           await api.releaseYjsRoom(preSwitchNote.id);
         } catch (err) {
           console.warn(
-            "[EditorPane] releaseYjsRoom after MD��RTE switch failed:",
+            "[EditorPane] releaseYjsRoom after MD→RTE switch failed:",
             err,
           );
         }
@@ -703,14 +703,14 @@ function OrdinaryEditorPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorMode, actions, t]);
   // ---------------------------------------------------------------------------
-  // toggleEditorMode ���ڲ��ӹ��̣����������Ȧ���Ӷȣ��� A1��
+  // toggleEditorMode 的内部子过程（拆出来降低圈复杂度，见 A1）
   // ---------------------------------------------------------------------------
 
   /**
-   * MD��RTE ǰ���� yDoc ��ȡ���� markdown ���� activeNote��
+   * MD→RTE 前，从 yDoc 读取最新 markdown 回填 activeNote。
    *
-   * ֻ��ȡ ref���������հ�������˲���Ҫ useCallback��Ҳ��������ӵ�
-   * toggleEditorMode �� deps �
+   * 只读取 ref（不依赖闭包），因此不需要 useCallback；也避免把它加到
+   * toggleEditorMode 的 deps 里。
    */
   function syncActiveNoteFromYDoc() {
     const yDocNow = collabYDocRef.current;
@@ -737,11 +737,11 @@ function OrdinaryEditorPane({
   }
 
   /**
-   * RTE��MD���� Tiptap JSON �淶��Ϊ markdown�������Ȼ��� activeNote��
-   * �� PUT �ط���ˣ����ֹ��� + syncToYjs����
+   * RTE→MD：把 Tiptap JSON 规范化为 markdown，本地先回填 activeNote，
+   * 再 PUT 回服务端（带乐观锁 + syncToYjs）。
    *
-   * ���� true ��ʾ�ɹ������� PUT�����Լ����ƽ� setEditorMode����
-   * ���� false ��ʾ�淶�� PUT ʧ�ܲ�����ɻع���toggleEditorMode Ӧ��ǰ return����
+   * 返回 true 表示成功或无需 PUT（可以继续推进 setEditorMode）；
+   * 返回 false 表示规范化 PUT 失败并已完成回滚（toggleEditorMode 应提前 return）。
    */
   async function normalizeAndPersistOnSwitchRteToMd(
     snapshot: { content: string; contentText: string } | null,
@@ -756,7 +756,7 @@ function OrdinaryEditorPane({
     )
       return true;
 
-    // snapshot.content ͨ���� Tiptap JSON �ַ���������ʶ��һ�¡�
+    // snapshot.content 通常是 Tiptap JSON 字符串；兜底识别一下。
     const fmt = detectFormat(snapshot.content);
     let normalizedMd = snapshot.content;
     let normalizedText = snapshot.contentText;
@@ -768,12 +768,12 @@ function OrdinaryEditorPane({
           normalizedText = markdownToPlainText(md) || snapshot.contentText;
         }
       } catch (err) {
-        console.warn("[EditorPane] normalize RTE��MD content failed:", err);
+        console.warn("[EditorPane] normalize RTE→MD content failed:", err);
       }
     }
 
-    // �����Ȼ������ MD �༭�� mount ʱ�����淶���������
-    // ����ʹ���� PUT ʧ�ܣ�Ҳ�������Ա��� markdown ��Ⱦ��
+    // 本地先回填，让新 MD 编辑器 mount 时读到规范化后的内容
+    // （即使后续 PUT 失败，也能立即以本地 markdown 渲染）
     const needUpdate =
       normalizedMd !== note.content || normalizedText !== note.contentText;
     if (!needUpdate) return true;
@@ -787,8 +787,8 @@ function OrdinaryEditorPane({
     const noteId = note.id;
     const initialVersion = note.version;
 
-    // syncToYjs=true �÷������ REST �ɹ���� yText ͬ���滻Ϊ��� markdown��
-    // ��֤�´��л� MD ʱ y:join �õ��� state �� notes.content һ�¡�
+    // syncToYjs=true 让服务端在 REST 成功后把 yText 同步替换为这份 markdown，
+    // 保证下次切回 MD 时 y:join 拿到的 state 与 notes.content 一致。
     const sendNormalizePut = (version: number) =>
       api.updateNote(noteId, {
         content: normalizedMd,
@@ -803,7 +803,7 @@ function OrdinaryEditorPane({
       actions.setSyncStatus("saving");
       const updated = await sendNormalizePut(initialVersion);
 
-      // ���� version / updatedAt��������� handleUpdate ���� 409
+      // 回填 version / updatedAt，避免后续 handleUpdate 继续 409
       if (updated && activeNoteRef.current?.id === noteId) {
         actions.setActiveNote({
           ...activeNoteRef.current,
@@ -823,7 +823,7 @@ function OrdinaryEditorPane({
       }
       return true;
     } catch (err) {
-      // Abort���бʼǣ��� idle ����������Ϊ�ɼ����л�
+      // Abort（切笔记）按 idle 处理，仍视为可继续切换
       if (isAborted(err)) {
         actions.setSyncStatus("idle");
         return true;
@@ -849,8 +849,8 @@ function OrdinaryEditorPane({
       console.warn("[EditorPane] normalize PUT on mode switch failed:", err);
       actions.setSyncStatus("error");
 
-      // �ع� activeNote�����Ȿ�� content �ѱ� normalizedMd ���ǵ� editorMode û��
-      // ������ Tiptap �� markdown �� JSON ���� �� �༭���Ӿ����ң�
+      // 回滚 activeNote：避免本地 content 已被 normalizedMd 覆盖但 editorMode 没切
+      // （会让 Tiptap 把 markdown 当 JSON 解析 → 编辑器视觉错乱）
       if (
         preSwitchNote &&
         activeNoteRef.current?.id === (preSwitchNote as any).id
@@ -867,8 +867,8 @@ function OrdinaryEditorPane({
   }
 
   /**
-   * �л��ʼǣ�activeNote.id �仯��ǰ��Ҳ�ѵ�ǰ�༭���� debounce ����ˢһ�Σ�
-   * ��ֹ"д��һ������ �� 500ms �ڶ���"��
+   * 切换笔记（activeNote.id 变化）前，也把当前编辑器的 debounce 立刻刷一次，
+   * 防止"写到一半切走 → 500ms 内丢字"。
    */
   const lastActiveIdRef = useRef<string | null>(activeNote?.id ?? null);
   const skipNextSwitchFlushForNoteIdRef = useRef<string | null>(null);
@@ -889,17 +889,17 @@ function OrdinaryEditorPane({
     lastActiveIdRef.current = nextId;
   }, [activeNote?.id]);
 
-  // ������ P2-5: ��ǰ�༭��ģʽ ref���� handleUpdate ͬ��д�ݸ��ã� ������������������������������
+  // ─── P2-5: 当前编辑器模式 ref（供 handleUpdate 同步写草稿用） ───────────────
   const editorModeRef = useRef<EditorMode>(editorMode);
   useEffect(() => {
     editorModeRef.current = editorMode;
   }, [editorMode]);
 
-  // ������ P1-3: ҳ�汻ж�� / ����ʱǿ�ưѵ�ǰ�༭������д�뱾�زݸ� + ���߶��� ������������
-  // �����������ƶ��� webview ��ϵͳ���ա�ˢ�¡��� Tab���е���̨��ɱ��
-  // ���������첽 PUT��pagehide �� fetch �ᱻ��ֹ����ֻ��д localStorage ͬ�����̣�
-  //   1) saveDraft д���زݸ壨�´δ�ͬ�ʼǿɻָ���
-  //   2) enqueue д���߶��У��´ν� app �Զ� flush��
+  // ─── P1-3: 页面被卸载 / 隐藏时强制把当前编辑器内容写入本地草稿 + 离线队列 ──────
+  // 触发场景：移动端 webview 被系统回收、刷新、关 Tab、切到后台被杀。
+  // 不能依赖异步 PUT（pagehide 后 fetch 会被中止），只能写 localStorage 同步落盘：
+  //   1) saveDraft 写本地草稿（下次打开同笔记可恢复）
+  //   2) enqueue 写离线队列（下次进 app 自动 flush）
   useEffect(() => {
     const flushToLocal = () => {
       const note = activeNoteRef.current;
@@ -913,7 +913,7 @@ function OrdinaryEditorPane({
       }
       if (!snap || typeof snap.content !== "string") return;
       if (snap.content === note.content) return;
-      // 1) �ݸ壨ͬ����������������
+      // 1) 草稿（同步、零网络依赖）
       try {
         saveDraft({
           noteId: note.id,
@@ -930,7 +930,7 @@ function OrdinaryEditorPane({
       } catch {
         /* ignore */
       }
-      // 2) ���߶��У��´����� flush��
+      // 2) 离线队列（下次启动 flush）
       // 在线重载、热更新和切后台会触发此路径；常规保存失败会自行入队，
       // 因此在线时只保留草稿，避免将旧版本快照留待下次自动重放。
       if (navigator.onLine) return;
@@ -958,7 +958,7 @@ function OrdinaryEditorPane({
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") flushToLocal();
     };
-    // beforeunload ������������ر�/ˢ��ʱ�������ƶ��˲�һ���ɿ�������� pagehide
+    // beforeunload 在桌面浏览器关闭/刷新时触发；移动端不一定可靠，故组合 pagehide
     const onBeforeUnload = () => flushToLocal();
 
     window.addEventListener("pagehide", onPageHide);
@@ -971,7 +971,7 @@ function OrdinaryEditorPane({
     };
   }, []);
 
-  // ʹ�� ref ׷�����µ� activeNote������ handleUpdate �հ����ù���
+  // 使用 ref 追踪最新的 activeNote，避免 handleUpdate 闭包引用过期
   const activeNoteRef = useRef(activeNote);
   activeNoteRef.current = activeNote;
   const syncStatusRef = useRef(syncStatus);
@@ -1127,21 +1127,21 @@ function OrdinaryEditorPane({
   }, [convertActiveNoteFormat]);
 
   // ---------------------------------------------------------------------------
-  // Phase 2: ʵʱЭ�� ���� Presence / ���� / Զ�̸�����ʾ
+  // Phase 2: 实时协作 —— Presence / 软锁 / 远程更新提示
   // ---------------------------------------------------------------------------
-  /** Զ�̸��º���������˱�����ͬһƪ�ʼǣ���ʾ�û����¼��� / ������ͻ */
+  /** 远程更新横幅：当别人保存了同一篇笔记，提示用户重新加载 / 处理冲突 */
   const lastAutoAppliedRemoteRef = useRef<string>("");
-  /** Զ��ɾ����� */
+  /** 远程删除横幅 */
   const [remoteDelete, setRemoteDelete] = useState<{
     actorUserId?: string;
     trashed?: boolean;
   } | null>(null);
 
-  // ������ P2-5: δ����ݸ�ָ���ʾ ����������������������������
-  // �򿪱ʼ�ʱ����������� baseVersion <= server.version �� savedAt > server.updatedAt
-  // �Ĳݸ壬�򵯳��ָ���ʾ�������������ϴ����� / �����˳������½��롣
+  // ─── P2-5: 未保存草稿恢复提示 ──────────────
+  // 打开笔记时，如果本地有 baseVersion <= server.version 且 savedAt > server.updatedAt
+  // 的草稿，则弹出恢复提示。常见场景：上次弱网 / 崩溃退出后重新进入。
   const [pendingDraft, setPendingDraft] = useState<NoteDraft | null>(null);
-  // handleUpdate ������Ŷ��壬������ ref ����"ʹ��δ��ʼ������"
+  // handleUpdate 在下面才定义，这里用 ref 避免"使用未初始化变量"
   const handleUpdateRef = useRef<
     | ((data: {
         content?: string;
@@ -1301,11 +1301,11 @@ function OrdinaryEditorPane({
     };
   }, [actions]);
 
-  // �л��ʼ�ʱ��Ȿ�زݸ�
+  // 切换笔记时检测本地草稿
   useEffect(() => {
     setPendingDraft(null);
-    // �����ʼǣ������򱾻Ựƫ�����������ݸ�ָ���ʾ������Ȼ���뼴ֻ����
-    // û��"�ָ�δ��������"�����壬���������û�����Ϊ��ʧЧ��
+    // 锁定笔记（库锁或本会话偏好锁）不弹草稿恢复提示——既然进入即只读，
+    // 没有"恢复未保存内容"的意义，反而会让用户误以为锁失效。
     if (
       !activeNote ||
       activeNote.isLocked ||
@@ -1330,7 +1330,7 @@ function OrdinaryEditorPane({
     ) {
       setPendingDraft(draft);
     } else {
-      // ʵ��������һ�£������˸��£� �� ֱ������ݸ�����´λ���ʾ
+      // 实际内容已一致（或服务端更新） → 直接清掉草稿避免下次还提示
       try {
         clearDraft(activeNote.id);
       } catch {
@@ -1339,20 +1339,20 @@ function OrdinaryEditorPane({
     }
   }, [activeNote?.id, activeNote?.version, activeNote?.updatedAt]);
 
-  /** �ָ��ݸ壺�ѱ��زݸ�����д�� activeNote���ñ༭������װ�ز����� PUT */
+  /** 恢复草稿：把本地草稿内容写回 activeNote，让编辑器重新装载并触发 PUT */
   const handleRestoreDraft = useCallback(async () => {
     const draft = pendingDraft;
     const note = activeNoteRef.current;
     if (!draft || !note || draft.noteId !== note.id) return;
     setPendingDraft(null);
-    // ֱ�ӰѲݸ�д�� activeNote���༭�����ȡ note.content ����װ��
+    // 直接把草稿写回 activeNote，编辑器会读取 note.content 重新装载
     actions.setActiveNote({
       ...note,
       content: draft.content,
       contentText: draft.contentText,
       title: draft.title,
     });
-    // �����������棨������ putWithReconcile ·�������Զ�������ͻ��
+    // 主动触发保存（走现有 putWithReconcile 路径，会自动处理冲突）
     try {
       await handleUpdateRef.current?.({
         title: draft.title,
@@ -1363,11 +1363,11 @@ function OrdinaryEditorPane({
         toast.success(t("editor.draftRestored") || "已恢复未保存的修改");
       } catch {}
     } catch {
-      // handleUpdate �ڲ��Ѵ�������
+      // handleUpdate 内部已处理错误
     }
   }, [pendingDraft, actions, t]);
 
-  /** �����ݸ� */
+  /** 丢弃草稿 */
   const handleDiscardDraft = useCallback(() => {
     const draft = pendingDraft;
     if (!draft) return;
@@ -1380,13 +1380,13 @@ function OrdinaryEditorPane({
   }, [pendingDraft]);
 
   // ---------------------------------------------------------------------------
-  // ��ǰ��¼�û���Ϣ
+  // 当前登录用户信息
   // ---------------------------------------------------------------------------
-  // selfUser ͬʱ������������
-  //   1) useRealtimeNote �� selfUserId������"�Լ���"presence / note:updated ������
-  //   2) Phase 3 Y.js CRDT �� awareness����ʾ������������ɫ��
-  // ��˱����� useRealtimeNote ֮ǰ������������ʱ��������TDZ��������
-  /** ��ǰ��¼�û���Ϣ������ awareness ��ʾ������������ɫ */
+  // selfUser 同时服务于两处：
+  //   1) useRealtimeNote 的 selfUserId（过滤"自己的"presence / note:updated 回声）
+  //   2) Phase 3 Y.js CRDT 的 awareness（显示本人名字与颜色）
+  // 因此必须在 useRealtimeNote 之前声明，避免暂时性死区（TDZ）报错。
+  /** 当前登录用户信息，用于 awareness 显示本人名字与颜色 */
   const [selfUser, setSelfUser] = useState<{
     userId: string;
     username: string;
@@ -1413,7 +1413,7 @@ function OrdinaryEditorPane({
         setSelfUser({ userId: me.id, username: me.username || me.id });
       })
       .catch(() => {
-        /* δ��¼/����ʧ�ܾ�Ĭ */
+        /* 未登录/请求失败就静默 */
       });
     return () => {
       cancelled = true;
@@ -1654,9 +1654,9 @@ function OrdinaryEditorPane({
     setEditing: rtSetEditing,
   } = useRealtimeNote({
     noteId: activeNote?.id ?? null,
-    // ��ʽ���� selfUserId��EditorPane ������ selfUser��localStorage ���� + /api/me����
-    // ֱ�Ӵ���ȥ������ hook �ڲ�"selfUserId Ϊ null ������"���µ�����ʾ
-    // ���Լ��༭ʱ�� "XX ���ڱ༭ / XX �����˱ʼ�"����
+    // 显式传入 selfUserId：EditorPane 里已有 selfUser（localStorage 缓存 + /api/me），
+    // 直接传下去能消除 hook 内部"selfUserId 为 null 窗口期"导致的误提示
+    // （自己编辑时弹 "XX 正在编辑 / XX 更新了笔记"）。
     selfUserId: selfUser?.userId ?? null,
     onRemoteUpdate: (msg) => {
       void applyRemoteNoteUpdate(msg);
@@ -1717,7 +1717,7 @@ function OrdinaryEditorPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actions]);
 
-  // �ƶ��˺�̨�ָ� / ����ָ� / WebSocket ����ʱ���ܴ���ʵʱ��Ϣ������һ�ε�ǰ�ʼǰ汾��
+  // 移动端后台恢复 / 网络恢复 / WebSocket 重连时可能错过实时消息，补查一次当前笔记版本。
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible")
@@ -1730,7 +1730,7 @@ function OrdinaryEditorPane({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-    // checkActiveNoteRemoteVersion �Ǻ����������ڲ��� ref������Ҫ��Ϊ���������ذ�
+    // checkActiveNoteRemoteVersion 是函数声明，内部读 ref；不需要作为依赖触发重绑。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1744,14 +1744,14 @@ function OrdinaryEditorPane({
   // ---------------------------------------------------------------------------
 
   /**
-   * Phase 3 ����������
-   *   - ʹ�� Markdown �༭����Tiptap JSON �޷�����ӳ�䵽 Y.Text��
-   *   - �ʼ�δ����������ֱ̬��ֻ��������Эͬ��
-   *   - ��֪��ǰ�û���Ϣ����Ϊ awareness ���ݣ�
-   *   - �� activeNote
+   * Phase 3 启用条件：
+   *   - 使用 Markdown 编辑器（Tiptap JSON 无法无损映射到 Y.Text）
+   *   - 笔记未锁定（锁定态直接只读，无需协同）
+   *   - 已知当前用户信息（作为 awareness 身份）
+   *   - 有 activeNote
    *
-   * ע�����˳�����Ҳ���á�������ֻһ�� client��y-collab �൱�ڿղ������������
-   * ����������־û��������������Զ��ϲ���
+   * 注：单人场景下也启用——本地只一个 client，y-collab 相当于空操作，但获得了
+   * 服务端增量持久化与断线重连后的自动合并。
    */
   const collabReady = !!(
     activeNote &&
@@ -1774,13 +1774,13 @@ function OrdinaryEditorPane({
   });
 
   /**
-   * collabYDoc �� ref ����
+   * collabYDoc 的 ref 镜像。
    *
-   * ������`toggleEditorMode`��������������壩��Ҫ���л�ǰ�� yDoc ��ȡ����
-   * markdown ���� activeNote�������е� RTE ��������ٺ�������롣����
-   * `toggleEditorMode` �������� `collabYDoc` ֮ǰ������ collabYDoc ֱ��д��
-   * useCallback �ıհ��� deps����� TDZ������ render ʱ deps ������ֵ������
-   * useYDoc ֮ǰ��collabYDoc ������ʱ������������ ref ��ӷ��ʼ��ɹ�ܡ�
+   * 背景：`toggleEditorMode`（在组件顶部定义）需要在切换前从 yDoc 读取最新
+   * markdown 回填 activeNote，避免切到 RTE 后丢最近几百毫秒的输入。但是
+   * `toggleEditorMode` 声明点在 `collabYDoc` 之前，若把 collabYDoc 直接写进
+   * useCallback 的闭包与 deps，会踩 TDZ（初次 render 时 deps 数组求值发生在
+   * useYDoc 之前，collabYDoc 还在暂时性死区）。用 ref 间接访问即可规避。
    */
   const collabYDocRef = useRef<typeof collabYDoc>(null);
   collabYDocRef.current = collabYDoc;
@@ -1788,15 +1788,15 @@ function OrdinaryEditorPane({
   collabProviderRef.current = collabProvider;
 
   /**
-   * CRDT synced ״̬�� ref ����
+   * CRDT synced 状态的 ref 镜像。
    *
-   * ��;��
-   *   - toggleEditorMode ��Ҫ���л�ǰ�ж�"CRDT �Ƿ�����ɳ��� sync"��δ synced ʱ
-   *     yDoc.getText("content") �����������ǿմ�����û�յ������ y:sync����
-   *     ��ʱóȻ�е� RTE ��ѿ����ݵ����������ݻ��� activeNote���û��������ȫ����
-   *   - ͬ���� ref ����ֱ������ collabSynced����� toggleEditorMode useCallback
-   *     �� TDZ ���⣨����˳������ toggleEditorMode����
-   *   - collabReadyRef ��������"û���� CRDT (MD��RTE ���� CRDT ģʽ)"��"���õ�δ sync"��
+   * 用途：
+   *   - toggleEditorMode 需要在切换前判断"CRDT 是否已完成初次 sync"。未 synced 时
+   *     yDoc.getText("content") 读出来可能是空串（还没收到服务端 y:sync），
+   *     此时贸然切到 RTE 会把空内容当作最新内容回填 activeNote，用户最近输入全丢。
+   *   - 同样用 ref 而非直接引用 collabSynced，规避 toggleEditorMode useCallback
+   *     的 TDZ 问题（声明顺序晚于 toggleEditorMode）。
+   *   - collabReadyRef 用于区分"没启用 CRDT (MD→RTE 不在 CRDT 模式)"与"启用但未 sync"。
    */
   const collabSyncedRef = useRef<boolean>(false);
   collabSyncedRef.current = collabSynced;
@@ -1804,15 +1804,15 @@ function OrdinaryEditorPane({
   collabReadyRef.current = collabReady;
 
   /**
-   * UX7 �������ڣ���¼�ϴ�"δ sync ʱ�����л�"��ʱ�����
-   * ��һ�ε����toast ����+��¼ʱ�������ֹ�л���
-   * 3 ���ڵڶ��ε������Ϊ�û�����л������У��ƹ� UX6 ��������
-   * ���� 3 �룺ʱ������ڣ���Ϊ��һ��"��һ�ε��"��
-   * �� ref �棬����Ⱦ render ѭ����
+   * UX7 救命出口：记录上次"未 sync 时尝试切换"的时间戳。
+   * 第一次点击：toast 警告+记录时间戳，阻止切换。
+   * 3 秒内第二次点击：认为用户坚持切换，放行（绕过 UX6 保护）。
+   * 超过 3 秒：时间戳过期，视为新一次"第一次点击"。
+   * 用 ref 存，不污染 render 循环。
    */
   const lastUnsyncedClickAtRef = useRef<number>(0);
 
-  // �л��ʼ�ʱ��պ��
+  // 切换笔记时清空横幅
   useEffect(() => {
     setRemoteDelete(null);
     // cleanup 即"离开这篇笔记"：编辑告一段落，立刻同步一次，
@@ -1820,8 +1820,8 @@ function OrdinaryEditorPane({
     return () => { requestMobileSyncNow(); };
   }, [activeNote?.id]);
 
-  // ���� �л��ʼ�ʱ�Զ���� HTML ��ʽ������Ԥ��ģʽ ����
-  // ����ʼ����ݸ�ʽΪ "html"���Զ����� HTML Ԥ����������˵�����༭����
+  // ── 切换笔记时自动检测 HTML 格式并进入预览模式 ──
+  // 如果笔记内容格式为 "html"，自动启用 HTML 预览；否则回退到常规编辑器。
   useEffect(() => {
     if (!activeNote) return;
     previewInitializedNoteIdRef.current = activeNote.id;
@@ -1831,7 +1831,7 @@ function OrdinaryEditorPane({
     setHtmlPreviewMode(isHtml);
     setNoteIsHtml(isHtml);
     setNoteIsFullHtmlDoc(isFullDoc);
-  }, [activeNote?.id]); // ֻ���л��ʼ�ʱ��⣬�༭�����в����Զ��л�
+  }, [activeNote?.id]); // 只在切换笔记时检测，编辑过程中不再自动切换
 
   // BACKLINKS-02: 切换笔记时加载反向链接数量
   useEffect(() => {
@@ -1863,7 +1863,7 @@ function OrdinaryEditorPane({
     };
   }, [activeNote?.id]);
 
-  /** �� presence �з����û��������ں����ʾ�� */
+  /** 从 presence 中反查用户名（用于横幅显示） */
   const findUsername = useCallback(
     (userId?: string) => {
       if (!userId) return undefined;
@@ -1873,20 +1873,20 @@ function OrdinaryEditorPane({
     [presenceUsers],
   );
 
-  /** �û�ȷ��Զ��ɾ����ʾ����յ�ǰ�ʼǲ����б��Ƴ� */
+  /** 用户确认远程删除提示：清空当前笔记并从列表移除 */
   const handleAckRemoteDelete = useCallback(() => {
     const cur = activeNoteRef.current;
     if (cur) {
       actions.setActiveNote(null);
       actions.removeNoteFromList(cur.id);
       actions.removeNoteTab(cur.id);
-      // ����վ��refreshNotes ������ӻ�"����վ"��ͼ
+      // 回收站：refreshNotes 会把它加回"回收站"视图
       actions.refreshNotes();
     }
     setRemoteDelete(null);
   }, [actions]);
 
-  /** �༭̬�㲥��handleUpdate ����ʱ��ʱ�� editing=true��500ms ���Զ�ȡ�� */
+  /** 编辑态广播：handleUpdate 调用时临时置 editing=true，500ms 后自动取消 */
   const editingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flagEditing = useCallback(() => {
     rtSetEditing(true);
@@ -1896,14 +1896,14 @@ function OrdinaryEditorPane({
       editingTimerRef.current = null;
     }, 1500);
   }, [rtSetEditing]);
-  // ���ж��ʱ����
+  // 组件卸载时清理
   useEffect(() => {
     return () => {
       if (editingTimerRef.current) clearTimeout(editingTimerRef.current);
     };
   }, []);
 
-  // ����ж��ǰ���� flush��ˢ�¡��رձ�ǩ��
+  // 窗口卸载前兜底 flush（刷新、关闭标签）
   useEffect(() => {
     const flushLifecycleSave = () => {
       persistCurrentEditorSnapshotDraft();
@@ -1921,8 +1921,8 @@ function OrdinaryEditorPane({
     };
   }, []);
 
-  // NoteList/Sidebar �������л� activeNote ǰ�������¼������� Tiptap �յ��� note.id ��
-  // ������ɱʼǵ� debounce�������л�ǰ 500ms �ڵı༭û����⡣
+  // NoteList/Sidebar 在真正切换 activeNote 前发出此事件，避免 Tiptap 收到新 note.id 后
+  // 先清掉旧笔记的 debounce，导致切换前 500ms 内的编辑没有落库。
   useEffect(() => {
     const onBeforeNoteSwitch = () => {
       const noteId = activeNoteRef.current?.id ?? null;
@@ -1945,7 +1945,7 @@ function OrdinaryEditorPane({
       );
   }, []);
 
-  // Delete ��ɾ���ʼǿ�ݼ������ڱ༭��δ�۽�ʱ��Ч��
+  // Delete 键删除笔记快捷键（仅在编辑器未聚焦时生效）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1954,7 +1954,7 @@ function OrdinaryEditorPane({
         !activeNote.isLocked &&
         !viewLockedIdsRef.current.has(activeNote.id)
       ) {
-        // ��齹���Ƿ��ڱ༭���ڲ�������ڱ༭���ڣ�Delete ��Ӧ������ɾ�����֣�
+        // 检查焦点是否在编辑器内部（如果在编辑器内，Delete 键应该正常删除文字）
         const activeEl = document.activeElement;
         const isInEditor =
           activeEl?.closest(".ProseMirror, .cm-editor") ||
@@ -1996,7 +1996,7 @@ function OrdinaryEditorPane({
     };
   }, [activeNote?.id]);
 
-  // ����ⲿ�ر��ƶ��˲˵�
+  // 点击外部关闭移动端菜单
   useEffect(() => {
     if (!showMobileMenu) return;
     const handler = (e: MouseEvent) => {
@@ -2107,9 +2107,9 @@ function OrdinaryEditorPane({
       //   2. Markdown 空文档是空字符串，前端 guard 会错误拦截用户主动清空
       //   3. 后端 guard 同时检查 content 和 contentText，更准确
 
-      // ������ P2-5: ���زݸ�˫���� ����������������������������
-      // ÿ�� onUpdate fire ��**ͬ��**дһ�ݲݸ嵽 localStorage��ֻҪ�����κλ���
-      // ��PUT ʧ�� / fetch ���� / ҳ�汻ɱ�����ˣ��´δ�ͬһ�ʼ����ܴӲݸ�ָ���
+    // ─── P2-5: 本地草稿双保险 ──────────────
+    // 每次 onUpdate fire 都**同步**写一份草稿到 localStorage，只要后面任何环节
+    // （PUT 失败 / fetch 挂死 / 页面被杀）丢了，下次打开同一笔记仍能从草稿恢复。
       if (data.content !== undefined) {
         try {
           saveDraft({
@@ -2125,36 +2125,36 @@ function OrdinaryEditorPane({
             savedAt: Date.now(),
           });
         } catch {
-          /* ignore quota �ȴ��� */
+          /* ignore quota 等错误 */
         }
       }
 
-      // Phase 2: �㲥"�����ڱ༭"��1.5s �������������Զ�ȡ����
+    // Phase 2: 广播"我正在编辑"（1.5s 内无新输入则自动取消）
       try {
         flagEditing();
       } catch {}
       actions.setSyncStatus("saving");
 
-      // ��װ��С�����Ա� 409 ���� server ���ص� currentVersion �ط�һ�Ρ�
+    // 封装成小函数以便 409 后用 server 返回的 currentVersion 重放一次。
       //
-      // P0-4: 409 �ط�ʱ���ȴӱ༭�������� snapshot ���¹��� payload��
-      //   ������ԭʵ�� sendOnce ��Զ���ó��ν��� handleUpdate ʱ�� data �հ���
-      //   �� data �� 500ms ǰ debounce ʱ�̵����ݡ���� 409 �ȴ� + �ط��ڼ��û�
-      //   �������֣��طžͻ���"��ʱ������"���Ƿ�������°汾����һ�ε� debounce
-      //   PUT �ֻ��� 409������ͬ����ʱ�����ݸ���һ�Σ��� �û��о�"�Ҹ��õ���
-      //   ������ / �༭���Զ�����"��
+    // P0-4: 409 重放时优先从编辑器拉最新 snapshot 重新构建 payload。
+    //   背景：原实现 sendOnce 永远复用初次进入 handleUpdate 时的 data 闭包，
+    //   而 data 是 500ms 前 debounce 时刻的内容。如果 409 等待 + 重放期间用户
+    //   又敲了字，重放就会用"过时的内容"覆盖服务端最新版本（下一次的 debounce
+    //   PUT 又会再 409，再用同样过时的内容覆盖一次）→ 用户感觉"我刚敲的字
+    //   被吞了 / 编辑器自动回退"。
       //
-      //   �ķ���ÿ�� sendOnce ����ʱ�����׷� + 409 �طţ������ȳ��Դ�
-      //   editorHandleRef ȡһ������ snapshot���õ��򸲸� content/contentText��
-      //   �׷�ʱ snapshot �� data ����һ�£�����룩�������ÿɺ��ԣ��ط�ʱ
-      //   ��ȷ�����͵���"�û����������ڱ༭���￴��������"��
+    //   改法：每次 sendOnce 调用时（含首发 + 409 重放），都先尝试从
+    //   editorHandleRef 取一份最新 snapshot；拿到则覆盖 content/contentText。
+    //   首发时 snapshot 与 data 几乎一致（差几毫秒），副作用可忽略；重放时
+    //   则确保发送的是"用户当下真正在编辑器里看到的内容"。
       //
-      //   ���� data.content !== undefined������ CRDT-only ������ʱ�Ÿ��ǣ�
-      //   CRDT ģʽ data ���� content���� yjs ͨ��д�أ�������������͵͵����
+    //   仅在 data.content !== undefined（即非 CRDT-only 场景）时才覆盖；
+    //   CRDT 模式 data 不带 content，由 yjs 通道写回，绝不能在这里偷偷塞。
       let attemptCount = 0;
-      // ʵ�ʷ��͵����һ�� payload�������� 409 �طű��������� snapshot����
-      // �·� setActiveNote ���� content ʱ���������ǳ�ʼ data������ activeNote
-      // ��������ʵ�洢���ݲ�һ�¡�
+    // 实际发送的最后一份 payload（可能因 409 重放被换成最新 snapshot）。
+    // 下方 setActiveNote 回填 content 时按它而不是初始 data，避免 activeNote
+    // 与服务端真实存储内容不一致。
       let lastSentData: {
         content?: string;
         contentText?: string;
@@ -2174,12 +2174,12 @@ function OrdinaryEditorPane({
               };
             }
           } catch {
-            /* getSnapshot ʧ��ʱ���˵�ԭ data������������ */
+          /* getSnapshot 失败时回退到原 data，不阻塞保存 */
           }
         }
         lastSentData = effectiveData;
-        // P0-#2 �޸���CRDT ģʽ�� content δ�� �� ֻͬ�� meta��title����
-        // ���� REST PUT ������ yjs ��д notes.content ������̬����
+      // P0-#2 修复：CRDT 模式下 content 未传 → 只同步 meta（title），
+      // 避免 REST PUT 与服务端 yjs 回写 notes.content 产生竞态覆盖
         const payload: any = { title: effectiveData.title, version };
         payload.writeSource = "live-autosave";
         payload.contentFormat = currentNote.contentFormat;
@@ -2190,26 +2190,26 @@ function OrdinaryEditorPane({
         return api.updateNote(currentNote.id, payload);
       };
 
-      // �ѱ��� PUT ע��Ϊ "inflight"���� toggleEditorMode ���л�ǰ await��
-      // ���л�����"���������� REST PUT"�����漰 yjs update ����
+    // 把本次 PUT 注册为 "inflight"，供 toggleEditorMode 在切换前 await。
+    // 串行化的是"本组件发起的 REST PUT"，不涉及 yjs update 流。
       //
-      // ������ε���ʱ�����ֱ�Ӹ��� ref����һ�ε� handleUpdate Ҳ���� await ���
-      // inflight ���������� FIFO ���У�toggleEditorMode ֻ����"�л��㵱�»�δ���
-      // ����һ�� PUT"��
+    // 并发多次调用时后进者直接覆盖 ref（上一次的 handleUpdate 也还在 await 这个
+    // inflight 链），无需 FIFO 队列；toggleEditorMode 只关心"切换点当下还未完成
+    // 的那一笔 PUT"。
       const inflight = (async () => {
         try {
-          // �ֹ�����ͻ reconcile������˷��� { status: 409, currentVersion: N }��
-          // ������һ���Ļ������� activeNote.version ��Զͣ���ھ�ֵ��֮��ÿ�� debounce
-          // �Զ����涼���ٴ� 409���γ�"409 �籩"�������־���ܿ�����ʮ������ 409����
+      // 乐观锁冲突 reconcile：服务端返回 { status: 409, currentVersion: N }。
+      // 不做这一步的话，本地 activeNote.version 永远停留在旧值，之后每次 debounce
+      // 自动保存都会再次 409，形成"409 风暴"（后端日志里能看到几十次连续 409）。
           //
-          // putWithReconcile �Ĳ��ԣ��� toggleEditorMode �Ĺ淶�� PUT ����ͬһ��ʵ�֣���
-          //   1) ��ѡ�� err.currentVersion �ط�һ�Σ�
-          //   2) �����û�����汾��ʱ�ٶ����� fetchLatestVersion��GET /notes/:id����
-          //   3) �ڼ��бʼǣ�onAbort���� abort �طţ���ֹ�Ѿɱʼ�����д���±ʼǡ�
+      // putWithReconcile 的策略（与 toggleEditorMode 的规范化 PUT 共用同一套实现）：
+      //   1) 首选用 err.currentVersion 重放一次；
+      //   2) 服务端没附带版本号时再兜底走 fetchLatestVersion（GET /notes/:id）；
+      //   3) 期间切笔记（onAbort）则 abort 重放，防止把旧笔记内容写入新笔记。
           let updated;
           if (data.content !== undefined) {
-            // ���ı������� 409 ʱ�����١������� version ä�طž����ġ�������Ḳ��
-            // PC/Web �ձ�������ݡ�����ĳ���ȡԶ�����°棬�������زݸ壬�������ͻ�����
+        // 正文保存遇到 409 时不能再“拿最新 version 盲重放旧正文”，否则会覆盖
+        // PC/Web 刚保存的内容。这里改成拉取远端最新版，保留本地草稿，并进入冲突横幅。
             try {
               updated = await sendOnce(currentNote.version);
             } catch (err: any) {
@@ -2230,7 +2230,7 @@ function OrdinaryEditorPane({
                   version: fresh.version,
                 } as any);
               } catch {
-                /* ��ȫ��ʧ��Ҳ�������زݸ壬�Ժ����û����� */
+            /* 拉全文失败也保留本地草稿，稍后让用户重试 */
               }
               const snap = getCurrentEditorSnapshot();
               if (snap) {
@@ -2277,32 +2277,32 @@ function OrdinaryEditorPane({
             );
           }
 
-          // ���ڱ���ıʼ����ǵ�ǰ����ʼ�ʱ����״̬����ֹ�����л�ʱ���Ǵ���ʼǣ�
+      // 仅在保存的笔记仍是当前激活笔记时更新状态（防止快速切换时覆盖错误笔记）
           if (activeNoteRef.current?.id === updated.id) {
-            // �ؼ�������Ѹձ���� content / contentText Ҳ��� activeNote��
+        // 关键：必须把刚保存的 content / contentText 也回填到 activeNote。
             //
-            // ������Ϊʲô֮ǰֻ����Ԫ���ݣ����������� content ������� activeNote
-            // ���ñ仯 �� TiptapEditor �� useEffect([note.content]) ���� setContent
-            // �� ���/���뱻��ϡ�����֮ǰֻ���� version/updatedAt/title��
+        // 背景（为什么之前只回填元数据）：曾经担心 content 回填会让 activeNote
+        // 引用变化 → TiptapEditor 的 useEffect([note.content]) 触发 setContent
+        // → 光标/输入被打断。所以之前只回填 version/updatedAt/title。
             //
-            // ������"�л��༭�� (MD ? RTE)"������������ bug��
-            //   - MD �༭������ �� activeNote.content ���Ǿ� Tiptap JSON��δˢ�£�
-            //   - �е� Tiptap �� TiptapEditor �� note.content �� �������Ǿ� JSON
-            //     �� �û��� MD �����������޸���ȫ"��ʧ"
-            //   - ����ͬ��
-            // ����Ϊ"�����л��Ͷ����ݡ������޸�Ҳ�����"��
+            // 修复"切换编辑器 (MD ⇄ RTE)"后内容丢失的 bug：
+        //   - MD 编辑器保存 → activeNote.content 仍是旧 Tiptap JSON（未刷新）
+        //   - 切到 Tiptap → TiptapEditor 读 note.content → 读到的是旧 JSON
+        //     → 用户在 MD 里做的所有修改完全"消失"
+        //   - 反向同理
+        // 表现为"来回切换就丢内容、后续修改也被清空"。
             //
-            // ����취������������༭����ͨ�� lastEmittedContentRef ������
-            // �Ƚ� note.content �Ƿ�����Լ��ϴ��ɳ�ȥ���Ƿݣ��Ǿ����� setContent��
-            // �����궶�������ǣ�������һ���༭����汾�ָ���������ͬ����
+        // 解决办法：这里必须回填。编辑器侧通过 lastEmittedContentRef 守卫，
+        // 比较 note.content 是否等于自己上次派出去的那份，是就跳过 setContent，
+        // 避免光标抖动；不是（来自另一个编辑器或版本恢复）就正常同步。
             //
-            // P1-5: content �ֶ�������"ʵ�ʷ��͸�����˵���һ��"��lastSentData��
-            // ������ 409 �ط�ʱȡ������ snapshot���������Ǳհ���ĳ�ʼ data��
-            // ��һ����"�ֹ���д����"���� PUT �ڼ��û��������֣��༭����ǰ snapshot
-            // �� lastSentData ������ȡ�����ʱ����**���� activeNote.content ����**
-            // ���������û��������ݣ���ֻ����Ԫ���ݣ���һ�� debounce �Զ������
-            // �Ѻ�����������ȥ���������Ա����� activeNote ���û��˵��Ծɵİ汾��
-            // �������� TiptapEditor effect ���ؽ��༭�� DOM ����������ˡ�
+        // P1-5: content 字段优先用"实际发送给服务端的那一份"（lastSentData，
+        // 可能是 409 重放时取的最新 snapshot），而不是闭包里的初始 data。
+        // 进一步做"乐观自写守卫"：若 PUT 期间用户又敲了字，编辑器当前 snapshot
+        // 和 lastSentData 不再相等——此时我们**保留 activeNote.content 不变**
+        // （即仍是用户最新内容），只更新元数据；下一次 debounce 自动保存会
+        // 把后续输入推上去。这样可以避免让 activeNote 引用回退到稍旧的版本，
+        // 进而触发 TiptapEditor effect 误重建编辑器 DOM 导致输入回退。
             let nextContent = activeNoteRef.current.content;
             let nextContentText = activeNoteRef.current.contentText;
             let preserveLocalEditor = false;
@@ -2369,14 +2369,14 @@ function OrdinaryEditorPane({
             });
             actions.setSyncStatus("saved");
             actions.setLastSynced(new Date().toISOString());
-            // 2���ָ� idle
+        // 2秒后恢复 idle
             if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
             savedTimerRef.current = setTimeout(
               () => actions.setSyncStatus("idle"),
               2000,
             );
 
-            // P2-5: ����ɹ� �� ������زݸ�
+        // P2-5: 保存成功 → 清掉本地草稿，并重置连续失败计数
             try {
               clearDraft(currentNote.id);
             } catch {
@@ -2384,15 +2384,15 @@ function OrdinaryEditorPane({
             }
           }
         } catch (err) {
-          // �бʼ��жϣ�putWithReconcile �ڲ����Ϊ aborted�����������Ĵ���
+      // 切笔记中断（putWithReconcile 内部标记为 aborted）不是真正的错误
           if (isAborted(err)) return;
           console.warn("[EditorPane] save failed:", err);
 
-          // ������ P0-1 ������ӣ����� / ����˲��ɴ�ʹ save �״�ʱ�� ����������������������������
-          // �ѱ༭����ǰ���� snapshot �������߶��У�������ָ����Զ� flush��
-          // ��һ��ʹ�û�"�������¼������������"������Ϊ saveInflight ��������
-          // ������������ �� ��ʹ api.ts ����������δ���� handleOfflineEnqueue
-          // ������ fetch ���� 4xx ������ retryable �����У�Ҳ���ṩһ��������
+      // ─── P0-1 兜底入队：弱网 / 服务端不可达使 save 抛错时， ──────────────
+      // 把编辑器当前最新 snapshot 填入离线队列，等网络恢复后自动 flush。
+      // 这一步使用户"在弱网下继续输入的内容"不会因为 saveInflight 生命周期
+      // 结束而被遗忘 — 即使 api.ts 的上游拦截未调用 handleOfflineEnqueue
+      // （例如 fetch 返回 4xx 但不在 retryable 名单中）也能提供一道保护。
           try {
             const snap = editorHandleRef.current?.getSnapshot?.();
             if (snap && typeof snap.content === "string") {
@@ -2430,7 +2430,7 @@ function OrdinaryEditorPane({
       try {
         await inflight;
       } finally {
-        // ֻ���"�Լ�"ע����Ƿݣ����ڼ������� PUT ע���� promise����������
+      // 只清空"自己"注册的那份；若期间又有新 PUT 注册新 promise，保留不动
         if (saveInflightRef.current === inflight) {
           saveInflightRef.current = null;
         }
@@ -2439,12 +2439,12 @@ function OrdinaryEditorPane({
     [actions, flagEditing],
   );
 
-  // ���� handleUpdateRef ����ָ������ handleUpdate���� P2-5 �ݸ�ָ����ã�
+  // 保持 handleUpdateRef 总是指向最新 handleUpdate（供 P2-5 草稿恢复调用）
   useEffect(() => {
     handleUpdateRef.current = handleUpdate;
   }, [handleUpdate]);
 
-  // �ֶ�����ͬ�������±��浱ǰ�༭������
+  // 手动触发同步：重新保存当前编辑器内容
   const handleManualSync = useCallback(async () => {
     const currentNote = activeNoteRef.current;
     if (!currentNote || syncStatus === "saving") return;
@@ -2604,10 +2604,10 @@ function OrdinaryEditorPane({
   const toggleLock = useCallback(async () => {
     if (!activeNote || activeNote.isTrashed) return;
     haptic.medium();
-    // ���Ƚ��"�Ự��"���û�ƫ��"�򿪼�����"��ɵ���ʱֻ������
-    //   - ���ﱾ�� isLocked=1���Ǿ������߼��� DB��
-    //   - ���� isLocked=0 �����Ự��ƫ����ס��ֻ�Ƴ����ؼ��ϼ��ɣ���д��ˣ�
-    //     ����һ��"��ʱ����"�����ó־û�Ϊ�ñʼǵĿ�״̬��
+    // 优先解除"会话锁"（用户偏好"打开即锁定"造成的临时只读）：
+    //   - 库里本身 isLocked=1：那就走老逻辑切 DB；
+    //   - 库里 isLocked=0 但本会话被偏好锁住：只移除本地集合即可，不写后端，
+    //     避免一次"临时解锁"被永久持久化为该笔记的库状态。
     if (!activeNote.isLocked && viewLockedIds.has(activeNote.id)) {
       setViewLockedIds((prev) => {
         if (!prev.has(activeNote.id)) return prev;
@@ -2627,8 +2627,8 @@ function OrdinaryEditorPane({
       isLocked: updated.isLocked,
       updatedAt: updated.updatedAt,
     });
-    // ���հѿ����е� 1�����������Ͳ����ٶ���ά�ֱ��ػỰ�����������Ѿ����ǡ�
-    // ���ѿ����е� 0����������ͬʱ������Ự�ĻỰ��������У�����֤ UI һ�ν�����λ��
+    // 若刚把库锁切到 1（加锁），就不必再额外维持本地会话锁——库锁已经覆盖。
+    // 若把库锁切到 0（解锁），同时清掉本会话的会话锁（如果有），保证 UI 一次解锁到位。
     if (!updated.isLocked) {
       setViewLockedIds((prev) => {
         if (!prev.has(activeNote.id)) return prev;
@@ -2687,7 +2687,7 @@ function OrdinaryEditorPane({
     }
   }, [activeNote, t]);
   const moveToTrash = useCallback(async () => {
-    // ������������Ự�����ʼǲ�����������վ������"�������ʼ�"����ɾ��
+    // 锁定（库锁或会话锁）笔记不允许进回收站，避免"被保护笔记"被误删。
     if (
       !activeNote ||
       activeNote.isLocked ||
@@ -2737,8 +2737,8 @@ function OrdinaryEditorPane({
       .updateNote(noteId, { isTrashed: 1 } as any)
       .then(() => {
         actions.refreshNotebooks();
-        // ˢ���б�������ǰ����"����վ"��ͼ�������ʼ���Ҫ�������֣�
-        // ������ͼҲ������һ�£���֤������һ�¡�
+        // 刷新列表：若当前处于"回收站"视图，这条笔记需要立即出现；
+        // 其他视图也重新拉一下，保证与服务端一致。
         actions.refreshNotes();
       })
       .catch(console.error);
@@ -2816,23 +2816,23 @@ function OrdinaryEditorPane({
     [],
   );
 
-  // AI ���ɱ���
+  // AI 生成标题
   const [aiTitleLoading, setAiTitleLoading] = useState(false);
   const handleAITitle = useCallback(async () => {
     if (!activeNote || !activeNote.contentText || aiTitleLoading) return;
     setAiTitleLoading(true);
     try {
-      // 1) �Ȱѱ༭���� pending �� debounce �Ķ� flush ��ȥ�����⣺
-      //    - AI ���ڹ��ڵ� contentText ���ɱ���
-      //    - �Ժ� updateNote �� version ��󱻺�˷��� 409 "Version conflict"
-      //      ���±�������Ĭʧ�ܣ�֮ǰֻ console.error���û��������κη�������
+      // 1) 先把编辑器里 pending 的 debounce 改动 flush 出去，避免：
+      //    - AI 基于过期的 contentText 生成标题
+      //    - 稍后 updateNote 因 version 落后被后端返回 409 "Version conflict"
+      //      导致标题请求静默失败（之前只 console.error，用户看不到任何反馈）。
       try {
         editorHandleRef.current?.flushSave();
       } catch {
         /* ignore */
       }
 
-      // 2) AI ����
+      // 2) AI 生成
       const titleCtx = buildAiContext({
         action: "title",
         title: activeNote.title,
@@ -2849,9 +2849,9 @@ function OrdinaryEditorPane({
         return;
       }
 
-      // 3) д����⣺���ֹ�����ͻ��һ�������ԡ�
-      //    MD �༭�� debounce ��Ȼ�� flush���� AI �����ʱ���û��Կ��ܼ�������
-      //    �� ���� �� version ������������� 409�������������±ʼ����� version ���ԡ�
+      // 3) 写入标题：带乐观锁冲突的一次性重试。
+      //    MD 编辑器 debounce 虽然已 flush，但 AI 请求耗时中用户仍可能继续输入
+      //    → 保存 → version 自增；这里如果 409，就重新拉最新笔记拿新 version 再试。
       const doUpdate = async (version: number) =>
         api.updateNote(activeNote.id, {
           title: cleaned,
@@ -2874,8 +2874,8 @@ function OrdinaryEditorPane({
         throw err;
       }
 
-      // 4) ͬ��ǰ��״̬��MarkdownEditor ���ж����� [note.title] effect
-      //    ��ѷ��ܿ� title input �� DOM ֵˢ�³��±��⡣
+      // 4) 同步前端状态；MarkdownEditor 侧有独立的 [note.title] effect
+      //    会把非受控 title input 的 DOM 值刷新成新标题。
       actions.setActiveNote(updated);
       actions.updateNoteInList({
         id: updated.id,
@@ -2899,7 +2899,7 @@ function OrdinaryEditorPane({
     }
   }, [activeNote, actions, aiTitleLoading, t]);
 
-  // AI �Ƽ���ǩ
+  // AI 推荐标签
   const [aiTagsLoading, setAiTagsLoading] = useState(false);
   const handleAITags = useCallback(async () => {
     if (!activeNote || !activeNote.contentText || aiTagsLoading) return;
@@ -2920,7 +2920,7 @@ function OrdinaryEditorPane({
         return;
       }
       for (const name of tagNames) {
-        // ����Ƿ��Ѵ���
+        // 检查是否已存在
         const existing = state.tags.find((t) => t.name === name);
         let tagId: string;
         if (existing) {
@@ -2929,13 +2929,13 @@ function OrdinaryEditorPane({
           const newTag = await api.createTag({ name });
           tagId = newTag.id;
         }
-        // ����Ƿ��ѹ���
+        // 检查是否已关联
         const noteTags = activeNote.tags || [];
         if (!noteTags.find((t) => t.id === tagId)) {
           await api.addTagToNote(activeNote.id, tagId);
         }
       }
-      // ���»�ȡ�ʼǺͱ�ǩ
+      // 重新获取笔记和标签
       const updatedNote = await api.getNote(activeNote.id);
       actions.setActiveNote(updatedNote);
       api.getTags().then(actions.setTags).catch(console.error);
@@ -2946,7 +2946,7 @@ function OrdinaryEditorPane({
     setAiTagsLoading(false);
   }, [activeNote, actions, state.tags, aiTagsLoading]);
 
-  // AI �ܽ�
+  // AI 总结
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiSummaryResult, setAiSummaryResult] = useState("");
   const [showSummaryDialog, setShowSummaryDialog] = useState(false);
@@ -3018,7 +3018,7 @@ function OrdinaryEditorPane({
     const md = "\n\n## AI 总结\n\n" + aiSummaryResult + "\n";
     const appended = editorHandleRef.current?.appendMarkdown?.(md);
     if (!appended) {
-      // �༭����֧�� appendMarkdown��fallback ��������
+      // 编辑器不支持 appendMarkdown，fallback 到复制文本
       try {
         await navigator.clipboard.writeText(aiSummaryResult);
         toast.success(
@@ -3029,7 +3029,7 @@ function OrdinaryEditorPane({
       }
       return;
     }
-    // ��������
+    // 立即落盘
     try {
       editorHandleRef.current?.flushSave();
     } catch {
@@ -3039,7 +3039,7 @@ function OrdinaryEditorPane({
     setShowSummaryDialog(false);
   }, [activeNote, aiSummaryResult, t]);
 
-  // AI ���� Mermaid
+  // AI 生成 Mermaid
   const [aiMermaidLoading, setAiMermaidLoading] = useState(false);
   const [aiMermaidResult, setAiMermaidResult] = useState("");
   const [aiMermaidType, setAiMermaidType] = useState<
@@ -3080,7 +3080,7 @@ function OrdinaryEditorPane({
         });
         if (mermaidCtx.notice) toast.info(mermaidCtx.notice);
         let result = await api.aiChat(type, mermaidCtx.promptText);
-        // ��ϴ��ȥ��Χ��
+        // 先洗掉外层围栏
         result = result
           .replace(/^```mermaid\s*/i, "")
           .replace(/^```\s*/i, "")
@@ -3190,8 +3190,8 @@ function OrdinaryEditorPane({
   const handleMoveToNotebook = useCallback(
     async (notebookId: string) => {
       if (!activeNote || notebookId === activeNote.notebookId) return;
-      // ���� try/catch����˶Կ繤�����ƶ��᷵�� 400 CROSS_WORKSPACE_MOVE_FORBIDDEN��
-      // ���������ð�ݳ� "Uncaught (in promise)" ����������ʶ������������ȷ��ʾ��
+    // 必须 try/catch：后端对跨工作区移动会返回 400 CROSS_WORKSPACE_MOVE_FORBIDDEN，
+    // 若不捕获会冒泡成 "Uncaught (in promise)" 噪音。这里识别错误码给出明确提示。
       try {
         const updated = await api.updateNote(activeNote.id, {
           notebookId,
@@ -3221,10 +3221,10 @@ function OrdinaryEditorPane({
     [activeNote, actions],
   );
 
-  // ---- P3��AI �Զ����ཨ�� ----
-  // ���"AI �������"��һ�� /ai/classify���� top-3 ������Ⱦ����������ڡ�
-  // ��������ڼ䰴ť disabled��ʧ��ʱ�� toast ��ʾ���������û���ѡ��
-  // ÿ�� activeNote �仯��ս��飬���⿴����һ���ʼǵľɽ����
+  // ---- P3：AI 自动归类建议 ----
+  // 点击"AI 建议归类"后发一次 /ai/classify，把 top-3 建议渲染在下拉面板内。
+  // 建议加载期间按钮 disabled；失败时用 toast 提示，不阻塞用户手选。
+  // 每次 activeNote 变化清空建议，避免看到上一条笔记的旧结果。
   const [aiSuggestions, setAiSuggestions] = useState<
     | {
         notebookId: string;
@@ -3246,7 +3246,7 @@ function OrdinaryEditorPane({
     setAiClassifyLoading(true);
     try {
       const res = await api.aiClassify({ noteId: activeNote.id });
-      // ���˵�"���ǵ�ǰ�ʼǱ�"�Ľ��顪��û������
+      // 过滤掉"就是当前笔记本"的建议——没有意义
       const filtered = res.suggestions.filter(
         (s) => s.notebookId !== activeNote.notebookId,
       );
@@ -3265,12 +3265,12 @@ function OrdinaryEditorPane({
     }
   }, [activeNote, aiClassifyLoading, t]);
 
-  // ���������������ȫһ�µıʼǱ���
+  // 构建与左侧侧边栏完全一致的笔记本树
   //
-  // ��"�ƶ����ʼǱ�"�ĺ�ѡ�����ϸ�������**��ǰ�ʼ����ڵ� workspace**��
-  // ��� PUT /notes/:id ��ǿ��Դ/Ŀ��ͬ workspace��������ǰ���� guard����
-  // �û������������Ǹɾ���ͬ�ռ���������㵽��Ȼ�ᱻ 400 �ܾ��ıʼǱ���
-  // workspaceId ��һ��undefined/"" ������ null��= ���˿ռ䣩��
+  // 但"移动到笔记本"的候选必须严格限制在**当前笔记所在的 workspace**：
+  // 后端 PUT /notes/:id 已强制源/目标同 workspace，这里做前端软 guard，让
+  // 用户看到的树就是干净的同空间树，避免点到必然会被 400 拒绝的笔记本。
+  // workspaceId 归一：undefined/"" 都视作 null（= 个人空间）。
   const notebookTree = useMemo(() => {
     const srcWs = (activeNote?.workspaceId || null) as string | null;
     const sameWsNotebooks = activeNote
@@ -3278,14 +3278,14 @@ function OrdinaryEditorPane({
       : state.notebooks;
     return buildTree(sameWsNotebooks);
   }, [state.notebooks, activeNote]);
-  // ��ǰ�ʼ������ʼǱ�������·�������м��
+  // 当前笔记所属笔记本的完整路径（面包屑）
   const currentPath = useMemo(
     () => findPathById(state.notebooks, activeNote?.notebookId),
     [state.notebooks, activeNote?.notebookId],
   );
 
-  // ���� �ʼǼ����йǼ��� ����
-  // �ڵ���ʼ��б������ݻ�û����ǰ��ʾ����̬
+  // ── 笔记加载中骨架屏 ──
+  // 在点击笔记列表后、内容还没到达前显示过渡态
   if (noteLoading && !activeNote) {
     return (
       <NoteLoadingSkeleton
@@ -3305,11 +3305,11 @@ function OrdinaryEditorPane({
   if (!activeNote) {
     return (
       <div className="flex-1 flex flex-col bg-app-bg transition-colors relative">
-        {/* �ƶ��ˣ��������ذ�ť + ��ʾ��
-            ������ԭ��̬�� `hidden md:flex` �����ݲ��������ƶ����е� editor ��ͼ��
-            ���� activeNote ʱ��ĻһƬ�հף��û��Ҳ����ص��б�����ڣ�ϵͳ���ؼ�
-            ��Ȼ�ܴ��� onBackToList���������û�/���Ƶ��������²���ֱ�ۣ���������
-            ����"��ʼ�û��Ӧ"�����ﲹһ���ƶ��˿ɼ��ķ���������İ�����Ϊ���ס� */}
+        {/* 移动端：顶部返回按钮 + 提示。
+            背景：原空态用 `hidden md:flex` 把内容藏起来，移动端切到 editor 视图但
+            尚无 activeNote 时屏幕一片空白，用户找不到回到列表的入口（系统返回键
+            虽然能触发 onBackToList，但部分用户/手势导航环境下并不直观），看起来
+            就像"点笔记没反应"。这里补一条移动端可见的返回入口与文案，作为兜底。 */}
         <header
           data-adaptive-editor-empty-header
           className="flex items-center gap-2 px-3 py-2 border-b border-app-border bg-app-surface/50 md:hidden"
@@ -3325,7 +3325,7 @@ function OrdinaryEditorPane({
           </button>
         </header>
         <div className="flex-1 flex items-center justify-center px-6">
-          {/* �����ԭ�п�̬�������Ӿ����䣩 */}
+          {/* 桌面端原有空态（保持视觉不变） */}
           <div className="text-center hidden md:flex flex-col items-center">
             <div className="relative mb-6">
               <div className="w-20 h-20 rounded-2xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center">
@@ -3389,7 +3389,7 @@ function OrdinaryEditorPane({
               </span>
             </div>
           </div>
-          {/* �ƶ��˼򻯿�̬�������� header ����ṩ�����ɵ㽻���� */}
+          {/* 移动端简化空态（与上面 header 配合提供完整可点交互） */}
           <div className="text-center md:hidden flex flex-col items-center">
             <div className="w-16 h-16 rounded-2xl bg-accent-primary/5 border border-accent-primary/10 flex items-center justify-center mb-4">
               <svg
@@ -3476,7 +3476,7 @@ function OrdinaryEditorPane({
           transition={{ duration: reduceMotion ? 0 : 0.15 }}
           className="flex-1 flex flex-col bg-app-bg overflow-hidden transition-colors relative"
         >
-          {/* �ʼ��л� loading ���� */}
+      {/* 笔记切换 loading 遮罩 */}
           <AnimatePresence>
             {noteLoading && (
               <motion.div
@@ -3505,13 +3505,13 @@ function OrdinaryEditorPane({
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Mobile Editor Header �� iOS ���˫�нṹ
-          �� 1 �У����� + ���м���ʼǱ�·����+ ͬ��״̬
-          �� 2 �У���ǰ�ʼǱ��⣨�ضϣ�+ �ղ� + ����
-          ˵����
-            - С���������ޣ�ԭ��һ���� 5 ��ͼ�갴ť�Ѽ�ѹ���ҿ������ʼǱ�·������⣻
-            - ��/�ö�����Ƶ���أ�Ų�� ? �˵����˵����ﷴӳ��ǰ״̬��
-            - Presence ͷ����С�����岻���ƶ��˲���Ⱦ������˱����� */}
+      {/* Mobile Editor Header — iOS 风格双行结构
+          第 1 行：返回 + 面包屑（笔记本路径）+ 同步状态
+          第 2 行：当前笔记标题（截断）+ 收藏 + 更多
+          说明：
+            - 小屏宽度有限，原来一行塞 5 个图标按钮已挤压，且看不到笔记本路径与标题；
+            - 赞/踩按钮低频加载，挪进 ⋯ 菜单；菜单项反映当前状态；
+            - Presence 头像在小屏意义不大，移动端不渲染；桌面端保留。 */}
           <header
             data-mobile-editor-compact={compactMobileEditing ? "true" : "false"}
             className={cn(
@@ -3520,7 +3520,7 @@ function OrdinaryEditorPane({
             )}
             style={{ paddingTop: "var(--safe-area-top)" }}
           >
-            {/* �� 1 �У����� + ���м + ͬ�� */}
+        {/* 第 1 行：返回 + 面包屑 + 同步 */}
             <div className="flex min-w-0 items-center gap-1.5 px-2 py-1.5">
               <button
                 data-adaptive-editor-back
@@ -3530,8 +3530,8 @@ function OrdinaryEditorPane({
               >
                 <ChevronLeft size={22} />
               </button>
-              {/* ���м������·�������һ�μӴ�ǿ���������ɹ�������ضϳ� "..."
-              �������"�ƶ����ʼǱ�"�˵�������������м�ɵ��������һ�£� */}
+          {/* 面包屑：完整路径，最后一段加粗强调，超长可滚动避免截断成 "..."
+              点击调起"移动到笔记本"菜单（与桌面端面包屑可点击的语义一致） */}
               <button
                 onClick={() => {
                   setShowMobileMenu(true);
@@ -3666,7 +3666,7 @@ function OrdinaryEditorPane({
             >
               <MoreHorizontal size={16} />
             </Button>
-            {/* ������������˵� */}
+            {/* 更多操作下拉菜单 */}
             <AnimatePresence>
               {showMobileMenu && (
                 <motion.div
@@ -3680,7 +3680,7 @@ function OrdinaryEditorPane({
                     WebkitOverflowScrolling: "touch",
                   }}
                 >
-                  {/* �ö� / ȡ���ö� */}
+                  {/* 置顶 / 取消置顶 */}
                   {!Capacitor.isNativePlatform() &&
                     activeNote.contentFormat !== "plaintext" && (
                       <button
@@ -3773,7 +3773,7 @@ function OrdinaryEditorPane({
                     </span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* �ƶ��ʼǱ� */}
+                  {/* 移动笔记本 */}
                   <button
                     onClick={() => setShowMobileMoveMenu(!showMobileMoveMenu)}
                     disabled={isTrashed}
@@ -3785,7 +3785,7 @@ function OrdinaryEditorPane({
                     </span>
                     <ChevronRight size={14} className="text-tx-tertiary" />
                   </button>
-                  {/* �ƶ��ʼǱ��Ӳ˵� */}
+                  {/* 移动笔记本子菜单 */}
                   <AnimatePresence>
                     {showMobileMoveMenu && (
                       <motion.div
@@ -3813,7 +3813,7 @@ function OrdinaryEditorPane({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                  {/* ��� */}
+                  {/* 大纲 */}
                   <button
                     onClick={() => {
                       setShowMobileOutline(true);
@@ -3840,7 +3840,7 @@ function OrdinaryEditorPane({
                     onAction={applyCjkTypography}
                   />
                   <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* AI ���ɱ��� */}
+                  {/* AI 生成标题 */}
                   {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
@@ -3865,7 +3865,7 @@ function OrdinaryEditorPane({
                     <span>{t("editor.aiGenerateTitle")}</span>
                   </button>
                   )}
-                  {/* AI �Ƽ���ǩ */}
+                  {/* AI 推荐标签 */}
                   {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
@@ -3890,7 +3890,7 @@ function OrdinaryEditorPane({
                     <span>{t("editor.aiSuggestTags")}</span>
                   </button>
                   )}
-                  {/* AI �ܽ� */}
+                  {/* AI 总结 */}
                   {isFeatureEnabled("ai") && (
                   <button
                     onClick={() => {
@@ -3916,7 +3916,7 @@ function OrdinaryEditorPane({
                   </button>
                   )}
                   <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* ���� */}
+                  {/* 分享 */}
                   {isFeatureEnabled("sharing") && (
                   <button
                     onClick={() => {
@@ -3929,7 +3929,7 @@ function OrdinaryEditorPane({
                     <span>{t("editor.shareNote")}</span>
                   </button>
                   )}
-                  {/* �汾��ʷ */}
+                  {/* 版本历史 */}
                   <button
                     onClick={() => {
                       setShowVersionHistory(true);
@@ -3940,7 +3940,7 @@ function OrdinaryEditorPane({
                     <History size={15} className="text-violet-500" />
                     <span>{t("editor.versionHistory")}</span>
                   </button>
-                  {/* ���� */}
+                  {/* 评论 */}
                   {isFeatureEnabled("sharing") && (
                   <button
                     onClick={() => {
@@ -3971,7 +3971,7 @@ function OrdinaryEditorPane({
                         </span>
                       )}
                   </button>
-                  {/* ����Ŀ¼ */}
+                  {/* 附件目录 */}
                   <button
                     onClick={() => {
                       setShowAttachmentsPanel(true);
@@ -3994,7 +3994,7 @@ function OrdinaryEditorPane({
                       <span>拆分文档</span>
                     </button>
                   )}
-                  {/* HTML Ԥ�� / �༭�л����� HTML Ƭ�αʼ���ʾ����ȫ��¡��֧�ֱ༭�� */}
+                  {/* HTML 预览 / 编辑切换（仅 HTML 片段笔记显示，完全克隆不支持编辑） */}
                   {noteIsHtml && !noteIsFullHtmlDoc && (
                     <>
                       <div className="h-px bg-app-border mx-2 my-0.5" />
@@ -4051,7 +4051,7 @@ function OrdinaryEditorPane({
                     <span>{t("note.exportAsJpg")}</span>
                   </button>
                   <div className="h-px bg-app-border mx-2 my-0.5" />
-                  {/* ɾ���ʼ� */}
+                  {/* 删除笔记 */}
                   <button
                     onClick={() => {
                       moveToTrash();
@@ -4068,7 +4068,7 @@ function OrdinaryEditorPane({
             </AnimatePresence>
           </div>
 
-          {/* Mobile Outline Panel (ȫ������) */}
+      {/* Mobile Outline Panel (全屏覆盖) */}
           <AnimatePresence>
             {showMobileOutline && (
               <motion.div
@@ -4151,8 +4151,8 @@ function OrdinaryEditorPane({
                     <span className="flex min-w-0 items-center gap-1 overflow-hidden">
                       {currentPath.map((nb, idx) => {
                         const isLast = idx === currentPath.length - 1;
-                        // ĩ�������������ضϣ�min-w-0 + ���� shrink-0�����м�α��ֽ��ղ�����
-                        // ֮ǰ���жζ��� shrink-0 + truncate������ truncate ʧЧ�������� emoji/��ͷ�Ӿ��ص�
+                  // 末段允许收缩并截断（min-w-0 + 不加 shrink-0），中间段保持紧凑不收缩
+                  // 之前所有段都用 shrink-0 + truncate，导致 truncate 失效、文字与 emoji/箭头视觉重叠
                         return (
                           <React.Fragment key={nb.id}>
                             {idx > 0 && (
@@ -4203,9 +4203,9 @@ function OrdinaryEditorPane({
                       className="absolute top-full left-0 mt-1 w-72 bg-white dark:bg-zinc-950 border border-app-border rounded-lg shadow-xl z-50 py-1 max-h-96 overflow-auto"
                       style={{ animation: "contextMenuIn 0.12s ease-out" }}
                     >
-                      {/* ���� P3��AI ������� ����
-                    ���ڶ�������λ�ã����������� �� չʾ���� �� ������ƶ���
-                    ���鲻����"ȫ���ʼǱ�"��ѡ�б����û����ֶ��߹��档 */}
+                {/* ── P3：AI 建议归类 ──
+                    放在顶部显眼位置；点击后加载中 → 展示建议 → 点击即移动。
+                    建议不覆盖"全部笔记本"手选列表，用户两种动线共存。 */}
                       {isFeatureEnabled("ai") && (
                       <div className="px-2 pt-1 pb-0.5">
                         <button
@@ -4213,7 +4213,7 @@ function OrdinaryEditorPane({
                           disabled={aiClassifyLoading}
                           className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-50 disabled:cursor-wait transition-colors"
                           title={
-                            t("editor.aiClassifyTip") || "���ڱʼ������Ƽ�Ŀ��ʼǱ�"
+                            t("editor.aiClassifyTip") || "根据笔记内容推荐最合适的笔记本"
                           }
                         >
                           {aiClassifyLoading ? (
@@ -4223,8 +4223,8 @@ function OrdinaryEditorPane({
                           )}
                           <span className="flex-1 text-left">
                             {aiClassifyLoading
-                              ? t("editor.aiClassifyLoading") || "AI ���ڷ�����"
-                              : t("editor.aiClassifyAction") || "AI �������"}
+                              ? t("editor.aiClassifyLoading") || "AI 正在分析…"
+                              : t("editor.aiClassifyAction") || "AI 建议归类"}
                           </span>
                         </button>
                         {aiSuggestions && aiSuggestions.length > 0 && (
@@ -4366,7 +4366,7 @@ function OrdinaryEditorPane({
 
             {/* Sync Indicator + Grouped Actions */}
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* ͬ��״̬ */}
+          {/* 同步状态 */}
               <SyncIndicator
                 syncStatus={syncStatus}
                 lastSyncedAt={lastSyncedAt}
@@ -4375,7 +4375,7 @@ function OrdinaryEditorPane({
 
               <div className="h-4 w-px shrink-0 bg-app-border" />
 
-              {/* �༭������ */}
+          {/* 编辑操作组 */}
               <div className="flex shrink-0 items-center gap-0.5 bg-app-hover/50 rounded-lg px-1 py-0.5">
                 <Button
                   variant="ghost"
@@ -4440,7 +4440,7 @@ function OrdinaryEditorPane({
                 </Button>
               </div>
 
-              {/* ���� */}
+          {/* 大纲 */}
               {isFeatureEnabled("sharing") && (
                 <Button
                   variant="ghost"
@@ -4552,24 +4552,24 @@ function OrdinaryEditorPane({
                 </Button>
               )}
 
-              {/* �༭��ģʽ�л���MD / Tiptap�� */}
+          {/* 编辑器模式切换（MD / Tiptap） */}
               {/*
-            ����Ѷ���ͨ�û����أ����ļ����� SHOW_EDITOR_MODE_TOGGLE ע�ͣ���
-            URL `?md=1|0` ��Ȼ��Ч��toggleEditorMode ����Э�鱣�����·���
+            入口已对普通用户隐藏（见文件顶部 SHOW_EDITOR_MODE_TOGGLE 注释）。
+            URL `?md=1|0` 仍然生效；toggleEditorMode 完整协议保留在下方。
 
-            disabled ������
-              - �� modeSwitching�������л��У��������롣
-            ���� collabSynced��
-              ���ڰ汾���� `collabReady && !collabSynced` ʱ���ð�ť + ��ʾ"Эͬ
-              ����ͬ����"tooltip����ʵ�ⷢ�ֲ��ֻ����� collabSynced ���ɿ���ͣ����
-              false������ realtime δ��ͨ��provider ��̬�������� y:sync ��ʧ����
-              ���°�ť���û����޷��л� RTE ���� ���Ǳ�"���ж���"�����ص��������⡣
-              �����ı���������� `toggleEditorMode` ��ͷ�����Ϸ� �� ��ڣ���
+            disabled 条件：
+              - 仅 modeSwitching：正在切换中，避免重入。
+            关于 collabSynced：
+              早期版本曾在 `collabReady && !collabSynced` 时禁用按钮 + 显示"协同
+              正在同步中"tooltip，但实测发现部分环境下 collabSynced 不可靠地停留在
+              false（例如 realtime 未连通、provider 竟态、或服务端 y:sync 丢失），
+              导致按钮永久灰灭、无法切回 RTE —— 这是比"误切丢字"更严重的体验问题。
+              真正的保护放在入口 `toggleEditorMode` 开头（见上方 ① 入口）：
                 if (collabReadyRef.current && !collabSyncedRef.current) {
                   toast.error(...); return;
                 }
-              ��ť���ֿɵ������ CRDT ��δ sync ֻ�� toast ��ִ���л���sync ��ɺ�
-              �ٵ㼴��˳���л�����Զ��������"��ť����"����״̬��
+              按钮保持可点击，若 CRDT 仍未 sync 只弹 toast 不执行切换；sync 完成后
+              再点即可顺利切换，永远不会陷入"按钮坏了"的死状态。
           */}
               {SHOW_EDITOR_MODE_TOGGLE &&
                 activeNote.contentFormat !== "plaintext" && (
@@ -4894,13 +4894,13 @@ function OrdinaryEditorPane({
 
           {userPrefs.enableNoteTabs && !state.editorSplit && <NoteTabsBar />}
 
-          {/* Editor (HTML Ԥ�� / MD / Tiptap ��ģʽ����) + Outline */}
+      {/* Editor (HTML 预览 / MD / Tiptap 按模式分派) + Outline */}
           <div className="flex-1 flex overflow-hidden">
             <div
               className="note-theme-surface flex-1 overflow-hidden relative"
               data-note-id={activeNote.id}
             >
-              {/* Phase 2: ʵʱЭ����������� / Զ�̸��� / Զ��ɾ�������� absolute ���㣬��ռ�ĵ���������ҳ�涶�� */}
+          {/* Phase 2: 实时协作横幅（软锁 / 远程更新 / 远程删除）—— absolute 浮层，不占文档流，避免页面抖动 */}
               {false && pendingDraft ? (
                 <div
                   className="absolute top-2 left-2 right-2 z-30 px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 shadow-sm flex items-center justify-between gap-2"
@@ -4936,8 +4936,8 @@ function OrdinaryEditorPane({
                   </div>
                 </div>
               ) : null}
-              {/* ErrorBoundary �������ֱ༭�����бʼ�Ϊ key���������Զ����ã�
-              �ײ㻹�ܴ� console �� [EditorErrorBoundary] ��־�� window.__lastDirtyDoc */}
+          {/* ErrorBoundary 包裹三种编辑器：切笔记为 key，崩溃后自动重置；
+              底层还能打到 console 的 [EditorErrorBoundary] 日志与 window.__lastDirtyDoc */}
               <EditorErrorBoundary resetKey={activeNote.id}>
                 {/* 文件夹同步的 PDF / DOCX 笔记默认直接显示原文件，并隐藏内部同步元数据。 */}
                 {activeNote.contentFormat === "plaintext" ? (
@@ -4998,8 +4998,8 @@ function OrdinaryEditorPane({
                   />
                 ) : editorMode === "md" ? (
                   <MarkdownEditor
-                    // Phase 3: key �� CRDT ����̬���л� provider ʱǿ���ؽ��༭����
-                    // ���� yCollab ��չ������ʱ���� yText ������״̬����
+              // Phase 3: key 绑定 CRDT 启用态，切换 provider 时强制重建编辑器，
+              // 避免 yCollab 扩展在运行时更换 yText 带来的状态错乱
                     key={
                       collabYDoc
                         ? `md-y-${activeNote.id}`
@@ -5011,8 +5011,8 @@ function OrdinaryEditorPane({
                     onTagsChange={handleTagsChange}
                     onHeadingsChange={setHeadings}
                     onEditorReady={handleEditorReady}
-                    // UX3��ģʽ�л��ڼ䶳��༭�������û��� mount��unmount ��������֣�
-                    // ��������������һ�༭����������������"�ڶ�����"����
+              // UX3：模式切换期间冻结编辑（避免用户在 mount→unmount 间隔里敲字，
+              // 这段输入进不了任一编辑器的数据流，属于"黑洞输入"）。
                     editable={
                       canEditActiveNote && !effectiveLocked && !modeSwitching
                     }
@@ -5051,10 +5051,10 @@ function OrdinaryEditorPane({
                 paused={noteLoading || modeSwitching}
               />
               {/*
-            UX1/UX2���༭���л��� overlay��
-            - ���ڵ�ǰ�༭���Ϸ����赲���� / �Ӿ���ʾ"�л���"��
-            - AnimatePresence �ý�������ƽ��������"��"һ�£�
-            - pointer-events-auto �����ص��Ҳ��ֹ Tiptap/CM6 ��ѡ�����ƻ���
+            UX1/UX2：编辑器切换中 overlay。
+            - 盖在当前编辑器上方，阻挡误点击 / 视觉提示"切换中"；
+            - AnimatePresence 让进出过渡平滑，避免"咔"一下；
+            - pointer-events-auto 既拦截点击也防止 Tiptap/CM6 的选区被破坏。
           */}
               <AnimatePresence>
                 {modeSwitching && (
@@ -5077,7 +5077,7 @@ function OrdinaryEditorPane({
                 )}
               </AnimatePresence>
             </div>
-            {/* �������� */}
+      {/* 分享弹窗 */}
             {showShareModal && isFeatureEnabled("sharing") && (
               <ShareModal
                 noteId={activeNote.id}
@@ -5086,7 +5086,7 @@ function OrdinaryEditorPane({
               />
             )}
 
-            {/* �汾��ʷ */}
+      {/* 版本历史 */}
             {showVersionHistory && (
               <VersionHistoryPanel
                 noteId={activeNote.id}
@@ -5132,7 +5132,7 @@ function OrdinaryEditorPane({
               />
             )}
 
-            {/* ������� */}
+      {/* 评论面板 */}
             {showCommentPanel && isFeatureEnabled("sharing") && (
               <CommentPanel
                 noteId={activeNote.id}
@@ -5150,7 +5150,7 @@ function OrdinaryEditorPane({
               />
             )}
 
-            {/* ����Ŀ¼��� */}
+      {/* 附件目录面板 */}
             {showAttachmentsPanel && (
               <NoteAttachmentsPanel
                 noteId={activeNote.id}
@@ -5159,7 +5159,7 @@ function OrdinaryEditorPane({
               />
             )}
 
-            {/* Delete ��ɾ��ȷ�ϵ��� */}
+      {/* Delete 键删除确认弹窗 */}
             <AnimatePresence>
               {showDeleteConfirm && (
                 <motion.div
@@ -5209,7 +5209,7 @@ function OrdinaryEditorPane({
               )}
             </AnimatePresence>
 
-            {/* AI �ܽᵯ�� */}
+            {/* AI 总结弹窗 */}
             <AnimatePresence>
               {showSummaryDialog && (
                 <motion.div
@@ -5228,7 +5228,7 @@ function OrdinaryEditorPane({
                     onClick={(e) => e.stopPropagation()}
                     className="bg-app-surface border border-app-border rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col"
                   >
-                    {/* ������ */}
+                    {/* 标题栏 */}
                     <div className="flex items-center justify-between px-5 py-3.5 border-b border-app-border">
                       <div className="flex items-center gap-2">
                         <Sparkles size={16} className="text-violet-500" />
@@ -5245,7 +5245,7 @@ function OrdinaryEditorPane({
                         <X size={16} />
                       </button>
                     </div>
-                    {/* ������ */}
+                    {/* 内容区 */}
                     <div className="flex-1 overflow-y-auto px-5 py-4">
                       {aiSummaryLoading ? (
                         <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -5264,7 +5264,7 @@ function OrdinaryEditorPane({
                         </div>
                       )}
                     </div>
-                    {/* ������ */}
+                    {/* 底部操作栏 */}
                     {!aiSummaryLoading && aiSummaryResult && (
                       <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-app-border">
                         <div className="flex items-center gap-2">
@@ -5304,7 +5304,7 @@ function OrdinaryEditorPane({
               )}
             </AnimatePresence>
 
-            {/* AI Mermaid Ԥ������ */}
+            {/* AI Mermaid 预览弹窗 */}
             <MindMapEmbedInsertDialog
               open={
                 showMindMapInsertDialog &&
@@ -5449,7 +5449,7 @@ function OrdinaryEditorPane({
                 </motion.div>
               )}
             </AnimatePresence>
-            {/* HTML Ԥ�� �� �༭ģʽ�л�ȷ�ϵ��� */}
+      {/* HTML 预览 → 编辑模式切换确认弹窗 */}
             <AnimatePresence>
               {showHtmlEditWarning && (
                 <motion.div
@@ -5516,7 +5516,7 @@ function OrdinaryEditorPane({
   );
 }
 
-/* ===== ������ ===== */
+/* ===== 大纲面板 ===== */
 function OutlinePanel({
   headings,
   width,
@@ -5601,7 +5601,7 @@ function OutlinePanel({
   );
 }
 
-/* ===== �ʼǱ����������� Sidebar.tsx �� buildTree ��ȫһ�£� ===== */
+/* ===== 笔记本树构建（与 Sidebar.tsx 的 buildTree 完全一致） ===== */
 function buildTree(notebooks: Notebook[]): Notebook[] {
   const map = new Map<string, Notebook>();
   const roots: Notebook[] = [];
@@ -5614,7 +5614,7 @@ function buildTree(notebooks: Notebook[]): Notebook[] {
       roots.push(node);
     }
   });
-  // �� sortOrder �ȶ�����ȷ����ק�����˳��������ӳ�� UI
+  // 按 sortOrder 稳定排序，确保拖拽后的新顺序立即反映到 UI
   const byOrder = (a: Notebook, b: Notebook) =>
     (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   const sortRecursive = (list: Notebook[]) => {
@@ -5627,7 +5627,7 @@ function buildTree(notebooks: Notebook[]): Notebook[] {
   return roots;
 }
 
-/* �Ӹ���ָ�� id ������·���������������������мչʾ */
+/* 从根到指定 id 的完整路径（含自身），用于面包屑展示 */
 function findPathById(
   notebooks: Notebook[],
   id: string | null | undefined,
@@ -5654,7 +5654,7 @@ function getNotebookIcon(icon?: string | null): string {
   return value;
 }
 
-/* ===== �༭������"�ƶ��ʼǱ�"������Ŀ��������Ŀ¼�ṹ����һ�£� ===== */
+/* ===== 编辑器顶部"移动笔记本"树形条目（与侧边栏目录结构保持一致） ===== */
 function MoveTreeItem({
   notebook,
   depth,
@@ -5667,7 +5667,7 @@ function MoveTreeItem({
   onSelect: (id: string) => void;
 }) {
   const hasChildren = !!notebook.children && notebook.children.length > 0;
-  // Ĭ��չ�����������������а�����ǰ�ʼǣ���չ���������۵�
+  // 默认展开：若自身或子孙中包含当前笔记，则展开；否则折叠
   const containsCurrent = useMemo(() => {
     const stack: Notebook[] = [notebook];
     while (stack.length) {
@@ -5732,7 +5732,7 @@ function MoveTreeItem({
   );
 }
 
-/* ===== ͬ��״ָ̬ʾ�� ===== */
+/* ===== 同步状态指示器 ===== */
 function SyncIndicator({
   syncStatus,
   lastSyncedAt,

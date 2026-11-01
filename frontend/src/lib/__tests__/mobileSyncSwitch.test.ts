@@ -78,7 +78,7 @@ vi.mock("../authSession", () => ({
     fetchImpl(url, init),
 }));
 vi.mock("../mobileLocalFirstBridge", () => ({ installMobileLocalFirstBridge: () => () => undefined }));
-vi.mock("../mobileLocalAccountMigration", () => ({ migrateMobileLocalAccount: async () => undefined }));
+vi.mock("../mobileLocalAccountMigration", () => ({ migrateMobileLocalAccount: async () => undefined, discardMigratedLocalSeed: async () => undefined }));
 vi.mock("../localStore", () => ({
   getAllNotebooks: async () => [], getAllNotes: async () => [], getAllOfflineAttachmentJobs: async () => [],
   getAllTags: async () => [], getOfflineAttachmentsByNote: async () => [], setCurrentUser: vi.fn(),
@@ -110,7 +110,8 @@ beforeEach(async () => {
       payload = { serverSequence: 1, results: mutations.map(({ mutationId, baseVersion, payload: note }: { mutationId: string; baseVersion?: number; payload?: {version?:number} }) => ({
         mutationId, status: "applied", version: baseVersion == null ? note?.version || 1 : baseVersion + 1,
       })) };
-    } else if (url.includes("/changes?")) payload = { resetRequired: false, nextSequence: 1, items: [] };
+    } else if (url.includes("/snapshot?")) payload = { snapshotSequence: 1, nextCursor: null, items: [] };
+    else if (url.includes("/changes?")) payload = { resetRequired: false, nextSequence: 1, items: [] };
     else if (url.includes("/ack")) payload = {};
     else if (url.includes("/blob/")) return { ok: init?.method !== "HEAD", status: init?.method === "HEAD" ? 404 : 200 };
     else throw new Error(`Unexpected request: ${url}`);

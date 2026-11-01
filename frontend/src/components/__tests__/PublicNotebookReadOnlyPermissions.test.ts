@@ -23,9 +23,9 @@ describe("shared note read-only permissions", () => {
     expect(editorPaneSource).toContain('import { canWriteNote } from "@/lib/notePermissions";');
     expect(editorPaneSource).toContain("const canEditActiveNote = canWriteNote(activeNote);");
     const gates = editorPaneSource.match(
-      /editable=\{canEditActiveNote && !effectiveLocked && !modeSwitching\}/g,
+      /editable=\{\s*canEditActiveNote && !effectiveLocked && !modeSwitching\s*\}/g,
     ) || [];
-    expect(gates).toHaveLength(3);
+    expect(gates).toHaveLength(4);
   });
 
   it("keeps the split editor read-only and ignores stale update callbacks", () => {

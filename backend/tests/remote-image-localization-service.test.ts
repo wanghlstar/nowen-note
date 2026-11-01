@@ -240,6 +240,9 @@ test("job ownership is isolated", async () => {
     async () => localization.getLocalizationJob(OTHER_USER_ID, created.id),
     (error: any) => error?.code === "JOB_NOT_FOUND",
   );
+  // 所有权断言结束后必须释放 active job，否则后续用例都会撞 JOB_ALREADY_ACTIVE。
+  localization.cancelLocalizationJob(USER_ID, created.id);
+  assert.equal((await waitForJob(USER_ID, created.id)).status, "cancelled");
 });
 
 test("all-personal job scans automatically beyond the note and image batch limits", async () => {

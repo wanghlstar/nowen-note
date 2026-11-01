@@ -22,8 +22,8 @@ describe("list marker regressions", () => {
     const htmlExport = read("src/lib/exportServiceCore.ts");
     const imageExport = read("src/lib/noteImageExportCore.ts");
     const shared = read("src/components/SharedNoteView.tsx");
-    expect(main).toContain('li.task-list-item[data-checked="true"] > p > .nowen-task-item-text');
-    expect(main).toContain('li[data-type="taskItem"][data-checked="true"] > div > p');
+    expect(main).toMatch(/li\.task-list-item\[data-checked="true"\]\s*>\s*p\s*>\s*\.nowen-task-item-text/);
+    expect(main).toMatch(/li\[data-type="taskItem"\]\[data-checked="true"\]\s*>\s*div\s*>\s*p/);
     expect(markers).toContain('li.task-item[data-checked="true"] > div > p');
     expect(markers).not.toContain('li.task-item[data-checked="true"] > div,');
     expect(shared).toContain('class="task-item" data-checked=');

@@ -17,7 +17,7 @@ describe("native notification and fallback Pull scheduling", () => {
     const dispose = installMobileSyncRealtime({ requestSync } as unknown as MobileSyncEngine);
     mocks.listeners.get("sync.changed")!(); mocks.listeners.get("open")!();
     document.dispatchEvent(new Event("visibilitychange"));
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(requestSync).toHaveBeenCalledTimes(4);
     expect(requestSync).toHaveBeenLastCalledWith(150);
     expect(mocks.connect).toHaveBeenCalledOnce();

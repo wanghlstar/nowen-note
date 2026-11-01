@@ -7,7 +7,21 @@ import AttachmentDetailDrawer from "../attachmentDetail/AttachmentDetailDrawer";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const mocks = vi.hoisted(() => ({ list: vi.fn(), move: vi.fn(), get: vi.fn(), access: vi.fn(), copied: vi.fn(), error: vi.fn() }));
 vi.mock("@/lib/api", () => ({
-  api: { attachmentFolders: { list: mocks.list }, files: { move: mocks.move, get: mocks.get, setExternalAccess: mocks.access } },
+  api: {
+    attachmentFolders: { list: mocks.list },
+    files: {
+      move: mocks.move,
+      get: mocks.get,
+      setExternalAccess: mocks.access,
+      organization: {
+        list: vi.fn().mockResolvedValue({ supported: false, folders: [], tags: [], canManageTags: false }),
+        get: vi.fn(),
+        description: vi.fn().mockResolvedValue({ description: "" }),
+      },
+    },
+  },
+  getServerUrl: () => "http://localhost",
+  getCurrentWorkspace: () => null,
   resolveAttachmentUrl: (url: string) => `http://localhost${url}`,
 }));
 vi.mock("@/hooks/useSiteSettings", () => ({ useSiteSettings: () => ({ siteConfig: {} }) }));
@@ -47,10 +61,10 @@ describe("file organization controls", () => {
   it("moves selected files to a chosen folder only after the API succeeds", async () => {
     const onMoved = vi.fn(); const onClose = vi.fn();
     await act(async () => { root.render(<FileMoveDialog ids={["file-1"]} currentFolderId="a" onMoved={onMoved} onClose={onClose} />); });
-    const select = container.querySelector("select")!;
-    await act(async () => { select.value = "b"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    const target = [...container.querySelectorAll("button")].find((b) => b.textContent === "目录乙")!;
+    await act(async () => { target.click(); });
     await click("fileManager.moveFiles");
-    expect(mocks.move).toHaveBeenCalledWith(["file-1"], "b");
+    expect(mocks.move).toHaveBeenCalledWith(["file-1"], "b", { "file-1": "a" });
     expect(onMoved).toHaveBeenCalledWith("b", "目录乙"); expect(onClose).toHaveBeenCalledOnce();
   });
 

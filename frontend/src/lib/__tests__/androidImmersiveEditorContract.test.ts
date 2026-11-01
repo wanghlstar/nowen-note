@@ -38,7 +38,7 @@ describe("Android immersive editor contract", () => {
     expect(source).toContain('MobileEditorToolbarPortal location="leading"');
     expect(source).toContain('MobileEditorToolbarPortal location="trailing"');
     expect(source).toContain('data-mobile-note-menu-trigger');
-    expect(source).toContain("toggleLock(); setShowMobileMenu(false)");
+    expect(source).toMatch(/toggleLock\(\);\s*setShowMobileMenu\(false\)/);
   });
 
   it("reuses the breadcrumb slot for the title only after the body title scrolls away", () => {

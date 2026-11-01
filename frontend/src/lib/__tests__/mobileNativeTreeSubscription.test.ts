@@ -26,12 +26,20 @@ describe("native personal tree subscription", () => {
     expect(engine.subscriptionParams({...scope,workspaceId:"w",scopeKey:"workspace:w"} as never).has("entityTypes")).toBe(false);
     expect(() => assertMobileSyncItems([{entityType:"knowledge_tree_node",entityId:"note:n1",operation:"upsert"}],"changes",true)).not.toThrow();
   });
-  it.each([undefined,NATIVE_TREE_ENTITY_SET.split(",").slice(0,-1)])("keeps the legacy protocol on a fresh profile when an old server reports %s", async (entityTypes) => {
+  it("keeps the legacy protocol on a fresh profile when an old server reports no entity set", async () => {
     const {db,engine} = fixture();
-    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({entityTypes})));
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({entityTypes:undefined})));
     await engine.negotiateTree(scope);
     expect(engine.subscriptionParams(scope).has("entityTypes")).toBe(false);
     expect(db.run).not.toHaveBeenCalled();
+  });
+  it("accepts the Lite P0 subset without a tree cursor as the trimmed subscription", async () => {
+    const {db,engine} = fixture();
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({entityTypes:NATIVE_TREE_ENTITY_SET.split(",").slice(0,-1)})));
+    await engine.negotiateTree(scope);
+    expect(engine.subscriptionParams(scope).get("entityTypes")).toBe(NATIVE_TREE_ENTITY_SET);
+    expect(db.run.mock.calls.flatMap(([, values]) => (values as unknown[]) || [])
+      .some((value) => String(value).startsWith("nativeTreeSubscription:"))).toBe(false);
   });
   it("accepts an explicit unsupported-set response only before a tree cursor has been bound", async () => {
     vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({code:"INVALID_PAYLOAD"},400)));
@@ -43,7 +51,7 @@ describe("native personal tree subscription", () => {
   });
   it("refuses to silently downgrade a persisted tree subscription even when the server returns legacy types", async () => {
     const {db,engine} = fixture(true);
-    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({entityTypes:NATIVE_TREE_ENTITY_SET.split(",").slice(0,-1)})));
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(response({entityTypes:NATIVE_TREE_ENTITY_SET.split(",").slice(0,-2)})));
     await expect(engine.negotiateTree(scope)).rejects.toMatchObject({code:"UNSUPPORTED_TREE_SUBSCRIPTION"});
     expect(db.run).not.toHaveBeenCalled();
   });
