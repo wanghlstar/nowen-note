@@ -5,8 +5,6 @@ import LoginPage from "../LoginPage";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-const { loginRequested } = vi.hoisted(() => ({ loginRequested: vi.fn(() => false) }));
-
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -41,10 +39,6 @@ vi.mock("@/lib/api", () => ({
   setServerUrl: vi.fn(),
   testServerConnection: vi.fn(async () => ({ ok: true })),
 }));
-// Lite 包（安卓 / 桌面 Lite）
-vi.mock("@/lib/featureRegistry", () => ({ getFeatureProfile: () => "lite" }));
-vi.mock("@/lib/mobileLocalMode", () => ({ isMobileAccountLoginRequested: loginRequested }));
-
 let root: Root | null = null;
 const host = document.createElement("div");
 
@@ -56,30 +50,18 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   host.remove();
-  loginRequested.mockReturnValue(false);
 });
 
-describe("LoginPage lite local-first entry", () => {
-  it("shows the local-first card by default", async () => {
+describe("LoginPage lite entry", () => {
+  it("shows the remote login form with a local-only entry", async () => {
     const onContinueLocal = vi.fn();
     await act(async () => root?.render(<LoginPage isClientMode onLogin={vi.fn()} onContinueLocal={onContinueLocal} />));
-    expect(host.textContent).toContain("auth.liteLocalFirstTitle");
+    expect(host.querySelector('input[autocomplete="current-password"]')).toBeTruthy();
+    expect(host.textContent).toContain("auth.continueLocal");
     const button = Array.from(host.querySelectorAll("button"))
-      .find((item) => item.textContent === "auth.liteEnterLocalNotes");
+      .find((item) => item.textContent === "auth.continueLocal");
     expect(button).toBeTruthy();
     await act(async () => button?.click());
     expect(onContinueLocal).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows the server login form after an account entry asked for a login", async () => {
-    // 回归：安卓账号入口（切换 / 添加账号）会 requestMobileAccountLogin() 后重载；
-    // 若这里仍渲染本地入口，就会在登录页和「进入本地笔记」之间死循环。
-    // 同步设置内添加服务器已改为就地登录，不再经过这个请求。
-    loginRequested.mockReturnValue(true);
-    const onContinueLocal = vi.fn();
-    await act(async () => root?.render(<LoginPage isClientMode onLogin={vi.fn()} onContinueLocal={onContinueLocal} />));
-    expect(host.textContent).not.toContain("auth.liteLocalFirstTitle");
-    expect(host.querySelector('input[autocomplete="current-password"]')).toBeTruthy();
-    expect(host.textContent).toContain("auth.continueLocal");
   });
 });

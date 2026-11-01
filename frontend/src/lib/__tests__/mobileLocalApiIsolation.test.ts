@@ -12,7 +12,8 @@ describe("Android 本地模式远程 API 隔离", () => {
     } });
   });
 
-  it("未登录时在发出网络请求前拒绝非本地 API", async () => {
+  it("本机模式下在发出网络请求前拒绝非本地 API", async () => {
+    localStorage.setItem("nowen-mobile-force-local-mode", "1");
     const network = vi.spyOn(globalThis, "fetch");
 
     await expect(api.getMe()).rejects.toBeInstanceOf(MobileLocalModeRemoteRequestError);

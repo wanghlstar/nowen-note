@@ -91,6 +91,7 @@ describe("手机设置切换账号", () => {
 
   it("未登录本机模式仍提供登录入口", async () => {
     localStorage.removeItem("nowen-token");
+    localStorage.setItem("nowen-mobile-force-local-mode", "1");
     await mount();
     expect(host.textContent).toContain("mobileAccount.signInAndSync");
     expect(host.textContent).not.toContain("mobileAccount.switchAccount");

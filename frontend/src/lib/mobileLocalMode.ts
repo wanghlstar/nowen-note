@@ -22,22 +22,14 @@ export function isAndroidNativeRuntime(): boolean {
   }
 }
 
-function hasAccessToken(): boolean {
-  try {
-    return !!localStorage.getItem("nowen-token");
-  } catch {
-    return false;
-  }
-}
-
 export function isMobileLocalMode(): boolean {
   if (!isAndroidNativeRuntime()) return false;
   try {
-    if (localStorage.getItem(FORCE_LOCAL_KEY) === "1") return true;
-    if (hasAccessToken()) return false;
-    return localStorage.getItem(LOGIN_REQUESTED_KEY) !== "1";
+    // 首次启动不自动进入本机模式：登录页同时提供「登录远端账号」和
+    // 「继续使用仅此设备」。只有用户明确选择本机模式后才置位。
+    return localStorage.getItem(FORCE_LOCAL_KEY) === "1";
   } catch {
-    return true;
+    return false;
   }
 }
 

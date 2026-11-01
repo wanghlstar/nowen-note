@@ -129,7 +129,8 @@ describe("Android 本地优先运行时与离线切换", () => {
     expect(mocks.db.close).toHaveBeenCalledTimes(1); // only the migration source database
   });
 
-  it("无 token 仍打开独立 SQLite，但不创建同步引擎", async () => {
+  it("选择仅此设备后无 token 仍打开独立 SQLite，但不创建同步引擎", async () => {
+    enterMobileLocalMode();
     await initializeMobileLocalFirstRuntime();
 
     expect(mocks.openNativeDatabase).toHaveBeenCalledWith("android-device-local");
@@ -150,13 +151,13 @@ describe("Android 本地优先运行时与离线切换", () => {
 
   it("Harmony device-only startup opens the shared local repository without starting sync", async () => {
     // Dispose the prior test's cached device-only runtime before cold startup.
-    localStorage.setItem("nowen-mobile-account-login-requested", "1");
+    localStorage.removeItem("nowen-mobile-force-local-mode");
     await initializeMobileLocalFirstRuntime();
-    localStorage.removeItem("nowen-mobile-account-login-requested");
     vi.clearAllMocks();
     Object.assign(window, { Capacitor: {
       isNativePlatform: () => true, getPlatform: () => "harmony", platform: "harmony",
     } });
+    enterMobileLocalMode();
     await initializeMobileLocalFirstRuntime();
 
     expect(mocks.openNativeDatabase).toHaveBeenCalledWith("android-device-local");

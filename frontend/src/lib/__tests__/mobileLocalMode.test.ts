@@ -22,13 +22,18 @@ describe("Android 未登录本地模式", () => {
     installCapacitor("android");
   });
 
-  it("Android 无 token 时默认进入稳定的设备本地账号", () => {
-    expect(isMobileLocalMode()).toBe(true);
+  it("Android 首次启动默认显示登录页，不自动进入设备本地账号", () => {
+    expect(isMobileLocalMode()).toBe(false);
     expect(getMobileLocalUser()).toMatchObject({
       id: "android-local-user",
       username: "local",
       displayName: "仅此设备",
     });
+  });
+
+  it("用户选择仅此设备后才进入本地模式", () => {
+    continueMobileLocalMode();
+    expect(isMobileLocalMode()).toBe(true);
   });
 
   it("用户主动进入登录页后暂停本地模式，返回后恢复", () => {
@@ -65,7 +70,7 @@ describe("Android 未登录本地模式", () => {
 
   it("Harmony uses the same device-only lifecycle without pretending to be Android", () => {
     installCapacitor("harmony");
-    expect(isMobileLocalMode()).toBe(true);
+    expect(isMobileLocalMode()).toBe(false);
     requestMobileAccountLogin();
     expect(isMobileLocalMode()).toBe(false);
     continueMobileLocalMode();

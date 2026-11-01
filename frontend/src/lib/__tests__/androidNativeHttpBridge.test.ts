@@ -259,6 +259,7 @@ describe("androidNativeHttpBridge", () => {
   });
 
   it("blocks every API transport while Android is in unsigned local mode", async () => {
+    localStorage.setItem("nowen-mobile-force-local-mode", "1");
     Object.assign(window, { Capacitor: {
       isNativePlatform: () => true,
       getPlatform: () => "android",

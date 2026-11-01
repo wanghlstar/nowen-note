@@ -8,7 +8,7 @@
 
 ## 0. 一句话现状
 
-产品形态已定型：**Lite = 本地优先 + 后台同步**，Mac/安卓/NAS 三端一致；登录页只保留「进入本地笔记」，服务器通过「设置 → 同步」添加。
+产品形态已定型：**Lite = 本地优先 + 后台同步**，Mac/安卓/NAS 三端一致。登录页默认显示远端登录（服务器地址 + 账号 + 密码），表单下方保留「继续使用仅此设备」；远端登录成功后进入本地库并启动后台同步，也可以先本地离线、之后在「设置 → 同步」添加服务器。
 **P0「登出后无限闪屏」已修复并验证**（根因与修复见 §3）。
 最新 release：**v1.5.3-lite.14**（tag 指向 `58fc851d`），7 个资产齐全。
 lite.14 之后有 6 个代码提交（前后端测试全绿 + 编码/密码校验修复，另有本次文档更新），下一个 tag 应为 `v1.5.3-lite.15`。
@@ -114,7 +114,7 @@ lite.14 之后有 6 个代码提交（前后端测试全绿 + 编码/密码校�
 
 ## 6. 关键文件索引
 
-- 桌面零登录 / 登录页门禁：`frontend/src/App.tsx`（约 1450-1540 零登录、1762-1810 本地入口与加载态）、`frontend/src/components/LoginPage.tsx`（Lite 单入口面板在组件主 return 之前）
+- 桌面零登录 / 登录页门禁：`frontend/src/App.tsx`（`AuthGate.checkAuth`、`handleContinueLocal` / `handleEnterLocalNotes`）、`frontend/src/components/LoginPage.tsx`（远端登录表单 + 底部「继续使用仅此设备」）、`frontend/src/lib/mobileLocalMode.ts`（`nowen-mobile-force-local-mode` 是唯一本机模式开关）
 - 机器账号：`tauri/src-tauri/src/sidecar.rs`（`bootstrap_local_account`，Always Allow-Create=1）、`backend/src/routes/auth.ts`（`/desktop/bootstrap-local`）
 - 同步：`backend/src/sync/{applyLocal.ts,resolve.ts,bootstrap.ts,engine.ts}`、`backend/src/routes/sync-local.ts`
 - 同步设置 UI：`frontend/src/components/settings/SyncSettingsPanel.tsx`
