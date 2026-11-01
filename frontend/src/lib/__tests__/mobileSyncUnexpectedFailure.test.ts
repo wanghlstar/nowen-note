@@ -76,6 +76,31 @@ describe("Android native Sync V2 crash containment", () => {
     engine.stop();
   });
 
+  it("does not require AbortSignal.throwIfAborted in older Android WebViews", async () => {
+    const original = AbortSignal.prototype.throwIfAborted;
+    // Chrome < 100 lacks this method; Android WebView reports it as undefined.
+    Reflect.deleteProperty(AbortSignal.prototype, "throwIfAborted");
+    try {
+      const db = { query: vi.fn(), run: vi.fn(), transaction: vi.fn() };
+      const engine = new MobileSyncEngine({
+        db: db as never, attachments: {} as never, serverUrl: "https://notes.example.com",
+        token: "test-token", userId: "u1", profileId: "p1", deviceId: "d1",
+      });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
+      // Private method probe: this test only verifies transport start does not
+      // call the missing WebView API.
+      const probe = Reflect.get(engine, "fetchResponse") as (path: string) => Promise<Response>;
+      const response = await probe.call(engine, "/probe");
+      expect(response.ok).toBe(true);
+      expect(db.run).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(AbortSignal.prototype, "throwIfAborted", {
+        configurable: true, writable: true, value: original,
+      });
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("does not relaunch a stopped sync after a pending timer", async () => {
     vi.useFakeTimers();
     const db = { query: vi.fn(), run: vi.fn(), transaction: vi.fn() };

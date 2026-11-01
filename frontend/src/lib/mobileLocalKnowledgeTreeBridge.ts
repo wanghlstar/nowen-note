@@ -52,6 +52,21 @@ function snapshotKey(workspaceId: string | undefined, includeDeleted: boolean): 
   return `knowledgeTreeSnapshot:v1:${syncScopeKey(workspaceId)}:${includeDeleted ? 1 : 0}`;
 }
 
+/**
+ * 网络不可达与“服务端明确拒绝”必须区分：只有前者可以回退到本机数据。
+ * Android WebView 的原生 HTTP 失败通常不是 TypeError，不能只按 TypeError 判断。
+ */
+function isOfflineFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  // 服务端有响应（401/403/500 等）说明在线，不能当断网降级。
+  if ("status" in error && typeof error.status === "number" && error.status > 0) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const code = "code" in error ? error.code : undefined;
+  if (typeof code === "string" && /^(?:NETWORK|NETWORK_UNAVAILABLE|NETWORK_ERROR|NETWORK_REQUEST_FAILED|ECONNRE(?:FUSED|SET)|ENOTFOUND|ETIMEDOUT|TIMEOUT|ABORT_ERR)$/i.test(code)) return true;
+  if (error.name === "AbortError" || error.name === "TimeoutError") return true;
+  return /failed to fetch|network request failed|load failed|network error|connection (?:refused|failed)|err_(?:connection|name|internet|timed)|timed? out|无法连接|网络(?:异常|不可用)/i.test(error.message);
+}
+
 function notebookNode(item: Notebook, deviceOnly: boolean): KnowledgeTreeNode {
   const id = `notebook:${item.id}`;
   return {
@@ -326,7 +341,7 @@ export function installMobileLocalKnowledgeTreeBridge(
             }
           }
         }
-        if (!(error instanceof TypeError) || !/failed to fetch|network request failed|load failed/i.test(error.message)) throw error;
+        if (!isOfflineFailure(error)) throw error;
         if (db) {
           if (scope !== "personal") {
             const access = (await db.query<{ accessStatus: string }>(
@@ -350,6 +365,13 @@ export function installMobileLocalKnowledgeTreeBridge(
         // not authorize any cached remote body or project other Native rows.
         const drafts = await present({ nodes: [] }, false);
         if (drafts.nodes.length) return drafts;
+        // 个人空间的本机库才是权威源：没有服务端 ACL 快照时仍必须能列出
+        // 已同步到本机的笔记，否则断网后列表为空、界面表现为“笔记消失”。
+        // 工作区仍保持严格：缺少离线授权证明时不投影本机行。
+        if (scope === "personal") {
+          console.warn("[mobile knowledge tree] 离线且无服务端快照，使用本机知识树投影", error);
+          return present(await list(workspaceId, includeDeleted), false);
+        }
         // Native 投影不含文件夹密码，缺失/损坏的服务端快照不能降级成无保护目录。
         throw new Error("目录权限和密码信息尚未缓存，请联网后重试");
       }

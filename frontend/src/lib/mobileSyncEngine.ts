@@ -56,6 +56,13 @@ interface SnapshotEntry {
 
 function now(): string { return new Date().toISOString(); }
 
+/** Android WebView 可能没有 AbortSignal.throwIfAborted（Chrome < 100）。 */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const reason = signal.reason;
+  throw reason instanceof Error ? reason : new DOMException("Aborted", "AbortError");
+}
+
 function workspaceId(scopeKey: string): string | null {
   return scopeKey.startsWith("workspace:") ? scopeKey.slice("workspace:".length) : null;
 }
@@ -459,7 +466,7 @@ export class MobileSyncEngine {
 
   private async fetchResponse(path: string, init: RequestInit = {}): Promise<Response> {
     const syncSignal = this.syncAbort?.signal;
-    syncSignal?.throwIfAborted();
+    throwIfAborted(syncSignal);
     // Never send this native profile's queued writes under another login.
     const activeToken = getAccessToken();
     if (activeToken && activeToken !== this.options.token) {
@@ -496,7 +503,7 @@ export class MobileSyncEngine {
           ...(init.headers || {}),
         },
       }, apiBaseUrl, (input, requestInit) => {
-        controller.signal.throwIfAborted();
+        throwIfAborted(controller.signal);
         return fetch(input, requestInit);
       })]);
     } catch (cause) {
@@ -515,7 +522,7 @@ export class MobileSyncEngine {
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const signal = this.syncAbort?.signal;
     const response = await this.fetchResponse(path, init);
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     const responseToken = getAccessToken();
     if (!response.ok) {
       const payload = await response.json().catch(() => ({})) as { code?: string; error?: string };
@@ -535,7 +542,7 @@ export class MobileSyncEngine {
         "同步接口返回了非 JSON 响应，请检查节点小宝的 API 代理路径与登录状态",
       );
     }
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     if (getAccessToken() !== responseToken) {
       throw syncFailure("AUTH_SESSION_CHANGED", "登录状态已更新，旧同步响应已隔离");
     }
@@ -1324,7 +1331,7 @@ export class MobileSyncEngine {
           const exists=await this.fetchResponse(path,{method:"HEAD"});
           if(exists.ok){await this.options.db.run("UPDATE attachments SET transferStatus='uploaded',transferError=NULL,updatedAt=? WHERE scopeKey=? AND id=?",[now(),scope.scopeKey,row.id]);completed++;continue;}
           const blob=await this.options.attachments.read(row.id,row.mimeType);
-          this.syncAbort?.signal.throwIfAborted();
+          throwIfAborted(this.syncAbort?.signal);
           const uploaded=await this.fetchResponse(path,{method:"PUT",headers:{"Content-Type":row.mimeType},body:blob});
           if(!uploaded.ok)throw new Error(`HTTP ${uploaded.status}`);
           await this.options.db.run("UPDATE attachments SET transferStatus='uploaded',transferError=NULL,updatedAt=? WHERE scopeKey=? AND id=?",[now(),scope.scopeKey,row.id]);

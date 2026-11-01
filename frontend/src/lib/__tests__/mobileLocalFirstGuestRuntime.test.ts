@@ -192,16 +192,18 @@ describe("Android 本地优先运行时与离线切换", () => {
     mocks.openNativeDatabase.mockClear();
     mocks.db.close.mockClear();
 
+    // 升级前的安装没有最近库标记，仍应由保留的登录令牌推导出同一账号库。
+    localStorage.removeItem("nowen-mobile-local-library");
     enterMobileLocalMode();
     await initializeMobileLocalFirstRuntime();
 
     expect(mocks.engine.stop).toHaveBeenCalledOnce();
     expect(mocks.db.close).toHaveBeenCalledOnce();
     expect(mocks.openNativeDatabase).toHaveBeenCalledOnce();
-    expect(mocks.openNativeDatabase).toHaveBeenCalledWith("android-device-local");
+    expect(mocks.openNativeDatabase).toHaveBeenCalledWith(accountId);
     expect(mocks.createNativeLocalRepository).toHaveBeenLastCalledWith(expect.objectContaining({
-      accountId: "android-device-local",
-      userId: "android-local-user",
+      accountId,
+      userId: "user-1",
     }));
     expect(localStorage.getItem("nowen-token")).toBe(token);
   });

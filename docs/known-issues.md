@@ -15,7 +15,8 @@
 
 ## Lite / Tauri 已知问题
 - 富文本编辑器代码块渲染抖动：输入 ```sql 回车后继续输入会让代码块视觉消失，数据正常。详见 `docs/lite-handover-2026-10-30.md` §5。
-- 安卓同步设置内直接添加服务器（就地登录 + 2FA）已实现，待真机走查；本地库仍为权威源，登录后由 `mobileLocalFirstRuntime` 重建账号库并启动同步。
+- 安卓同步设置内直接添加服务器（就地登录 + 2FA）已实现，待真机走查；单一本地 SQLite 库是权威源，登录账号只是追加同步目标，「仅此设备」沿用同一库并停止同步，不再打开第二个空库。
+- 安卓断网回归：登录后离线启动曾出现「0 条笔记 / 笔记加载失败」，根因是知识树缺服务端快照时个人空间拒绝本机投影，且 WebView 缺少 `AbortSignal.throwIfAborted` 导致后台同步落 `SYNC_RUNTIME_ERROR`。现个人空间离线会投影本机知识树，同步引擎自带 abort 兜底；真机复测中。
 - 安卓组网/VPN 下局域网发现失败：WebRTC 拿不到真实路由网段，需要原生 Capacitor 插件读 `ConnectivityManager.getLinkProperties`。
 - macOS 签名公证、Linux AppImage、Windows/Linux 真机验收未完成。
 - 示例指南目前只有「欢迎使用 Nowen Note」，其余 7 篇教程待补回。

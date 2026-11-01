@@ -38,6 +38,41 @@ const QUEUE_MIGRATION_KEY = "legacyOfflineQueueMigrationV1";
 const DEVICE_KEY = "nowen.localFirst.deviceId";
 const PROFILE_PREFIX = "nowen.localFirst.profile.";
 const TOKEN_PREFIX = "nowen.localFirst.token.";
+/** 最近一次登录使用的本机库。仅此设备模式沿用同一 SQLite，避免切模式后笔记“消失”。 */
+const LOCAL_LIBRARY_KEY = "nowen-mobile-local-library";
+
+function activeLocalLibraryId(): string {
+  try {
+    const stored = localStorage.getItem(LOCAL_LIBRARY_KEY);
+    if (stored) return stored;
+    // 升级前已登录的安装没有该标记：用保留的令牌推导账号库，避免首次
+    // 切到“仅此设备”时打开另一个空库。
+    const token = getAccessToken();
+    const userId = token ? decodeUserId(token) : null;
+    const serverUrl = getServerUrl().replace(/\/+$/, "");
+    if (userId && serverUrl) {
+      const accountId = `${serverUrl.toLowerCase()}\n${userId}`;
+      localStorage.setItem(LOCAL_LIBRARY_KEY, accountId);
+      return accountId;
+    }
+  } catch { /* 使用默认本机库 */ }
+  return MOBILE_LOCAL_ACCOUNT_ID;
+}
+
+function activeLocalIdentity(): { libraryId: string; userId: string } {
+  const libraryId = activeLocalLibraryId();
+  // 账号库的 ID 是 `${serverUrl}\n${userId}`；仅此设备沿用账号库时，
+  // 目录草稿等按 userId 过滤的本地数据仍属原账号。
+  const separator = libraryId.indexOf("\n");
+  return {
+    libraryId,
+    userId: separator > 0 ? libraryId.slice(separator + 1) : MOBILE_LOCAL_USER_ID,
+  };
+}
+
+function rememberLocalLibraryId(accountId: string): void {
+  try { localStorage.setItem(LOCAL_LIBRARY_KEY, accountId); } catch { /* 使用默认本机库 */ }
+}
 
 interface RuntimeHandle {
   identity: string;
@@ -464,30 +499,32 @@ async function configureRuntime(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   if (isMobileLocalMode()) {
     setMobileSyncEnabled(false);
-    const identity = `local\n${MOBILE_LOCAL_ACCOUNT_ID}`;
+    const { libraryId, userId } = activeLocalIdentity();
+    const identity = `local\n${libraryId}`;
     if (active?.identity === identity) return;
     await disposeActive();
-    setCurrentUser(MOBILE_LOCAL_USER_ID);
+    setCurrentUser(userId);
     setCurrentWorkspace("personal");
-    const db = await openNativeDatabase(MOBILE_LOCAL_ACCOUNT_ID);
+    const db = await openNativeDatabase(libraryId);
     let restoreBridge: () => void = () => undefined;
     try {
-      const attachmentStore = await createNativeAttachmentStore(MOBILE_LOCAL_ACCOUNT_ID);
+      const attachmentStore = await createNativeAttachmentStore(libraryId);
       const repository = createNativeLocalRepository({
         db,
         attachments: attachmentStore,
-        accountId: MOBILE_LOCAL_ACCOUNT_ID,
-        userId: MOBILE_LOCAL_USER_ID,
+        accountId: libraryId,
+        userId,
         getScopeKey: () => "personal",
       });
       await repository.warmAttachmentUrls();
       setLocalRepository(repository);
       setSyncLocalAdminAdapter(createDeviceOnlyAdminAdapter(repository));
-      restoreBridge = installMobileLocalFirstBridge(repository,db,MOBILE_LOCAL_USER_ID);
+      restoreBridge = installMobileLocalFirstBridge(repository,db,userId);
       active = { identity, db, restoreBridge, removeListeners: [] };
       // 设备本地模式没有后端可依赖，示例笔记要在这里补：Mac / NAS 由后端种子触发器
       // 生成，安卓这边此前是空的，三端不一致。种子是体验内容，失败不影响使用。
-      void seedMobileLocalGuide(repository);
+      // 复用账号库时不写入示例，避免污染已有账号数据。
+      if (!libraryId.includes("\n")) void seedMobileLocalGuide(repository);
     } catch (error) {
       restoreBridge();
       setLocalRepository(null);
@@ -510,6 +547,7 @@ async function configureRuntime(): Promise<void> {
   await disposeActive();
 
   const ids = await ensureIdentity(serverUrl,userId,token);
+  rememberLocalLibraryId(ids.accountId);
   const db = await openNativeDatabase(ids.accountId);
   let endpoints: ReturnType<typeof createMobileServerEndpointRuntime> | undefined;
   const removeListeners: RuntimeHandle["removeListeners"] = [];

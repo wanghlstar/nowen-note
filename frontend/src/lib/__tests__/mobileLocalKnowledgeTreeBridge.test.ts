@@ -225,23 +225,30 @@ describe("mobile local knowledge tree bridge", () => {
     expect(repository.listNotebooksForWorkspace).not.toHaveBeenCalled();
   });
 
-  it("refuses a password-free local projection when a signed-in device has no server snapshot", async () => {
-    const { repository } = createRepository();
+  it("projects the local tree when a signed-in personal device has no server snapshot", async () => {
+    const { repository, notebooks } = createRepository();
     const remoteList = vi.spyOn(knowledgeTreeApi, "list").mockRejectedValue(new TypeError("Failed to fetch"));
     restoreBridge = installMobileLocalKnowledgeTreeBridge(repository, { deviceOnly: false });
 
-    await expect(knowledgeTreeApi.list()).rejects.toThrow("目录权限和密码信息尚未缓存");
-    expect(repository.listNotebooksForWorkspace).not.toHaveBeenCalled();
+    const offline = await knowledgeTreeApi.list();
+    expect(offline.nodes.map((node) => node.id)).toEqual([
+      `notebook:${notebooks[0].id}`,
+      `notebook:${notebooks[1].id}`,
+      "note:note-1",
+    ]);
+    expect(repository.listNotebooksForWorkspace).toHaveBeenCalled();
+
+    // Android 原生 HTTP 的失败形态不是 TypeError，也必须回退到本机库。
+    remoteList.mockRejectedValue(Object.assign(new Error("网络不可用"), { code: "NETWORK_UNAVAILABLE" }));
+    expect((await knowledgeTreeApi.list()).nodes).toHaveLength(3);
 
     const denied = Object.assign(new Error("forbidden"), { status: 403 });
     remoteList.mockRejectedValue(denied);
     await expect(knowledgeTreeApi.list()).rejects.toBe(denied);
-    expect(repository.listNotebooksForWorkspace).not.toHaveBeenCalled();
 
     const malformed = new TypeError("Cannot read properties of undefined");
     remoteList.mockRejectedValue(malformed);
     await expect(knowledgeTreeApi.list()).rejects.toBe(malformed);
-    expect(repository.listNotebooksForWorkspace).not.toHaveBeenCalled();
   });
 
   it("lists local notebooks and notes without requesting the remote registry", async () => {
