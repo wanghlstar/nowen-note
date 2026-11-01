@@ -151,6 +151,22 @@
         {
           "file": "frontend/src/lib/__tests__/noteSyncSafety.test.ts",
           "case": "keeps both local and server snapshots in a bounded conflict vault"
+        },
+        {
+          "file": "frontend/src/lib/__tests__/mobileConflictTimelineMerge.test.ts",
+          "case": "时间线合并让较新的一版胜出，并把可归档的一版交给调用方"
+        },
+        {
+          "file": "frontend/src/lib/__tests__/mobileConflictTimelineMerge.test.ts",
+          "case": "删除意图、树生命周期、缺失时间与不同实体都不自动合并"
+        },
+        {
+          "file": "frontend/src/lib/__tests__/mobileConflictTimelineMerge.engine.test.ts",
+          "case": "本机版本较新时按服务器版本重推，并把较旧的一版归档为已处理冲突"
+        },
+        {
+          "file": "frontend/src/lib/__tests__/mobileConflictTimelineMerge.engine.test.ts",
+          "case": "服务器版本更新时采用服务器正文，本机版本完整归档而不丢失"
         }
       ]
     },

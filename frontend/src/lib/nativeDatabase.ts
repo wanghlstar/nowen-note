@@ -35,7 +35,7 @@ type NativeDatabaseGlobal = typeof globalThis & {
   __nowenNoteNativeDatabaseState?: NativeDatabaseGlobalState;
 };
 
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 const DATABASE_PREFIX = "nowen_local_";
 
 const ENTITY_TYPE_CHECK = `
@@ -506,6 +506,7 @@ const SCHEMA_V1_STATEMENTS = [
     ),
     createdAt TEXT NOT NULL,
     resolvedAt TEXT,
+    resolvedBy TEXT,
     FOREIGN KEY (profileId) REFERENCES sync_profiles(id) ON DELETE CASCADE,
     CHECK (scopeKey = 'personal' OR (
       scopeKey LIKE 'workspace:%' AND length(scopeKey) > 10
@@ -605,6 +606,7 @@ const SYNC_CONFLICTS_V2_STATEMENTS = [
     ),
     createdAt TEXT NOT NULL,
     resolvedAt TEXT,
+    resolvedBy TEXT,
     FOREIGN KEY (profileId) REFERENCES sync_profiles(id) ON DELETE CASCADE,
     CHECK (scopeKey = 'personal' OR (
       scopeKey LIKE 'workspace:%' AND length(scopeKey) > 10
@@ -666,6 +668,19 @@ async function upgradeSchemaV2ToV3(raw: SQLiteDBConnection): Promise<void> {
   const columns = new Set((rows.values || []).map((row) => String(row.name || "")));
   if (!columns.has("colorMark")) await raw.execute("ALTER TABLE notes ADD COLUMN colorMark TEXT", false);
   await raw.execute("CREATE INDEX IF NOT EXISTS idx_native_notes_color_mark ON notes(scopeKey, colorMark)", false);
+}
+
+/**
+ * v13：冲突台账记录「谁做的决定」。
+ *
+ * 时间线自动合并（mobileConflictTimeline）会把较旧的一版直接归档成
+ * `resolved`，必须能区分「用户自己选的」和「按时间线自动合并的」，
+ * 否则历史里看不出这篇笔记是被谁定过的。
+ */
+async function upgradeConflictResolvedBy(raw: SQLiteDBConnection): Promise<void> {
+  const rows = await raw.query("PRAGMA table_info(sync_conflicts)");
+  const columns = new Set((rows.values || []).map((row) => String(row.name || "")));
+  if (!columns.has("resolvedBy")) await raw.execute("ALTER TABLE sync_conflicts ADD COLUMN resolvedBy TEXT", false);
 }
 
 async function upgradeTaskRecurrence(raw: SQLiteDBConnection): Promise<void> {
@@ -825,6 +840,7 @@ class NativeDatabaseImpl implements NativeDatabase {
           }
         }
         if (version < 12) await upgradeSignedTreeOrdering(this.raw);
+        if (version < 13) await upgradeConflictResolvedBy(this.raw);
         await this.raw.execute(`PRAGMA user_version = ${SCHEMA_VERSION}`, false);
       });
     });

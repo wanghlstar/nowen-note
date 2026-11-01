@@ -687,6 +687,7 @@ function ResolvedConflictHistory({
                     </p>
                     <p className="mt-0.5 text-muted-foreground">
                       {item.entityType} · 已处理于 {formatResolvedAt(item.resolvedAt)}
+                      {item.resolvedBy === "auto-timeline" ? " · 按更新时间线自动合并（较旧的一版保留在此）" : ""}
                     </p>
                   </div>
                   <div className="flex gap-2">

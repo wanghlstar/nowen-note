@@ -389,11 +389,11 @@ function createNativeAdminAdapter(
         : "profileId=? AND status='resolved'";
       const params=entityType?[profileId,entityType]:[profileId];
       const total=(await db.query<{count:number}>(`SELECT COUNT(*) AS count FROM sync_conflicts WHERE ${where}`,params))[0]?.count||0;
-      const rows=await db.query<{id:string;entityType:string;entityId:string;localVersion:number|null;remoteVersion:number|null;localPayload:string|null;remotePayload:string|null;createdAt:string;resolvedAt:string}>(
+      const rows=await db.query<{id:string;entityType:string;entityId:string;localVersion:number|null;remoteVersion:number|null;localPayload:string|null;remotePayload:string|null;createdAt:string;resolvedAt:string;resolvedBy:string|null}>(
         `SELECT * FROM sync_conflicts WHERE ${where} ORDER BY resolvedAt DESC,createdAt DESC,id DESC LIMIT ? OFFSET ?`,
         [...params,limit,offset],
       );
-      return {total,limit,offset,hasMore:offset+rows.length<total,items:rows.map((row)=>{const local=json(row.localPayload),remote=json(row.remotePayload);return {id:row.id,entityType:row.entityType,entityId:row.entityId,localVersion:row.localVersion,remoteVersion:row.remoteVersion,createdAt:row.createdAt,resolvedAt:row.resolvedAt,diffFields:diff(local,remote),localTitle:typeof local?.title==="string"?local.title:null,remoteTitle:typeof remote?.title==="string"?remote.title:null};})} as T;
+      return {total,limit,offset,hasMore:offset+rows.length<total,items:rows.map((row)=>{const local=json(row.localPayload),remote=json(row.remotePayload);return {id:row.id,entityType:row.entityType,entityId:row.entityId,localVersion:row.localVersion,remoteVersion:row.remoteVersion,createdAt:row.createdAt,resolvedAt:row.resolvedAt,resolvedBy:row.resolvedBy??null,diffFields:diff(local,remote),localTitle:typeof local?.title==="string"?local.title:null,remoteTitle:typeof remote?.title==="string"?remote.title:null};})} as T;
     }
     const conflictMatch=path.match(/^\/conflicts\/([^/]+)$/);
     if(conflictMatch&&method==="GET"){
@@ -408,7 +408,7 @@ function createNativeAdminAdapter(
       const existing=(await db.query<{status:string}>("SELECT status FROM sync_conflicts WHERE id=? AND profileId=?",[conflictId,profileId]))[0];
       if(!existing)throw new Error("冲突不存在");
       const reopened=existing.status==="resolved";
-      if(reopened)await db.run("UPDATE sync_conflicts SET status='unresolved',resolvedAt=NULL WHERE id=? AND profileId=? AND status='resolved'",[conflictId,profileId]);
+      if(reopened)await db.run("UPDATE sync_conflicts SET status='unresolved',resolvedAt=NULL,resolvedBy=NULL WHERE id=? AND profileId=? AND status='resolved'",[conflictId,profileId]);
       const remaining=(await db.query<{count:number}>("SELECT COUNT(*) AS count FROM sync_conflicts WHERE profileId=? AND status='unresolved'",[profileId]))[0]?.count||0;
       return {conflictId,reopened,alreadyOpen:!reopened,remainingConflicts:remaining,message:reopened?"已重新放回冲突中心，请重新选择要采用的版本。":"该冲突已在待处理列表中。"} as T;
     }

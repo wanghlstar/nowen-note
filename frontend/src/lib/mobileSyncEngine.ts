@@ -8,6 +8,7 @@ import { fetchWithAuthRefresh, getAccessToken } from "./authSession";
 import { SERVER_ENDPOINT_CHANGED_EVENT } from "./serverEndpointState";
 import { forgetUnsentLocalNotes } from "./nativeLocalNoteOrigin";
 import { notifyMobileSyncStatusChanged, type MobileSyncAppliedDetail } from "./mobileSyncStatus";
+import { decideTimelineMerge } from "./mobileConflictTimeline";
 import { nativeReceiptKey } from "./mobileNoteSyncReceipt";
 import { NATIVE_TASK_REPEAT_FIELDS, nativeTaskRepeatValues } from "./nativeTaskFields";
 import { validateEncryptedNoteWrite } from "./encryptedNotes/noteDocument";
@@ -963,6 +964,27 @@ export class MobileSyncEngine {
           const existing = (await tx.query<{id:string}>(`SELECT id FROM sync_conflicts WHERE profileId=? AND scopeKey=?
             AND entityType=? AND entityId=? AND status='unresolved' LIMIT 1`,
           [this.options.profileId,scope.scopeKey,source.entityType,source.entityId]))[0];
+          // 时间线自动合并：删除意图、知识树结构、时间不可判定都不在此处理。
+          if (source.entityType === "note" && source.operation === "upsert" && result.serverPayload) {
+            const timelineLocal = local ?? (() => {
+              if (!localPayload) return null;
+              try { return JSON.parse(localPayload) as Record<string,unknown>; } catch { return null; }
+            })();
+            const timeline = decideTimelineMerge(timelineLocal, result.serverPayload);
+            if (timeline && timelineLocal) {
+              await this.applyTimelineMerge(tx, scope, {
+                entityType: source.entityType, entityId: source.entityId,
+                localPayload: timelineLocal, remotePayload: result.serverPayload,
+                localVersion: typeof timelineLocal.version === "number" ? timelineLocal.version : null,
+                remoteVersion: typeof result.serverVersion === "number" ? result.serverVersion
+                  : typeof result.serverPayload.version === "number" ? result.serverPayload.version : null,
+                winner: timeline.winner, conflictId: existing?.id,
+              });
+              // 本机胜出且已按服务器版本重新入队：立刻再推一轮，避免停在「待同步」。
+              if (timeline.winner === "local") this.rerun = true;
+              continue;
+            }
+          }
           if (existing) {
             await tx.run("UPDATE sync_conflicts SET localPayload=?,remotePayload=? WHERE id=?",
               [localPayload,JSON.stringify(result.serverPayload||{version:result.serverVersion}),existing.id]);
@@ -1121,6 +1143,21 @@ export class MobileSyncEngine {
             if (isAckedOwnNoteEcho(entry.payload, local, pending, receipt?.value)) continue;
           }
           if(entry.entityType==="attachment_organization" && (pending.baseVersion===entry.payload.version || local && sameNativeAssetOrganization(local,entry.payload))) continue;
+          // 时间线自动合并：较新的一版直接生效，较旧的一版归档到已处理冲突。
+          if(entry.entityType==="note" && !entry.payload.__delete && !bootstrap && local){
+            const timeline=decideTimelineMerge(local,entry.payload);
+            if(timeline){
+              await this.applyTimelineMerge(tx,scope,{
+                entityType:entry.entityType,entityId:entry.entityId,
+                localPayload:local,remotePayload:entry.payload,
+                localVersion:typeof local.version==="number"?local.version:null,
+                remoteVersion:typeof entry.payload.version==="number"?entry.payload.version:null,
+                winner:timeline.winner,
+              });
+              if(timeline.winner==="remote") applied.push(entry);
+              continue;
+            }
+          }
           if(entry.payload.__delete||!bootstrap||stable(local)!==stable(entry.payload)){
             await tx.run(`INSERT INTO sync_conflicts (id,profileId,scopeKey,entityType,entityId,
               localPayload,remotePayload,localVersion,remoteVersion,status,createdAt) VALUES (?,?,?,?,?,?,?,?,?,'unresolved',?)`,[
@@ -1191,6 +1228,60 @@ export class MobileSyncEngine {
       applicable.push(entry);
     }
     await applyNativePersonalTree(tx,applicable,this.options.userId,false);
+  }
+
+  /**
+   * 时间线自动合并（DCC-004 的时间线分支）。
+   *
+   * 较新的一版成为当前版本：本机胜出时按服务器版本 +1 重新入队，联网后
+   * 下一次 Push 必然被接受，笔记不会永远停在「冲突中、待同步 0、其实没传」；
+   * 服务器胜出时直接把远端正文落到本机。被放弃的一版完整归档到
+   * `sync_conflicts`（`status='resolved'`、`resolvedBy='auto-timeline'`）。
+   */
+  private async applyTimelineMerge(
+    tx:NativeDatabase,
+    scope:ScopeDescriptor,
+    input:{
+      entityType:RemoteEntityType;entityId:string;
+      localPayload:Record<string,unknown>;remotePayload:Record<string,unknown>;
+      localVersion:number|null;remoteVersion:number|null;
+      winner:"local"|"remote";conflictId?:string;
+    },
+  ):Promise<void>{
+    const {entityType,entityId,winner}=input;
+    await tx.run(`DELETE FROM sync_outbox WHERE profileId=? AND scopeKey=?
+      AND entityType=? AND entityId=? AND status IN ('pending','inflight','failed')`,
+    [this.options.profileId,scope.scopeKey,entityType,entityId]);
+    if(winner==="local"){
+      const remoteVersion=typeof input.remoteVersion==="number"&&Number.isSafeInteger(input.remoteVersion)&&input.remoteVersion>0
+        ? input.remoteVersion : null;
+      const version=remoteVersion === null ? Number(input.localPayload.version)||1 : remoteVersion+1;
+      const payload={...input.localPayload,version};
+      await this.applyEntity(tx,scope,{entityType,entityId,payload});
+      await tx.run(`INSERT INTO sync_outbox (
+        id,mutationId,profileId,deviceId,scopeKey,entityType,entityId,operation,baseVersion,payload,status,retryCount,createdAt
+      ) VALUES (?,?,?,?,?,?,?,'upsert',?,?,'pending',0,?)`,[
+        newLocalId(),newLocalId(),this.options.profileId,this.options.deviceId,scope.scopeKey,entityType,entityId,
+        remoteVersion,JSON.stringify({...payload,workspaceId:scope.workspaceId}),now(),
+      ]);
+    } else {
+      await this.applyEntity(tx,scope,{entityType,entityId,payload:input.remotePayload});
+    }
+    if(input.conflictId){
+      await tx.run(`UPDATE sync_conflicts SET localPayload=?,remotePayload=?,localVersion=?,remoteVersion=?,
+        status='resolved',resolvedAt=?,resolvedBy='auto-timeline' WHERE id=?`,[
+        JSON.stringify(input.localPayload),JSON.stringify(input.remotePayload),input.localVersion,input.remoteVersion,
+        now(),input.conflictId,
+      ]);
+      return;
+    }
+    await tx.run(`INSERT INTO sync_conflicts (
+      id,profileId,scopeKey,entityType,entityId,localVersion,remoteVersion,
+      localPayload,remotePayload,status,createdAt,resolvedAt,resolvedBy
+    ) VALUES (?,?,?,?,?,?,?,?,?,'resolved',?,?,'auto-timeline')`,[
+      newLocalId(),this.options.profileId,scope.scopeKey,entityType,entityId,input.localVersion,input.remoteVersion,
+      JSON.stringify(input.localPayload),JSON.stringify(input.remotePayload),now(),now(),
+    ]);
   }
 
   private async readEntity(db:NativeDatabase,scopeKey:string,type:RemoteEntityType,id:string):Promise<Record<string,unknown>|null>{

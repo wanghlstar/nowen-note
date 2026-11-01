@@ -99,6 +99,8 @@ export interface ConflictSummary {
 export interface ConflictDetail extends ConflictSummary {
   status: string;
   resolvedAt: string | null;
+  /** `auto-timeline`：按更新时间线自动合并（较旧的一版归档在此）。 */
+  resolvedBy?: string | null;
   base: Record<string, unknown> | null;
   local: Record<string, unknown> | null;
   remote: Record<string, unknown> | null;
@@ -106,6 +108,8 @@ export interface ConflictDetail extends ConflictSummary {
 
 export interface ResolvedConflictSummary extends ConflictSummary {
   resolvedAt: string;
+  /** `auto-timeline`：按更新时间线自动合并（较旧的一版归档在此）。 */
+  resolvedBy?: string | null;
 }
 
 export interface ResolvedConflictPage {

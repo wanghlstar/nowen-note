@@ -65,7 +65,7 @@ it("migrates schema 6 queues without losing mutation identity, retries, versions
   const db = await openNativeDatabase("tree-migration-fixture");
   expect(fixture.raw.prepare("SELECT * FROM sync_outbox").all()).toEqual(before);
   expect(fixture.raw.prepare("SELECT * FROM sync_conflicts").all()).toEqual(history);
-  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version: 12});
+  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version: 13});
   await db.run(`INSERT INTO sync_outbox(id,mutationId,profileId,deviceId,scopeKey,entityType,entityId,operation,createdAt)
     VALUES ('tree','tree-mutation','p','d','personal','knowledge_tree_node','note:n','upsert','now')`);
   expect(fixture.raw.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
@@ -86,7 +86,7 @@ it("upgrades schema 7 task recurrence and caches confirmed batches without overw
   fixture.raw.exec("PRAGMA user_version=7; INSERT INTO tasks(id,userId,title,createdAt,updatedAt) VALUES ('old','local','Preserved','now','now')");
   const before = fixture.raw.prepare("SELECT * FROM sync_outbox").all();
   const db = await openNativeDatabase("task-composer-fixture");
-  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 12 });
+  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 13 });
   expect(fixture.raw.prepare("SELECT title,repeatRule FROM tasks WHERE id='old'").get()).toEqual({ title: "Preserved", repeatRule: "none" });
   const task = { id: "confirmed", workspaceId: null, userId: "remote", title: "Daily study", description: "Practice", priority: 2, isCompleted: 0, dueDate: "2026-12-31", dueAt: "2026-12-31T09:00", repeatRule: "daily", repeatInterval: 1, repeatEndCount: 7, createdAt: "now", updatedAt: "now" } as Task;
   await cacheConfirmedNativeTasks(db, "local", [task], [{ id: "remote-project", userId: "remote", workspaceId: null, name: "Server project", icon: "", color: "#123456", sortOrder: 0, createdAt: "now", updatedAt: "now" }]);
@@ -140,7 +140,7 @@ it("upgrades schema 7 task rows without inventing archives or losing pending mut
   const db=await openNativeDatabase("task-migration-fixture");
   expect(fixture.raw.prepare("SELECT * FROM tasks").get()).toEqual({...task,archivedAt:null,...Object.fromEntries(NATIVE_TASK_REPEAT_FIELDS.map((field,index) => [field,nativeTaskRepeatValues({})[index]]))});
   expect(fixture.raw.prepare("SELECT * FROM sync_outbox").all()).toEqual(outbox);
-  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version: 12});
+  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version: 13});
   await db.close();
 });
 
@@ -151,7 +151,7 @@ it("upgrades lifecycle schema 8 with recurrence while preserving archives and pe
     VALUES ('archived','local','Preserved archive',1,'done','archive-time','created','updated')`);
   const before = fixture.raw.prepare("SELECT * FROM sync_outbox").all();
   const db = await openNativeDatabase("lifecycle-v8-fixture");
-  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 12 });
+  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 13 });
   expect(fixture.raw.prepare("SELECT title,archivedAt,repeatRule,repeatInterval FROM tasks WHERE id='archived'").get()).toEqual({
     title: "Preserved archive", archivedAt: "archive-time", repeatRule: "none", repeatInterval: 1,
   });
@@ -227,7 +227,7 @@ it("upgrades schema 10 asset queues and preserves existing local folders before 
     INSERT INTO mobile_local_attachment_folders(id,userId,name,parentId,createdAt,updatedAt) VALUES ('preserved','u','Preserved folder',NULL,'now','now');`);
   const before=fixture.raw.prepare("SELECT * FROM sync_outbox").all();
   const db=await openNativeDatabase("asset-upgrade-account");
-  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version:12});
+  expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version:13});
   expect(fixture.raw.prepare("SELECT * FROM sync_outbox").all()).toEqual(before);
   let active=true;const onCommitted=vi.fn();
   const restore=installMobileLocalAttachmentFolderBridge(db,"u",{onCommitted,assertActive:()=>{if(!active) throw new Error("Session changed");}});
@@ -260,7 +260,7 @@ it.each([false, true])("schema 11 signed-order migration preserves tree and queu
     expect(fixture.raw.prepare("SELECT sql FROM sqlite_master WHERE name='native_knowledge_tree_nodes'").get()?.sql).toContain("CHECK (sortOrder >= 0)");
   } else {
     const db = await openNativeDatabase("signed-order-migration");
-    expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version:12});
+    expect(fixture.raw.prepare("PRAGMA user_version").get()).toEqual({user_version:13});
     expect(fixture.raw.prepare("SELECT name FROM sqlite_master WHERE name='idx_native_tree_parent'").get()).toBeTruthy();
     await db.run("UPDATE native_knowledge_tree_nodes SET sortOrder=-2147483647 WHERE id='note:n'");
     expect(fixture.raw.prepare("SELECT sortOrder FROM native_knowledge_tree_nodes").get()).toEqual({sortOrder:-2147483647});
