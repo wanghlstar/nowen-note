@@ -152,9 +152,39 @@ describe("mobile local knowledge tree bridge", () => {
     expect([...metadata.values()].map((value) => JSON.parse(value))).toEqual([[remoteNode]]);
     restoreBridge();
     restoreBridge = installMobileLocalKnowledgeTreeBridge(repository, { deviceOnly: false }, db);
-    expect(await knowledgeTreeApi.listForWorkspace("personal")).toEqual({ nodes: [remoteNode] });
+    expect(await knowledgeTreeApi.listForWorkspace("personal")).toEqual({ nodes: [remoteNode], offlineSnapshot: true });
     expect(remoteList).toHaveBeenCalledTimes(2);
     expect(repository.listNotebooksForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the last snapshot when the server tree hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      const { repository } = createRepository();
+      const metadata = new Map<string, string>();
+      const db = {
+        run: vi.fn(async (_sql: string, values: unknown[]) => {
+          metadata.set(String(values[0]), String(values[1]));
+          return { changes: 1 };
+        }),
+        query: vi.fn(async (sql: string, values: unknown[]) => sql.includes("native_runtime_meta")
+          ? (metadata.has(String(values[0])) ? [{ value: metadata.get(String(values[0])) }] : [])
+          : []),
+      } as unknown as NativeDatabase;
+      const remoteNode = { id: "note:note-1", workspaceId: null, resourceType: "note", resourceId: "note-1" };
+      const remoteList = vi.spyOn(knowledgeTreeApi, "listForWorkspace")
+        .mockResolvedValueOnce({ nodes: [remoteNode] as never })
+        .mockReturnValueOnce(new Promise(() => undefined));
+
+      restoreBridge = installMobileLocalKnowledgeTreeBridge(repository, { deviceOnly: false }, db);
+      await knowledgeTreeApi.listForWorkspace("personal");
+      const hanging = knowledgeTreeApi.listForWorkspace("personal");
+      await vi.advanceTimersByTimeAsync(4_000);
+      await expect(hanging).resolves.toEqual({ nodes: [remoteNode], offlineSnapshot: true });
+      expect(remoteList).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps offline snapshots isolated by workspace and refuses locally revoked access", async () => {

@@ -1,5 +1,6 @@
 import { getCurrentWorkspace } from "./api";
 import { knowledgeTreeApi, type KnowledgeTreeResponse } from "./knowledgeTreeApi";
+import { isOfflineFailure } from "./mobileLocalKnowledgeTreeBridge";
 import type { NativeDatabase } from "./nativeDatabase";
 import { unsentLocalNoteKey } from "./nativeLocalNoteOrigin";
 import {
@@ -27,12 +28,13 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
   };
   window.addEventListener(KNOWLEDGE_TREE_PASSWORD_SESSION_CHANGED_EVENT, onSessionChanged);
   /**
-   * 知识树在登录态是「服务器优先 + 离线快照」。断网且快照缺失时不能无限等，
-   * 否则整张笔记列表会一直转圈。离线给更短的超时，线上保持宽松。
+   * 知识树在登录态是「服务器优先 + 离线快照」。断网且快照缺失时不能无限等：
+   * 笔记详情本身有 10s 加载上限，知识树校验必须在此之前结束，否则会先弹
+   * 「笔记加载超时」。离线给更短的超时，线上也保持低于 10s。
    */
   const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
   const readTree = async (workspaceId: string) => {
-    const timeoutMs = typeof navigator !== "undefined" && navigator.onLine === false ? 2500 : 15000;
+    const timeoutMs = isOffline() ? 2500 : 5000;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([
@@ -45,12 +47,19 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
       if (timer) clearTimeout(timer);
     }
   };
-  const resolveNoteFolders = async (note: LocalNote, resolve: ReturnType<typeof createNoteFolderPasswordResolver>) => {
+  const resolveNoteFolders = async (
+    note: LocalNote,
+    resolve: ReturnType<typeof createNoteFolderPasswordResolver>,
+    allowOfflineNotebookFallback = false,
+  ) => {
     const folderIds = resolve(note);
     if (folderIds !== null) return folderIds;
     const scopeKey = note.workspaceId ? `workspace:${note.workspaceId}` : "personal";
     const marker = (await db.query<{ value: string }>("SELECT value FROM native_runtime_meta WHERE key=?", [unsentLocalNoteKey(scopeKey, note.id)]))[0];
-    return marker?.value === "1" ? resolve(note, true) : null;
+    if (marker?.value === "1") return resolve(note, true);
+    // 离线快照可能早于这篇笔记同步进来；它所在的 notebook 链仍在时，按
+    // 继承关系判断保护状态，而不是直接判为“无法确认”。
+    return allowOfflineNotebookFallback ? resolve(note, true) : null;
   };
   const treeAccess = (tree: KnowledgeTreeResponse) => {
     const resolveFolders = createNoteFolderPasswordResolver(tree.nodes);
@@ -80,7 +89,7 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
         }
         // 在线授权携带真实保护链，不能依赖导航树提升共享节点后的父链。
         if (verified && node) return Promise.resolve(resolveFolders(note) === null ? null : verified.get(note.id) ?? null);
-        return resolveNoteFolders(note, resolveFolders);
+        return resolveNoteFolders(note, resolveFolders, tree.offlineSnapshot === true);
       },
     };
   };
@@ -96,13 +105,19 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
       tree = await readTree(note.workspaceId || "personal");
     } catch (error) {
       // 个人空间断网且没有知识树快照时，不能把用户自己的本地笔记锁死。
-      // 在线失败（服务端异常/超时）仍失败关闭；工作区始终严格。
-      if (note.workspaceId || !isOffline()) throw error;
+      // 在线失败（服务端异常/明确拒绝）仍失败关闭；工作区始终严格。
+      if (note.workspaceId || !isOfflineFailure(error)) throw error;
       console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码校验", error);
       return;
     }
     const folderIds = await treeAccess(tree).folders(note);
-    if (!folderIds) throw new Error("目录密码状态无法确认，请联网刷新目录后重试");
+    if (!folderIds) {
+      // 离线快照可能旧于本机同步：个人空间的本地正文是权威源，不能因为
+      // 快照里缺少这篇笔记就整屏报错。在线响应（含 passwordAuthorizedNotes）
+      // 仍然严格失败关闭。
+      if (!note.workspaceId && tree.offlineSnapshot) return;
+      throw new Error("目录密码状态无法确认，请联网刷新目录后重试");
+    }
     if (!folderIds.length) { protectedReads.delete(note.id); return; }
     protectedReads.set(note.id, folderIds);
     const unlocked = loadUnlockedFolderIds();
@@ -122,7 +137,7 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
     } catch (error) {
       // 断网时知识树/密码快照可能取不到。个人空间不能让整张列表卡死或清空；
       // 在线失败与工作区继续严格：访问权未确认时不展示。
-      if ((workspaceId && workspaceId !== "personal") || !isOffline()) throw error;
+      if ((workspaceId && workspaceId !== "personal") || !isOfflineFailure(error)) throw error;
       console.warn("[mobile password guard] 知识树不可用，离线跳过文件夹密码过滤", error);
       return notes;
     }
@@ -130,7 +145,8 @@ export function createMobileLocalNotePasswordGuard(authorizeRemote: (id: string)
     const requiredFolders = new Map<string, string[]>();
     const check = async (note: T) => {
       const folderIds = await access.folders(note);
-      if (!folderIds) return false;
+      // 离线快照缺少这篇个人笔记不等于它被加密：本机历史已把它归一为可读。
+      if (!folderIds) return !note.workspaceId && tree.offlineSnapshot === true;
       if (!folderIds.length) { protectedReads.delete(note.id); return true; }
       protectedReads.set(note.id, folderIds);
       requiredFolders.set(note.id, folderIds);

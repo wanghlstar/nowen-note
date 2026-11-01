@@ -73,6 +73,8 @@ export interface KnowledgeTreeResponse {
   nodes: KnowledgeTreeNode[];
   /** 仅本次在线请求有效，不能随树快照持久化。旧服务端不返回此字段。 */
   passwordAuthorizedNotes?: Array<{ noteId: string; folderIds: string[] }>;
+  /** 运行时标记：本次结果来自上一次在线树快照，不能作为在线 ACL 证明。 */
+  offlineSnapshot?: boolean;
 }
 
 export interface KnowledgePermissionsResponse {

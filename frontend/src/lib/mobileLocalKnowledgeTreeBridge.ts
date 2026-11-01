@@ -56,7 +56,7 @@ function snapshotKey(workspaceId: string | undefined, includeDeleted: boolean): 
  * 网络不可达与“服务端明确拒绝”必须区分：只有前者可以回退到本机数据。
  * Android WebView 的原生 HTTP 失败通常不是 TypeError，不能只按 TypeError 判断。
  */
-function isOfflineFailure(error: unknown): boolean {
+export function isOfflineFailure(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   // 服务端有响应（401/403/500 等）说明在线，不能当断网降级。
   if ("status" in error && typeof error.status === "number" && error.status > 0) return false;
@@ -317,8 +317,25 @@ export function installMobileLocalKnowledgeTreeBridge(
       const validNodes = (nodes: unknown): nodes is KnowledgeTreeNode[] => Array.isArray(nodes)
         && nodes.every((node) => node && typeof node.id === "string"
           && (scope === "personal" ? node.workspaceId == null : syncScopeKey(node.workspaceId || undefined) === scope));
+      // 网络黑洞时不能让笔记读取一直等知识树：先回退到快照（仍带 ACL），
+      // 再让调用方决定是否按离线处理。
+      let remoteTimer: ReturnType<typeof setTimeout> | undefined;
+      const remoteWithTimeout = async () => {
+        try {
+          return await Promise.race([
+            remote(),
+            new Promise<never>((_, reject) => {
+              remoteTimer = setTimeout(() => {
+                reject(Object.assign(new Error("知识树请求超时"), { name: "TimeoutError" }));
+              }, 4000);
+            }),
+          ]);
+        } finally {
+          if (remoteTimer) clearTimeout(remoteTimer);
+        }
+      };
       try {
-        const result = await remote();
+        const result = await remoteWithTimeout();
         if (!validNodes(result.nodes)) throw new Error("服务器知识树数据空间不匹配");
         if (db) {
           try {
@@ -357,7 +374,7 @@ export function installMobileLocalKnowledgeTreeBridge(
           if (cached) {
             try {
               const nodes = JSON.parse(cached.value) as unknown;
-              if (validNodes(nodes)) return present({ nodes }, false);
+              if (validNodes(nodes)) return present({ nodes, offlineSnapshot: true }, false);
             } catch { /* 损坏的快照不能证明目录没有密码。 */ }
           }
         }

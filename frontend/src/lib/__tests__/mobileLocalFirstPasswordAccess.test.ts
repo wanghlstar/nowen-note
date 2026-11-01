@@ -373,7 +373,8 @@ describe("signed-in Android folder password access", () => {
     restore = installMobileLocalFirstBridge(repository, db, "user");
     await expect(api.getNote("ordinary")).resolves.toEqual(notes[1]);
     snapshots.delete(unsentLocalNoteKey("personal", "ordinary"));
-    await expect(api.getNote("ordinary")).rejects.toThrow("目录密码状态无法确认");
+    // 离线快照里没有这篇个人笔记时，本机正文仍是权威源。
+    await expect(api.getNote("ordinary")).resolves.toEqual(notes[1]);
   });
 
   it("does not use a marker from another workspace or an invalid marker value", async () => {
@@ -402,15 +403,26 @@ describe("signed-in Android folder password access", () => {
     ["multiple tags", () => api.getNotesWithTags(["tag-a", "tag-b"])],
     ["search snippets", () => api.search("private")],
     ["search suggestions", () => api.searchNotes("private")],
-  ])("hides a synced note missing from the cached tree in %s even when its notebook is public", async (_name, read) => {
+  ])("keeps a synced personal note readable from the offline tree snapshot in %s", async (_name, read) => {
     const { remoteTree, nodes } = setup();
     remoteTree.mockResolvedValue({ nodes: nodes.filter((node) => node.resourceId !== "ordinary") });
     await api.getNotes(); // persist an older snapshot lacking the synced note's real parent chain
     remoteTree.mockRejectedValue(new TypeError("Failed to fetch"));
-    expect(await read()).toEqual([]);
-    await expect(api.getNote("ordinary")).rejects.toThrow("目录密码状态无法确认");
-    await expect(api.getNoteSlim("ordinary")).rejects.toThrow("目录密码状态无法确认");
+    // 快照旧于本机同步时，个人空间的本地正文仍是权威源，不能整屏失败。
+    expect((await read()).map((item) => item.id)).toEqual(["ordinary"]);
+    await expect(api.getNote("ordinary")).resolves.toEqual(notes[1]);
+    await expect(api.getNoteSlim("ordinary")).resolves.toMatchObject({ id: "ordinary" });
   });
+
+  it("still locks a note missing from the offline snapshot when its notebook chain is protected", async () => {
+    const { remoteTree, nodes } = setup();
+    remoteTree.mockResolvedValue({ nodes: nodes.filter((node) => node.resourceId !== "private") });
+    await api.getNotes();
+    remoteTree.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(api.getNote("private")).rejects.toMatchObject({ code: "FOLDER_UNLOCK_REQUIRED" });
+    expect((await api.getNotes()).map((note) => note.id)).toEqual(["ordinary"]);
+  });
+
   it.each([
     ["all notes", () => api.getNotes()],
     ["favorites", () => api.getNotes({ isFavorite: "1" })],
@@ -475,6 +487,22 @@ describe("signed-in Android folder password access", () => {
     await expect(api.getNote("ordinary")).resolves.toEqual(notes[1]);
     for (const id of ["outer", "inner"]) rememberUnlockedFolder(id, token({ userId: "user" }));
     await expect(api.getNote("private")).rejects.toThrow("Failed to fetch");
+  });
+
+  it("opens a local personal note when the tree request never settles", async () => {
+    const { remoteTree, nodes } = setup();
+    remoteTree.mockResolvedValueOnce({ nodes: nodes.filter((node) => node.resourceId !== "ordinary") });
+    await api.getNotes(); // 先留下一个旧快照，再模拟网络黑洞
+    remoteTree.mockReturnValue(new Promise(() => undefined));
+    vi.useFakeTimers();
+    try {
+      const pending = api.getNote("ordinary");
+      // 知识树兜底超时必须短于笔记详情 10s 加载上限。
+      await vi.advanceTimersByTimeAsync(4_000);
+      await expect(pending).resolves.toEqual(notes[1]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not replace missing password metadata with an unprotected local projection", async () => {
